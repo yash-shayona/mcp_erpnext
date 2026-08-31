@@ -6,6 +6,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context
 
+from ...contracts.registry import tool_meta
 from ...runtime import execute_tool_with_context
 from ...services.selling.sales_order import (
 	confirm_sales_order as _confirm_sales_order,
@@ -16,7 +17,7 @@ from ...services.selling.sales_order import (
 def register_sales_order_tools(mcp: Any) -> None:
 	"""Register the two public Selling capability tools."""
 
-	@mcp.tool()
+	@mcp.tool(meta=tool_meta("prepare_sales_order"))
 	def prepare_sales_order(
 		customer: str,
 		items: list[dict[str, Any]],
@@ -32,7 +33,7 @@ def register_sales_order_tools(mcp: Any) -> None:
 			lambda: _prepare_sales_order(customer, items, company, delivery_date, selling_price_list),
 		)
 
-	@mcp.tool()
+	@mcp.tool(meta=tool_meta("confirm_sales_order"))
 	def confirm_sales_order(approval_token: str, confirm: bool, ctx: Context) -> dict[str, Any]:
 		"""Create the prepared Draft Sales Order after explicit confirmation."""
 		return execute_tool_with_context(

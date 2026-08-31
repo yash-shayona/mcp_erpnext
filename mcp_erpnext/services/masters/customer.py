@@ -6,7 +6,7 @@ from typing import Any
 
 import frappe
 
-from ...approvals import APPROVAL_TTL_SECONDS, approvals
+from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...config.masters import customer as customer_config
 from ...observability import new_error_reference
 from ..common.creation_contract import missing_input_response, resolve_creation_contract
@@ -32,6 +32,15 @@ def _reference(candidate: dict[str, Any]) -> dict[str, str | None]:
         "doctype": "Customer",
         "name": candidate.get("value"),
         "customer_name": candidate.get("customer_name") or candidate.get("label"),
+    }
+
+
+def _candidate(candidate: dict[str, Any]) -> dict[str, Any]:
+    """Expose an ambiguity candidate only through a reusable typed reference."""
+    return {
+        "reference": _reference(candidate),
+        "label": candidate.get("label") or candidate.get("value"),
+        "score": candidate.get("score", 0.0),
     }
 
 
@@ -68,7 +77,7 @@ def search_customers(query: str) -> dict[str, Any]:
         "status": search_status(query, candidates),
         "doctype": "Customer",
         "query": query,
-        "candidates": candidates,
+        "candidates": [_candidate(candidate) for candidate in candidates],
     }
 
 
@@ -83,21 +92,23 @@ def resolve_customer(query: str) -> dict[str, Any]:
 
 
 def resolve_customer_for_workflow(query: str) -> dict[str, Any]:
-    """Translate Customer lookup into the reusable parent-workflow contract."""
+    """Return one terminal public resolution state for Customer lookup."""
     resolution = resolve_customer(query)
     if resolution["status"] == "resolved":
         return {
             "status": "resolved",
-            "customer": _reference(resolution["candidate"]),
+            "doctype": "Customer",
+            "reference": _reference(resolution["candidate"]),
             "match_type": resolution.get("match_type"),
         }
     if resolution["status"] == "ambiguous":
         return {
-            "status": "needs_selection",
+            "status": "ambiguous",
+            "doctype": "Customer",
             "query": query,
-            "candidates": resolution.get("candidates", []),
+            "candidates": [_candidate(candidate) for candidate in resolution.get("candidates", [])],
         }
-    return {"status": "needs_customer_creation", "query": query, "candidates": []}
+    return {"status": "not_found", "doctype": "Customer", "query": query, "candidates": []}
 
 
 def _normalise_identifier(fieldname: str, value: str) -> str:
@@ -326,38 +337,20 @@ def prepare_customer(customer: dict[str, Any]) -> dict[str, Any]:
 
 def confirm_customer(approval_token: str, confirm: bool) -> dict[str, Any]:
     """Create the reviewed Customer only for its original site and authenticated user."""
-    approvals.prune_expired()
+    user = _current_user()
     if not confirm:
+        approvals.cancel(approval_token, action=_ACTION, site=frappe.local.site, user=user)
         return _confirmation_error(
             "CONFIRMATION_REQUIRED",
             "Review the Customer preview before confirming it.",
             retryable=False,
         )
-    approval, state = approvals.lookup(
-        approval_token, action=_ACTION, site=frappe.local.site, user=_current_user()
+    approval, state = approvals.claim_for_confirm_write(
+        approval_token, action=_ACTION, site=frappe.local.site, user=user
     )
-    if state == "expired":
-        return _confirmation_error(
-            "CONFIRMATION_EXPIRED",
-            "This Customer confirmation has expired. Please prepare it again.",
-            retryable=True,
-        )
-    if state == "unavailable" or approval is None:
-        return _confirmation_error(
-            "CONFIRMATION_UNAVAILABLE",
-            "This Customer confirmation is not available in the current session.",
-            retryable=False,
-        )
-    if approval.result_document:
-        return {
-            "status": "created",
-            "customer": {
-                "doctype": "Customer",
-                "name": approval.result_document,
-                "customer_name": approval.payload["customer_name"],
-            },
-            "idempotent": True,
-        }
+    if state != "available" or approval is None:
+        code, message, retryable = confirmation_failure(state, "Customer")
+        return _confirmation_error(code, message, retryable=retryable)
     if missing := _create_permissions(approval.payload):
         return _permission_denied(missing)
     if duplicates := _duplicate_matches(approval.payload):
@@ -373,7 +366,6 @@ def confirm_customer(approval_token: str, confirm: bool) -> dict[str, Any]:
     except Exception:
         frappe.db.rollback()
         raise
-    approval.result_document = doc.name
     return {
         "status": "created",
         "customer": {

@@ -11,7 +11,7 @@ class RecordingMCP:
 	def __init__(self):
 		self.tool_names: list[str] = []
 
-	def tool(self):
+	def tool(self, **_kwargs):
 		def decorator(function):
 			self.tool_names.append(function.__name__)
 			return function
@@ -35,10 +35,10 @@ class ToolRegistrationTests(unittest.TestCase):
 				"resolve_item",
 				"prepare_item",
 				"confirm_item",
+				"select_resolved_candidate",
 				"prepare_sales_order",
 				"confirm_sales_order",
 				"prepare_quotation",
 				"confirm_quotation",
 			],
 		)
-

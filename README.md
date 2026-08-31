@@ -67,9 +67,9 @@ prepare_quotation
 confirm_quotation
 ```
 
-The current architecture and the complete tool catalog are documented in
-[`docs/ERPNext_MCP_ARCHITECTURE.md`](docs/ERPNext_MCP_ARCHITECTURE.md). The
-original, narrower Sales Order baseline is preserved in
+The current architecture, [public tool contract standard](docs/architecture/MCP_TOOL_CONTRACT_STANDARD.md),
+and generated [complete tool catalog](docs/TOOLS.md) document this boundary.
+The original, narrower Sales Order baseline is preserved in
 [`docs/MCP_SALES_ORDER_V1_FROZEN.md`](docs/MCP_SALES_ORDER_V1_FROZEN.md).
 
 ## Safe persistent writes
@@ -99,9 +99,10 @@ ERPNext write
 `prepare_customer`, `prepare_item`, `prepare_sales_order`, and
 `prepare_quotation` validate the requested data, apply ERPNext defaults and
 document behavior where their services implement them, and return a structured
-preview plus an approval token. They do not perform the final persistent
-write. Their matching `confirm_*` tools require `confirm=true` and write only
-the server-side prepared payload through normal Frappe document APIs.
+preview plus a pending-operation token. They do not perform the final
+persistent write. `confirm=true` is not user approval: a matching `confirm_*`
+tool can write only after the shared server-verified approval guard accepts the
+server-side prepared payload through normal Frappe document APIs.
 
 For Customer and Item, the prepare services build an unsaved Frappe document
 and inspect the installed site's runtime DocField metadata. Explicit input,
@@ -115,11 +116,15 @@ Selects use runtime options, and Check/scalar values are normalized or rejected
 deterministically. This remains capability-scoped; the server does not expose
 arbitrary DocType resolution.
 
-Approval state is local to the MCP process, expires after 15 minutes, and is
-bound to the capability action, Frappe site, authenticated Frappe user, and a
-digest of the prepared payload. This design is for one local process; a remote
-or multi-worker deployment needs persistent approval storage and per-user
-authentication before it is enabled.
+The current LibreChat bridge does not provide this MCP service with a
+server-verifiable human approval signal, so every `confirm_*` write fails
+closed with `TRUSTED_APPROVAL_UNAVAILABLE`. The pending-operation state expires
+after 15 minutes and is bound to the capability action, Frappe site,
+authenticated Frappe user, and digest of the prepared payload; it is also
+single-use. See [explicit user approval safety](docs/architecture/MCP_EXPLICIT_USER_APPROVAL_SAFETY.md).
+This state is local to one MCP process; a remote or multi-worker deployment
+needs persistent approval storage and a trusted approval adapter before writes
+can be enabled.
 
 ## Runtime and permission boundary
 
@@ -185,6 +190,14 @@ bench install-app mcp_erpnext
 ```
 
 ### Contributing
+
+Any new or changed public MCP tool must follow the
+[`MCP Tool Contract Standard`](docs/architecture/MCP_TOOL_CONTRACT_STANDARD.md):
+explicit input/output contracts, a side-effect classification, contract tests,
+and a generated/checked tool catalog are required before it is complete.
+Resolver changes must also preserve `ambiguous` as a terminal state until an
+explicit candidate reference is selected and revalidated; ranking never grants
+implicit selection.
 
 This app uses `pre-commit` for code formatting and linting. Please [install pre-commit](https://pre-commit.com/#installation) and enable it for this repository:
 

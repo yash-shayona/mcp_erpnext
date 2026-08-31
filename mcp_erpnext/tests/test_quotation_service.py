@@ -6,8 +6,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
+from pydantic import TypeAdapter
 
 from mcp_erpnext.approvals import APPROVAL_TTL_SECONDS, approvals
+from mcp_erpnext.contracts.selling.quotation import PrepareQuotationResult
 from mcp_erpnext.services.selling import quotation as quotation_service
 
 
@@ -60,9 +62,7 @@ class FakeQuotation:
 	def calculate_taxes_and_totals(self):
 		self.net_total = sum(row.net_amount for row in self.items)
 		self.total_taxes_and_charges = sum(row.tax_amount for row in self.taxes)
-		self.additional_discount_percentage = self.additional_discount_percentage or 0
-		self.discount_amount = self.discount_amount or 0
-		self.grand_total = self.net_total + self.total_taxes_and_charges - self.discount_amount
+		self.grand_total = self.net_total + self.total_taxes_and_charges - (self.discount_amount or 0)
 
 	def run_method(self, method):
 		return self
@@ -200,6 +200,12 @@ class QuotationServiceTests(unittest.TestCase):
 		self.assertEqual(result["preview"]["additional_discount_percentage"], 5)
 		self.assertEqual(result["preview"]["terms"], "Standard terms")
 
+	def test_unset_additional_discounts_are_zero_in_the_typed_preview(self):
+		result = self.prepare()
+		self.assertEqual(result["preview"]["additional_discount_percentage"], 0)
+		self.assertEqual(result["preview"]["discount_amount"], 0)
+		TypeAdapter(PrepareQuotationResult).validate_python(result)
+
 	def test_unreadable_commercial_settings_are_rejected(self):
 		for keyword, value in (
 			("selling_price_list", "Private Price List"),
@@ -223,6 +229,9 @@ class QuotationServiceTests(unittest.TestCase):
 
 	def test_valid_confirmation_creates_draft_once(self):
 		prepared = self.prepare()
+		approvals.record_trusted_user_approval(
+			prepared["approval_token"], action="create_quotation", site="test.localhost", user="sales@example.com"
+		)
 		result = quotation_service.confirm_quotation(prepared["approval_token"], True)
 		self.assertEqual(result, {"status": "created", "quotation": "SAL-QTN-TEST-0001", "docstatus": 0, "idempotent": False})
 		self.assertEqual(self.commit_count, 1)
@@ -246,6 +255,12 @@ class QuotationServiceTests(unittest.TestCase):
 		approvals._approvals[prepared["approval_token"]].payload["party_name"] = "MISSING"
 		result = quotation_service.confirm_quotation(prepared["approval_token"], True)
 		self.assertEqual(result["code"], "CONFIRMATION_UNAVAILABLE")
+		self.assertEqual(self.commit_count, 0)
+
+	def test_model_confirm_true_cannot_self_grant_approval(self):
+		prepared = self.prepare()
+		result = quotation_service.confirm_quotation(prepared["approval_token"], True)
+		self.assertEqual(result["code"], "TRUSTED_APPROVAL_UNAVAILABLE")
 		self.assertEqual(self.commit_count, 0)
 
 

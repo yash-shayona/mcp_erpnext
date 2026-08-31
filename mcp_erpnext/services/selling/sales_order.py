@@ -8,7 +8,7 @@ from typing import Any
 import frappe
 from frappe.utils import getdate, nowdate
 
-from ...approvals import APPROVAL_TTL_SECONDS, approvals
+from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...observability import new_error_reference, public_error
 from ..masters.customer import resolve_customer
 from ..masters.item import resolve_sales_item
@@ -233,8 +233,9 @@ def _confirmation_error(code: str, message: str, *, retryable: bool) -> dict[str
 
 def confirm_sales_order(approval_token: str, confirm: bool) -> dict[str, Any]:
 	"""Create the reviewed Draft only for the original site, user, and action."""
-	approvals.prune_expired()
+	user = _current_user()
 	if not confirm:
+		approvals.cancel(approval_token, action=_ACTION, site=frappe.local.site, user=user)
 		return {
 			"status": "confirmation_required",
 			"code": "CONFIRMATION_REQUIRED",
@@ -242,26 +243,21 @@ def confirm_sales_order(approval_token: str, confirm: bool) -> dict[str, Any]:
 			"reference": new_error_reference(),
 			"retryable": False,
 		}
-	approval, state = approvals.lookup(
+	approval, state = approvals.claim_for_confirm_write(
 		approval_token,
 		action=_ACTION,
 		site=frappe.local.site,
-		user=_current_user(),
+		user=user,
 	)
-	if state == "expired":
+	if state != "available" or approval is None:
+		code, message, retryable = confirmation_failure(state, "Sales Order")
+		return _confirmation_error(code, message, retryable=retryable)
+	if not frappe.has_permission("Sales Order", "create"):
 		return _confirmation_error(
-			"CONFIRMATION_EXPIRED",
-			"This Sales Order confirmation has expired. Please prepare the order again.",
-			retryable=True,
-		)
-	if state == "unavailable" or approval is None:
-		return _confirmation_error(
-			"CONFIRMATION_UNAVAILABLE",
-			"This Sales Order confirmation is not available in the current session.",
+			"PERMISSION_DENIED",
+			"The authenticated user cannot create Sales Orders.",
 			retryable=False,
 		)
-	if approval.result_document:
-		return {"status": "created", "sales_order": approval.result_document, "idempotent": True}
 
 	try:
 		doc = frappe.get_doc(approval.payload)
@@ -273,5 +269,4 @@ def confirm_sales_order(approval_token: str, confirm: bool) -> dict[str, Any]:
 	except Exception:
 		frappe.db.rollback()
 		raise
-	approval.result_document = doc.name
 	return {"status": "created", "sales_order": doc.name, "docstatus": doc.docstatus}

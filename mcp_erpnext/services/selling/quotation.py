@@ -8,7 +8,7 @@ from typing import Any
 import frappe
 from frappe.utils import getdate, nowdate
 
-from ...approvals import APPROVAL_TTL_SECONDS, approvals
+from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...observability import new_error_reference
 
 
@@ -174,8 +174,10 @@ def _preview(doc: Any) -> dict[str, Any]:
 		],
 		"net_total": doc.net_total,
 		"total_taxes_and_charges": doc.total_taxes_and_charges,
-		"additional_discount_percentage": doc.additional_discount_percentage,
-		"discount_amount": doc.discount_amount,
+		# ERPNext leaves these unset when no additional discount applies. The public
+		# preview contract represents that business state as its numeric zero value.
+		"additional_discount_percentage": doc.additional_discount_percentage or 0,
+		"discount_amount": doc.discount_amount or 0,
 		"grand_total": doc.grand_total,
 		"tc_name": doc.tc_name,
 		"terms": doc.terms,
@@ -290,18 +292,16 @@ def prepare_quotation(
 
 def confirm_quotation(approval_token: str, confirm: bool) -> dict[str, Any]:
 	"""Create the reviewed Draft Quotation using only signed server-side prepared data."""
-	approvals.prune_expired()
+	user = _current_user()
 	if not confirm:
+		approvals.cancel(approval_token, action=_ACTION, site=frappe.local.site, user=user)
 		return _error("CONFIRMATION_REQUIRED", "Review the Quotation preview before confirming it.")
-	approval, state = approvals.lookup(
-		approval_token, action=_ACTION, site=frappe.local.site, user=_current_user()
+	approval, state = approvals.claim_for_confirm_write(
+		approval_token, action=_ACTION, site=frappe.local.site, user=user
 	)
-	if state == "expired":
-		return _error("CONFIRMATION_EXPIRED", "This Quotation confirmation has expired. Please prepare it again.", retryable=True)
-	if state == "unavailable" or approval is None:
-		return _error("CONFIRMATION_UNAVAILABLE", "This Quotation confirmation is not available in the current session.")
-	if approval.result_document:
-		return {"status": "created", "quotation": approval.result_document, "docstatus": 0, "idempotent": True}
+	if state != "available" or approval is None:
+		code, message, retryable = confirmation_failure(state, "Quotation")
+		return _error(code, message, retryable=retryable)
 	if not frappe.has_permission("Quotation", "create"):
 		return _permission_denied()
 	if approval.payload.get("doctype") != "Quotation" or not approval.payload.get("party_name") or not approval.payload.get("items"):
@@ -317,5 +317,4 @@ def confirm_quotation(approval_token: str, confirm: bool) -> dict[str, Any]:
 	except Exception:
 		frappe.db.rollback()
 		raise
-	approval.result_document = doc.name
 	return {"status": "created", "quotation": doc.name, "docstatus": doc.docstatus, "idempotent": False}

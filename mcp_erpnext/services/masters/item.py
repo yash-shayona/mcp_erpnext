@@ -6,7 +6,7 @@ from typing import Any
 
 import frappe
 
-from ...approvals import APPROVAL_TTL_SECONDS, approvals
+from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...config.masters import item as item_config
 from ...observability import new_error_reference
 from ..common.creation_contract import missing_input_response, resolve_creation_contract
@@ -54,6 +54,15 @@ def _reference(candidate: dict[str, Any]) -> dict[str, str | None]:
     }
 
 
+def _candidate(candidate: dict[str, Any]) -> dict[str, Any]:
+    """Expose an ambiguity candidate only through a reusable typed reference."""
+    return {
+        "reference": _reference(candidate),
+        "label": candidate.get("label") or candidate.get("value"),
+        "score": candidate.get("score", 0.0),
+    }
+
+
 def search_items(query: str) -> dict[str, Any]:
     candidates = find_candidates(
         "Item",
@@ -66,7 +75,7 @@ def search_items(query: str) -> dict[str, Any]:
         "status": search_status(query, candidates),
         "doctype": "Item",
         "query": query,
-        "candidates": candidates,
+        "candidates": [_candidate(candidate) for candidate in candidates],
     }
 
 
@@ -81,21 +90,23 @@ def resolve_sales_item(query: str) -> dict[str, Any]:
 
 
 def resolve_item_for_workflow(query: str) -> dict[str, Any]:
-    """Translate the existing sales-Item lookup into a parent-workflow contract."""
+    """Return one terminal public resolution state for sales-Item lookup."""
     resolution = resolve_sales_item(query)
     if resolution["status"] == "resolved":
         return {
             "status": "resolved",
-            "item": _reference(resolution["candidate"]),
+            "doctype": "Item",
+            "reference": _reference(resolution["candidate"]),
             "match_type": resolution.get("match_type"),
         }
     if resolution["status"] == "ambiguous":
         return {
-            "status": "needs_selection",
+            "status": "ambiguous",
+            "doctype": "Item",
             "query": query,
-            "candidates": resolution.get("candidates", []),
+            "candidates": [_candidate(candidate) for candidate in resolution.get("candidates", [])],
         }
-    return {"status": "needs_item_creation", "query": query, "candidates": []}
+    return {"status": "not_found", "doctype": "Item", "query": query, "candidates": []}
 
 
 def _item_data(item: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
@@ -216,41 +227,20 @@ def prepare_item(item: dict[str, Any]) -> dict[str, Any]:
 
 def confirm_item(approval_token: str, confirm: bool) -> dict[str, Any]:
     """Create the prepared Item only for the original site and authenticated user."""
-    approvals.prune_expired()
+    user = _current_user()
     if not confirm:
+        approvals.cancel(approval_token, action=_ACTION, site=frappe.local.site, user=user)
         return _confirmation_error(
             "CONFIRMATION_REQUIRED",
             "Review the Item preview before confirming it.",
             retryable=False,
         )
-    approval, state = approvals.lookup(
-        approval_token, action=_ACTION, site=frappe.local.site, user=_current_user()
+    approval, state = approvals.claim_for_confirm_write(
+        approval_token, action=_ACTION, site=frappe.local.site, user=user
     )
-    if state == "expired":
-        return _confirmation_error(
-            "CONFIRMATION_EXPIRED",
-            "This Item confirmation has expired. Please prepare it again.",
-            retryable=True,
-        )
-    if state == "unavailable" or approval is None:
-        return _confirmation_error(
-            "CONFIRMATION_UNAVAILABLE",
-            "This Item confirmation is not available in the current session.",
-            retryable=False,
-        )
-    if approval.result_document:
-        return {
-            "status": "created",
-            "item": {
-                "doctype": "Item",
-                "name": approval.result_document,
-                "item_code": approval.payload["item_code"],
-                "item_name": approval.payload.get("item_name")
-                or approval.payload["item_code"],
-                "stock_uom": approval.payload["stock_uom"],
-            },
-            "idempotent": True,
-        }
+    if state != "available" or approval is None:
+        code, message, retryable = confirmation_failure(state, "Item")
+        return _confirmation_error(code, message, retryable=retryable)
     if not frappe.has_permission("Item", "create"):
         return _permission_denied()
     if duplicates := _duplicate_matches(approval.payload["item_code"]):
@@ -266,7 +256,6 @@ def confirm_item(approval_token: str, confirm: bool) -> dict[str, Any]:
     except Exception:
         frappe.db.rollback()
         raise
-    approval.result_document = doc.name
     return {
         "status": "created",
         "item": {

@@ -107,24 +107,42 @@ class ItemServiceTests(unittest.TestCase):
 		with patch.object(item_service, "resolve_sales_item", return_value={"status": "resolved", "candidate": candidate, "match_type": "exact"}):
 			result = item_service.resolve_item_for_workflow("ITEM-001")
 		self.assertEqual(result["status"], "resolved")
-		self.assertEqual(result["item"], {"doctype": "Item", "name": "ITEM-001", "item_code": "ITEM-001", "item_name": "Blue Polo", "stock_uom": "Nos"})
+		self.assertEqual(result["doctype"], "Item")
+		self.assertEqual(result["reference"], {"doctype": "Item", "name": "ITEM-001", "item_code": "ITEM-001", "item_name": "Blue Polo", "stock_uom": "Nos"})
 
 	def test_multiple_items_require_selection(self):
-		with patch.object(item_service, "resolve_sales_item", return_value={"status": "ambiguous", "candidates": [{"value": "ITEM-1"}, {"value": "ITEM-2"}]}):
-			result = item_service.resolve_item_for_workflow("Polo")
-		self.assertEqual(result["status"], "needs_selection")
+		with patch.object(item_service, "resolve_sales_item", return_value={"status": "ambiguous", "candidates": [{"value": "SV-FRAPPE-DEVELOPMENT", "label": "Frappe Custom App Development", "score": 0.597}, {"value": "SV-WEBSITE-DEVELOPMENT", "label": "Website Development", "score": 0.55}]}):
+			result = item_service.resolve_item_for_workflow("Development Item")
+		self.assertEqual(result["status"], "ambiguous")
+		self.assertEqual(result["doctype"], "Item")
+		self.assertEqual(result["candidates"][0]["reference"]["name"], "SV-FRAPPE-DEVELOPMENT")
 		self.assertEqual(len(result["candidates"]), 2)
 
 	def test_missing_item_requires_controlled_creation(self):
 		with patch.object(item_service, "resolve_sales_item", return_value={"status": "not_found", "candidates": []}):
-			self.assertEqual(item_service.resolve_item_for_workflow("New Item")["status"], "needs_item_creation")
+			self.assertEqual(item_service.resolve_item_for_workflow("New Item")["status"], "not_found")
 
 	def test_sales_item_search_remains_permission_scoped(self):
 		candidate = {"value": "ITEM-001", "label": "Blue Polo", "score": 1.0}
 		with patch.object(item_service, "find_candidates", return_value=[candidate]) as find_candidates:
 			result = item_service.search_items("ITEM-001")
 		self.assertEqual(result["status"], "resolved")
-		self.assertEqual(result["candidates"], [candidate])
+		self.assertEqual(
+			result["candidates"],
+			[
+				{
+					"reference": {
+						"doctype": "Item",
+						"name": "ITEM-001",
+						"item_code": "ITEM-001",
+						"item_name": "Blue Polo",
+						"stock_uom": None,
+					},
+					"label": "Blue Polo",
+					"score": 1.0,
+				}
+			],
+		)
 		self.assertEqual(find_candidates.call_args.args[2], {"disabled": ["!=", 1], "is_sales_item": 1})
 
 	def test_duplicate_item_code_blocks_preparation(self):
@@ -185,6 +203,9 @@ class ItemServiceTests(unittest.TestCase):
 
 	def test_valid_confirmation_creates_once_with_normal_permissions(self):
 		prepared = item_service.prepare_item(self.valid_item())
+		approvals.record_trusted_user_approval(
+			prepared["approval_token"], action="create_item", site="test.localhost", user="sales@example.com"
+		)
 		result = item_service.confirm_item(prepared["approval_token"], True)
 		self.assertEqual(result["status"], "created")
 		self.assertFalse(result["idempotent"])
@@ -201,15 +222,34 @@ class ItemServiceTests(unittest.TestCase):
 
 	def test_confirmation_rechecks_duplicate_before_writing(self):
 		prepared = item_service.prepare_item(self.valid_item())
+		approvals.record_trusted_user_approval(
+			prepared["approval_token"], action="create_item", site="test.localhost", user="sales@example.com"
+		)
 		self.list_rows = {"NEW-ITEM-001": [{"name": "NEW-ITEM-001", "item_code": "NEW-ITEM-001", "item_name": "Race", "stock_uom": "Nos", "disabled": 0}]}
 		result = item_service.confirm_item(prepared["approval_token"], True)
 		self.assertEqual(result["status"], "duplicate_suspected")
+		self.assertEqual(self.commit_count, 0)
+
+	def test_model_confirm_true_cannot_self_grant_approval(self):
+		prepared = item_service.prepare_item(self.valid_item())
+		result = item_service.confirm_item(prepared["approval_token"], True)
+		self.assertEqual(result["code"], "TRUSTED_APPROVAL_UNAVAILABLE")
 		self.assertEqual(self.commit_count, 0)
 
 	def test_sales_order_item_resolution_contract_is_unchanged(self):
 		with patch.object(sales_order, "resolve_sales_item", return_value={"status": "resolved", "candidate": {"value": "ITEM-001", "item_name": "Blue Polo"}, "match_type": "exact"}):
 			result = sales_order._prepare_items([{"item": "ITEM-001", "qty": 2}])
 		self.assertEqual(result, {"status": "resolved", "items": [{"item_code": "ITEM-001", "item_name": "Blue Polo", "qty": 2.0, "match_type": "exact"}]})
+
+	def test_sales_order_does_not_continue_from_an_ambiguous_item(self):
+		with patch.object(
+			sales_order,
+			"resolve_sales_item",
+			return_value={"status": "ambiguous", "candidates": [{"value": "ITEM-1"}, {"value": "ITEM-2"}]},
+		):
+			result = sales_order._prepare_items([{"item": "Development Item", "qty": 2}])
+		self.assertEqual(result["status"], "ambiguous")
+		self.assertEqual(result["candidates"], [{"value": "ITEM-1"}, {"value": "ITEM-2"}])
 
 
 if __name__ == "__main__":

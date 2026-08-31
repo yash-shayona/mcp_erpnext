@@ -183,6 +183,38 @@ def resolve_candidate(
     return resolve_ranked_candidates(query, candidates)
 
 
+def revalidate_exact_candidate(
+    doctype: str,
+    name: str,
+    base_filters: dict[str, Any],
+    display_fields: tuple[str, ...],
+    get_list: Callable[..., list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
+    """Revalidate an explicitly selected reference with normal permissions.
+
+    Stateless selection deliberately does not trust a previous candidate list.
+    It verifies the selected document still matches the resolver's filters and
+    remains visible to the current Frappe user.
+    """
+    if not isinstance(name, str) or not (selected_name := name.strip()):
+        return {"status": "not_found", "query": "", "candidates": []}
+    fields = tuple(dict.fromkeys(("name", *display_fields)))
+    rows = (get_list or frappe.get_list)(
+        doctype,
+        filters={"name": selected_name, **base_filters},
+        fields=list(fields),
+        limit_page_length=1,
+        ignore_permissions=False,
+    )
+    if not rows:
+        return {"status": "not_found", "query": selected_name, "candidates": []}
+    return {
+        "status": "resolved",
+        "match_type": "exact",
+        "candidate": _display_candidate(rows[0], display_fields),
+    }
+
+
 def search_status(query: str, candidates: list[dict[str, Any]]) -> str:
     """Give public master-search endpoints the same resolution boundary."""
     if not candidates:

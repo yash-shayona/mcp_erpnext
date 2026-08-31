@@ -1,0 +1,178 @@
+from __future__ import annotations
+
+import asyncio
+import unittest
+from datetime import date
+from typing import Any
+from unittest.mock import patch
+
+from mcp.server.fastmcp import FastMCP
+from pydantic import ValidationError
+
+from mcp_erpnext.contracts.audit import audit_tool_contracts
+from mcp_erpnext.contracts.common import CustomerReference
+from mcp_erpnext.contracts.registry import SideEffectClass, ToolContract, ToolOperation
+from mcp_erpnext.contracts.selling.quotation import QuotationPrepareInput
+from mcp_erpnext.mcp_server import create_mcp
+from mcp_erpnext.tools.selling import quotation as quotation_tools
+
+
+class ToolContractTests(unittest.TestCase):
+	def registered_tools(self):
+		return asyncio.run(create_mcp().list_tools())
+
+	def test_registered_inventory_passes_the_contract_audit(self):
+		self.assertEqual(audit_tool_contracts(self.registered_tools()), [])
+
+	def test_quotation_public_schema_has_resolved_nested_references(self):
+		tool = next(tool for tool in self.registered_tools() if tool.name == "prepare_quotation")
+		schema = tool.inputSchema
+		customer = schema["$defs"]["CustomerReference"]
+		item = schema["$defs"]["ItemReference"]
+		row = schema["$defs"]["QuotationItemInput"]
+		self.assertEqual(schema["required"], ["customer", "items", "valid_till"])
+		self.assertEqual(customer["properties"]["doctype"]["const"], "Customer")
+		self.assertEqual(customer["required"], ["doctype", "name"])
+		self.assertEqual(item["properties"]["doctype"]["const"], "Item")
+		self.assertEqual(item["required"], ["doctype", "name"])
+		self.assertEqual(row["properties"]["qty"]["exclusiveMinimum"], 0)
+		self.assertEqual(schema["properties"]["valid_till"]["format"], "date")
+		self.assertNotIn("item_code", schema["properties"])
+		self.assertNotIn("quantity", row["properties"])
+		self.assertNotIn("ctx", schema["properties"])
+
+	def test_quotation_output_schema_models_every_prepare_state(self):
+		tools = {tool.name: tool for tool in self.registered_tools()}
+		tool = tools["prepare_quotation"]
+		mapping = tool.outputSchema["discriminator"]["mapping"]
+		self.assertEqual(set(mapping), {"ready", "needs_input", "permission_denied", "error"})
+		self.assertEqual(tool.meta["mcp_erpnext"]["side_effect"], "PREPARE")
+		for name in ("prepare_quotation", "confirm_quotation"):
+			with self.subTest(name=name):
+				self.assertEqual(tools[name].outputSchema["type"], "object")
+
+	def test_resolver_schemas_expose_terminal_states_and_explicit_selection(self):
+		tools = {tool.name: tool for tool in self.registered_tools()}
+		for name in ("search_customers", "resolve_customer", "search_items", "resolve_item"):
+			with self.subTest(name=name):
+				self.assertEqual(tools[name].outputSchema["type"], "object")
+				self.assertEqual(
+					set(tools[name].outputSchema["discriminator"]["mapping"]),
+					{"resolved", "ambiguous", "not_found", "error"},
+				)
+				self.assertEqual(
+					tools[name].meta["mcp_erpnext"]["resolution_states"],
+					["resolved", "ambiguous", "not_found", "error"],
+				)
+		selection = tools["select_resolved_candidate"]
+		self.assertEqual(selection.outputSchema["type"], "object")
+		self.assertEqual(selection.inputSchema["properties"]["doctype"]["enum"], ["Customer", "Item"])
+		self.assertEqual(selection.inputSchema["required"], ["doctype", "name"])
+		self.assertEqual(
+			set(selection.outputSchema["discriminator"]["mapping"]),
+			{"resolved", "not_found", "error"},
+		)
+
+	def test_quotation_request_rejects_legacy_or_invalid_reference_shapes(self):
+		valid = {
+			"customer": {"doctype": "Customer", "name": "CUST-001"},
+			"items": [{"item": {"doctype": "Item", "name": "ITEM-001"}, "qty": 2}],
+			"valid_till": "2026-09-01",
+		}
+		self.assertEqual(QuotationPrepareInput.model_validate(valid).valid_till, date(2026, 9, 1))
+		for invalid in (
+			{**valid, "items": [{"item_code": "ITEM-001", "quantity": 2}]},
+			{**valid, "customer": {"name": "CUST-001"}},
+			{**valid, "customer": {"doctype": "Item", "name": "CUST-001"}},
+			{**valid, "customer": {"doctype": "Customer", "name": "   "}},
+			{**valid, "items": [{"item": {"doctype": "Customer", "name": "ITEM-001"}, "qty": 2}]},
+			{**valid, "items": [{"item": {"doctype": "Item", "name": "ITEM-001"}}]},
+			{**valid, "items": [{"item": {"doctype": "Item", "name": "ITEM-001"}, "qty": 0}]},
+			{**valid, "items": [{"item": {"doctype": "Item", "name": "ITEM-001"}, "qty": True}]},
+			{
+				**valid,
+				"customer": {
+					"status": "ambiguous",
+					"doctype": "Customer",
+					"query": "Acme",
+					"candidates": [],
+				},
+			},
+		):
+			with self.subTest(invalid=invalid):
+				with self.assertRaises(ValidationError):
+					QuotationPrepareInput.model_validate(invalid)
+
+	def test_quotation_wrapper_converts_the_typed_request_without_business_logic(self):
+		service_result = {
+			"status": "needs_input",
+			"missing": ["company"],
+			"message": "No permitted Company is available.",
+		}
+		with patch.object(quotation_tools, "execute_tool_with_context", side_effect=lambda _ctx, _name, operation: operation()), patch.object(
+			quotation_tools, "_prepare_quotation", return_value=service_result
+		) as service:
+			result = quotation_tools.prepare_quotation(
+				customer=CustomerReference(doctype="Customer", name="CUST-001"),
+				items=[QuotationPrepareInput.model_validate({
+					"customer": {"doctype": "Customer", "name": "CUST-001"},
+					"items": [{"item": {"doctype": "Item", "name": "ITEM-001"}, "qty": 2}],
+					"valid_till": "2026-09-01",
+				}).items[0]],
+				valid_till=date(2026, 9, 1),
+				ctx=object(),
+			)
+		self.assertEqual(result.root.status, "needs_input")
+		self.assertEqual(service.call_args.args[0], {"doctype": "Customer", "name": "CUST-001"})
+		self.assertEqual(service.call_args.args[1], [{"item": {"doctype": "Item", "name": "ITEM-001"}, "qty": 2.0}])
+		self.assertEqual(service.call_args.args[2], "2026-09-01")
+
+	def test_untyped_temporary_tool_fails_the_non_legacy_contract_policy(self):
+		mcp = FastMCP("contract-audit-test")
+
+		@mcp.tool(meta={"mcp_erpnext": {"side_effect": "READ"}})
+		def temporary_untyped(payload: dict[str, Any]) -> dict[str, Any]:
+			"""Temporary test tool with an intentionally invalid public payload."""
+			return payload
+
+		contracts = {
+			"temporary_untyped": ToolContract(
+				"temporary_untyped",
+				"Tests",
+				ToolOperation.SEARCH,
+				SideEffectClass.READ,
+				"Temporary test tool.",
+				False,
+				QuotationPrepareInput,
+				QuotationPrepareInput,
+			),
+		}
+		issues = audit_tool_contracts(asyncio.run(mcp.list_tools()), contracts)
+		self.assertIn("temporary_untyped: input schema contains an arbitrary object.", issues)
+
+	def test_confirm_write_without_shared_approval_guard_fails_the_contract_policy(self):
+		mcp = FastMCP("contract-audit-test")
+
+		@mcp.tool(meta={"mcp_erpnext": {"side_effect": "CONFIRM_WRITE"}})
+		def temporary_confirm(approval_token: str) -> str:
+			"""Temporary confirm tool with an intentionally missing approval guard."""
+			return approval_token
+
+		contracts = {
+			"temporary_confirm": ToolContract(
+				"temporary_confirm",
+				"Tests",
+				ToolOperation.CONFIRM,
+				SideEffectClass.CONFIRM_WRITE,
+				"Temporary confirm tool.",
+				True,
+				QuotationPrepareInput,
+				QuotationPrepareInput,
+			),
+		}
+		issues = audit_tool_contracts(asyncio.run(mcp.list_tools()), contracts)
+		self.assertIn("temporary_confirm: CONFIRM_WRITE tool lacks a shared approval guard.", issues)
+
+
+if __name__ == "__main__":
+	unittest.main()

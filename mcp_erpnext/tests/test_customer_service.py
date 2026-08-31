@@ -133,17 +133,20 @@ class CustomerServiceTests(unittest.TestCase):
 		with patch.object(customer_service, "resolve_customer", return_value={"status": "resolved", "candidate": candidate, "match_type": "exact"}):
 			result = customer_service.resolve_customer_for_workflow("Acme")
 		self.assertEqual(result["status"], "resolved")
-		self.assertEqual(result["customer"], {"doctype": "Customer", "name": "CUST-0001", "customer_name": "Acme"})
+		self.assertEqual(result["doctype"], "Customer")
+		self.assertEqual(result["reference"], {"doctype": "Customer", "name": "CUST-0001", "customer_name": "Acme"})
 
 	def test_multiple_customers_require_selection(self):
-		with patch.object(customer_service, "resolve_customer", return_value={"status": "ambiguous", "candidates": [{"value": "CUST-1"}, {"value": "CUST-2"}]}):
+		with patch.object(customer_service, "resolve_customer", return_value={"status": "ambiguous", "candidates": [{"value": "CUST-1", "label": "Acme One", "score": 0.7}, {"value": "CUST-2", "label": "Acme Two", "score": 0.6}]}):
 			result = customer_service.resolve_customer_for_workflow("Acme")
-		self.assertEqual(result["status"], "needs_selection")
+		self.assertEqual(result["status"], "ambiguous")
+		self.assertEqual(result["doctype"], "Customer")
+		self.assertEqual(result["candidates"][0]["reference"], {"doctype": "Customer", "name": "CUST-1", "customer_name": "Acme One"})
 		self.assertEqual(len(result["candidates"]), 2)
 
 	def test_no_customer_requires_creation(self):
 		with patch.object(customer_service, "resolve_customer", return_value={"status": "not_found", "candidates": []}):
-			self.assertEqual(customer_service.resolve_customer_for_workflow("New Customer")["status"], "needs_customer_creation")
+			self.assertEqual(customer_service.resolve_customer_for_workflow("New Customer")["status"], "not_found")
 
 	def test_each_supported_duplicate_identifier_blocks_preparation(self):
 		for fieldname, value, input_change in (
@@ -239,6 +242,9 @@ class CustomerServiceTests(unittest.TestCase):
 
 	def test_valid_confirmation_creates_once_with_normal_permissions(self):
 		prepared = customer_service.prepare_customer(self.valid_customer())
+		approvals.record_trusted_user_approval(
+			prepared["approval_token"], action="create_customer", site="test.localhost", user="sales@example.com"
+		)
 		result = customer_service.confirm_customer(prepared["approval_token"], True)
 		self.assertEqual(result["status"], "created")
 		self.assertFalse(result["idempotent"])
@@ -248,9 +254,18 @@ class CustomerServiceTests(unittest.TestCase):
 
 	def test_confirmation_rechecks_duplicates_before_writing(self):
 		prepared = customer_service.prepare_customer(self.valid_customer())
+		approvals.record_trusted_user_approval(
+			prepared["approval_token"], action="create_customer", site="test.localhost", user="sales@example.com"
+		)
 		self.list_rows = {"customer_name:New Customer": [{"name": "CUST-RACE", "customer_name": "New Customer"}]}
 		result = customer_service.confirm_customer(prepared["approval_token"], True)
 		self.assertEqual(result["status"], "duplicate_suspected")
+		self.assertEqual(self.commit_count, 0)
+
+	def test_model_confirm_true_cannot_self_grant_approval(self):
+		prepared = customer_service.prepare_customer(self.valid_customer())
+		result = customer_service.confirm_customer(prepared["approval_token"], True)
+		self.assertEqual(result["code"], "TRUSTED_APPROVAL_UNAVAILABLE")
 		self.assertEqual(self.commit_count, 0)
 
 
