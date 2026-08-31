@@ -1,0 +1,86 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-31 13:11:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "identity_section",
+  "librechat_user_id",
+  "librechat_email",
+  "column_break_identity",
+  "frappe_user",
+  "enabled",
+  "notes_section",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "identity_section",
+   "fieldtype": "Section Break",
+   "label": "Identity Mapping"
+  },
+  {
+   "fieldname": "librechat_user_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "LibreChat User ID",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "librechat_email",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "LibreChat Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "column_break_identity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "frappe_user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Frappe User",
+   "options": "User",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled",
+   "reqd": 1
+  },
+  {
+   "fieldname": "notes_section",
+   "fieldtype": "Section Break",
+   "label": "Administration"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "links": [],
+ "module": "MCP ERPNext",
+ "name": "LibreChat User Mapping",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
