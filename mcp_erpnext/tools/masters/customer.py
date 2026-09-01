@@ -8,6 +8,7 @@ from mcp.server.fastmcp import Context
 from pydantic import TypeAdapter
 
 from ...contracts.common import NonEmptyString
+from ...contracts.interaction import selection_directive
 from ...contracts.masters.resolution import (
 	CustomerResolutionOutput,
 	CustomerResolutionResult,
@@ -28,10 +29,17 @@ _resolution_adapter = TypeAdapter(CustomerResolutionResult)
 _search_adapter = TypeAdapter(CustomerSearchResultContract)
 
 
+def _with_selection_interaction(result: dict[str, Any]) -> dict[str, Any]:
+	"""Add semantic selection guidance without changing resolver business payloads."""
+	if result.get("status") != "ambiguous":
+		return result
+	return {**result, "interaction": selection_directive().model_dump(mode="json")}
+
+
 def search_customers(query: NonEmptyString, ctx: Context) -> CustomerSearchOutput:
 	"""Find permitted active Customers with explicit candidate references."""
 	result = execute_tool_with_context(ctx, "search_customers", lambda: _search_customers(query))
-	return CustomerSearchOutput(root=_search_adapter.validate_python(result))
+	return CustomerSearchOutput(root=_search_adapter.validate_python(_with_selection_interaction(result)))
 
 
 def resolve_customer(query: NonEmptyString, ctx: Context) -> CustomerResolutionOutput:
@@ -39,7 +47,7 @@ def resolve_customer(query: NonEmptyString, ctx: Context) -> CustomerResolutionO
 	result = execute_tool_with_context(
 		ctx, "resolve_customer", lambda: _resolve_customer_for_workflow(query)
 	)
-	return CustomerResolutionOutput(root=_resolution_adapter.validate_python(result))
+	return CustomerResolutionOutput(root=_resolution_adapter.validate_python(_with_selection_interaction(result)))
 
 
 def register_customer_tools(mcp: Any) -> None:

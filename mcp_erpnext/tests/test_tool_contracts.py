@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 from datetime import date
+from json import dumps
 from typing import Any
 from unittest.mock import patch
 
@@ -50,6 +51,17 @@ class ToolContractTests(unittest.TestCase):
 		for name in ("prepare_quotation", "confirm_quotation"):
 			with self.subTest(name=name):
 				self.assertEqual(tools[name].outputSchema["type"], "object")
+
+	def test_public_schemas_do_not_expose_server_approval_policy_internals(self):
+		schemas = dumps(
+			[
+				{"input": tool.inputSchema, "output": tool.outputSchema}
+				for tool in self.registered_tools()
+			]
+		)
+		for internal in ("MCP_APPROVAL_MODE", "approval_mode", "trusted_at", "record_trusted_user_approval"):
+			with self.subTest(internal=internal):
+				self.assertNotIn(internal, schemas)
 
 	def test_resolver_schemas_expose_terminal_states_and_explicit_selection(self):
 		tools = {tool.name: tool for tool in self.registered_tools()}
@@ -123,6 +135,9 @@ class ToolContractTests(unittest.TestCase):
 				ctx=object(),
 			)
 		self.assertEqual(result.root.status, "needs_input")
+		self.assertTrue(result.root.interaction.required)
+		self.assertEqual(result.root.interaction.kind, "INPUT")
+		self.assertIn("PROVIDE_INPUT", result.root.interaction.allowed_actions)
 		self.assertEqual(service.call_args.args[0], {"doctype": "Customer", "name": "CUST-001"})
 		self.assertEqual(service.call_args.args[1], [{"item": {"doctype": "Item", "name": "ITEM-001"}, "qty": 2.0}])
 		self.assertEqual(service.call_args.args[2], "2026-09-01")

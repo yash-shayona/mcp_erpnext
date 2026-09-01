@@ -14,6 +14,7 @@ from ..common import (
 	ResolvableDoctype,
 	ToolError,
 )
+from ..interaction import InteractionDirective
 
 
 MatchType = Literal["exact", "spelling_correction"]
@@ -50,6 +51,7 @@ class CustomerSearchResult(PublicContractModel):
 	doctype: Literal["Customer"]
 	query: NonEmptyString
 	candidates: list[CustomerResolutionCandidate]
+	interaction: InteractionDirective | None = None
 
 
 CustomerSearchResultContract = Annotated[
@@ -75,6 +77,7 @@ class ItemSearchResult(PublicContractModel):
 	doctype: Literal["Item"]
 	query: NonEmptyString
 	candidates: list[ItemResolutionCandidate]
+	interaction: InteractionDirective | None = None
 
 
 ItemSearchResultContract = Annotated[
@@ -101,6 +104,7 @@ class CustomerAmbiguous(PublicContractModel):
 	doctype: Literal["Customer"]
 	query: NonEmptyString
 	candidates: list[CustomerResolutionCandidate]
+	interaction: InteractionDirective
 
 
 class CustomerNotFound(PublicContractModel):
@@ -134,6 +138,7 @@ class ItemAmbiguous(PublicContractModel):
 	doctype: Literal["Item"]
 	query: NonEmptyString
 	candidates: list[ItemResolutionCandidate]
+	interaction: InteractionDirective
 
 
 class ItemNotFound(PublicContractModel):

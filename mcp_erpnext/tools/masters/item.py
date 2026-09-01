@@ -8,6 +8,7 @@ from mcp.server.fastmcp import Context
 from pydantic import TypeAdapter
 
 from ...contracts.common import NonEmptyString
+from ...contracts.interaction import selection_directive
 from ...contracts.masters.resolution import (
 	ItemResolutionOutput,
 	ItemResolutionResult,
@@ -28,16 +29,23 @@ _resolution_adapter = TypeAdapter(ItemResolutionResult)
 _search_adapter = TypeAdapter(ItemSearchResultContract)
 
 
+def _with_selection_interaction(result: dict[str, Any]) -> dict[str, Any]:
+	"""Add semantic selection guidance without changing resolver business payloads."""
+	if result.get("status") != "ambiguous":
+		return result
+	return {**result, "interaction": selection_directive().model_dump(mode="json")}
+
+
 def search_items(query: NonEmptyString, ctx: Context) -> ItemSearchOutput:
 	"""Find permitted sales Items with explicit candidate references."""
 	result = execute_tool_with_context(ctx, "search_items", lambda: _search_items(query))
-	return ItemSearchOutput(root=_search_adapter.validate_python(result))
+	return ItemSearchOutput(root=_search_adapter.validate_python(_with_selection_interaction(result)))
 
 
 def resolve_item(query: NonEmptyString, ctx: Context) -> ItemResolutionOutput:
 	"""Resolve one permitted sales Item or return a terminal selection state."""
 	result = execute_tool_with_context(ctx, "resolve_item", lambda: _resolve_item_for_workflow(query))
-	return ItemResolutionOutput(root=_resolution_adapter.validate_python(result))
+	return ItemResolutionOutput(root=_resolution_adapter.validate_python(_with_selection_interaction(result)))
 
 
 def register_item_tools(mcp: Any) -> None:

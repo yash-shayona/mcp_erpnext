@@ -11,6 +11,8 @@ from json import dumps
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from .settings import ApprovalMode
+
 
 APPROVAL_TTL_SECONDS = 15 * 60
 ApprovalLookup = Literal["available", "expired", "unavailable", "consumed"]
@@ -42,14 +44,20 @@ class ApprovalStore:
 	The store deliberately has no MCP-callable method that grants trust. A
 	transport-specific adapter may call :meth:`record_trusted_user_approval` only
 	after it has independently verified a human-originated approval event. The
-	current LibreChat MCP path has no such adapter, so every confirm write fails
-	closed with ``not_trusted``.
+	adapter remains required when the server is configured for
+	``trusted_human`` approval mode.
 	"""
 
-	def __init__(self) -> None:
+	def __init__(self, approval_mode: ApprovalMode = ApprovalMode.TRUSTED_HUMAN) -> None:
 		self._approvals: dict[str, PendingApproval] = {}
 		self._signing_key = secrets.token_bytes(32)
 		self._lock = RLock()
+		self._approval_mode = ApprovalMode(approval_mode)
+
+	def configure_approval_mode(self, approval_mode: ApprovalMode) -> None:
+		"""Set the process policy during MCP server startup, not from a tool call."""
+		with self._lock:
+			self._approval_mode = ApprovalMode(approval_mode)
 
 	def _payload_digest(self, payload: dict[str, Any]) -> str:
 		serialized = dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
@@ -100,14 +108,14 @@ class ApprovalStore:
 	def claim_for_confirm_write(
 		self, token: str, *, action: str, site: str, user: str
 	) -> tuple[PendingApproval | None, ApprovalClaim]:
-		"""Atomically claim a trusted pending operation before a final write."""
+		"""Atomically claim a policy-compliant pending operation before a final write."""
 		with self._lock:
 			approval, state = self._lookup_locked(token, action=action, site=site, user=user)
 			if state != "available" or approval is None:
 				return approval, state
 			if approval.consumed_at is not None or approval.cancelled_at is not None:
 				return None, "consumed"
-			if approval.trusted_at is None:
+			if self._approval_mode == ApprovalMode.TRUSTED_HUMAN and approval.trusted_at is None:
 				return None, "not_trusted"
 			# Consume before persistence so concurrent confirms cannot both write.
 			approval.consumed_at = time.monotonic()

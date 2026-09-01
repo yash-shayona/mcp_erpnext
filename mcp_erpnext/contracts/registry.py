@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from .interaction import InteractionKind
 from .masters.resolution import (
 	CustomerResolutionOutput,
 	CustomerSearchOutput,
@@ -59,6 +60,8 @@ class ToolContract:
 	legacy: bool = False
 	resolution_states: tuple[str, ...] = ()
 	approval_guard: str | None = None
+	interaction_kinds: tuple[InteractionKind, ...] = ()
+	approval_confirm_tool: str | None = None
 
 	@property
 	def compliant(self) -> bool:
@@ -69,14 +72,20 @@ class ToolContract:
 		resolution = (
 			{"resolution_states": list(self.resolution_states)} if self.resolution_states else {}
 		)
+		interaction = (
+			{"interaction_kinds": [kind.value for kind in self.interaction_kinds]}
+			if self.interaction_kinds
+			else {}
+		)
 		return {
 			"mcp_erpnext": {
 				"domain": self.domain,
 				"operation": self.operation.value,
 				"side_effect": self.side_effect.value,
 				"approval_required": self.approval_required,
-				**({"approval_guard": self.approval_guard} if self.approval_guard else {}),
-				**resolution,
+					**({"approval_guard": self.approval_guard} if self.approval_guard else {}),
+					**resolution,
+					**interaction,
 			}
 		}
 
@@ -117,18 +126,18 @@ def _legacy(
 
 
 TOOL_CONTRACTS = {
-	"search_customers": ToolContract("search_customers", "Masters", ToolOperation.SEARCH, SideEffectClass.READ, "Find permitted active Customers with explicit candidate references.", False, EntityResolveInput, CustomerSearchOutput, resolution_states=("resolved", "ambiguous", "not_found", "error")),
-	"resolve_customer": ToolContract("resolve_customer", "Masters", ToolOperation.RESOLVE, SideEffectClass.RESOLVE, "Resolve one permitted Customer or return a terminal selection state.", False, EntityResolveInput, CustomerResolutionOutput, resolution_states=("resolved", "ambiguous", "not_found", "error")),
+	"search_customers": ToolContract("search_customers", "Masters", ToolOperation.SEARCH, SideEffectClass.READ, "Find permitted active Customers with explicit candidate references.", False, EntityResolveInput, CustomerSearchOutput, resolution_states=("resolved", "ambiguous", "not_found", "error"), interaction_kinds=(InteractionKind.SELECTION,)),
+	"resolve_customer": ToolContract("resolve_customer", "Masters", ToolOperation.RESOLVE, SideEffectClass.RESOLVE, "Resolve one permitted Customer or return a terminal selection state.", False, EntityResolveInput, CustomerResolutionOutput, resolution_states=("resolved", "ambiguous", "not_found", "error"), interaction_kinds=(InteractionKind.SELECTION,)),
 	"prepare_customer": _legacy("prepare_customer", "Masters", ToolOperation.PREPARE, SideEffectClass.PREPARE, "Validate a Customer preview without writing.", False),
 	"confirm_customer": _legacy("confirm_customer", "Masters", ToolOperation.CONFIRM, SideEffectClass.CONFIRM_WRITE, "Create a prepared Customer.", True, TRUSTED_PENDING_OPERATION_GUARD),
-	"search_items": ToolContract("search_items", "Masters", ToolOperation.SEARCH, SideEffectClass.READ, "Find permitted sales Items with explicit candidate references.", False, EntityResolveInput, ItemSearchOutput, resolution_states=("resolved", "ambiguous", "not_found", "error")),
-	"resolve_item": ToolContract("resolve_item", "Masters", ToolOperation.RESOLVE, SideEffectClass.RESOLVE, "Resolve one permitted sales Item or return a terminal selection state.", False, EntityResolveInput, ItemResolutionOutput, resolution_states=("resolved", "ambiguous", "not_found", "error")),
+	"search_items": ToolContract("search_items", "Masters", ToolOperation.SEARCH, SideEffectClass.READ, "Find permitted sales Items with explicit candidate references.", False, EntityResolveInput, ItemSearchOutput, resolution_states=("resolved", "ambiguous", "not_found", "error"), interaction_kinds=(InteractionKind.SELECTION,)),
+	"resolve_item": ToolContract("resolve_item", "Masters", ToolOperation.RESOLVE, SideEffectClass.RESOLVE, "Resolve one permitted sales Item or return a terminal selection state.", False, EntityResolveInput, ItemResolutionOutput, resolution_states=("resolved", "ambiguous", "not_found", "error"), interaction_kinds=(InteractionKind.SELECTION,)),
 	"prepare_item": _legacy("prepare_item", "Masters", ToolOperation.PREPARE, SideEffectClass.PREPARE, "Validate an Item preview without writing.", False),
 	"confirm_item": _legacy("confirm_item", "Masters", ToolOperation.CONFIRM, SideEffectClass.CONFIRM_WRITE, "Create a prepared Item.", True, TRUSTED_PENDING_OPERATION_GUARD),
 	"prepare_sales_order": _legacy("prepare_sales_order", "Selling", ToolOperation.PREPARE, SideEffectClass.PREPARE, "Prepare a Sales Order preview without writing.", False),
 	"confirm_sales_order": _legacy("confirm_sales_order", "Selling", ToolOperation.CONFIRM, SideEffectClass.CONFIRM_WRITE, "Create a prepared Sales Order.", True, TRUSTED_PENDING_OPERATION_GUARD),
-	"prepare_quotation": ToolContract("prepare_quotation", "Selling", ToolOperation.PREPARE, SideEffectClass.PREPARE, "Prepare an ERPNext-calculated Quotation preview without writing.", False, QuotationPrepareInput, PrepareQuotationOutput),
-	"confirm_quotation": ToolContract("confirm_quotation", "Selling", ToolOperation.CONFIRM, SideEffectClass.CONFIRM_WRITE, "Create a prepared Draft Quotation after explicit server-verified human approval.", True, QuotationConfirmInput, ConfirmQuotationOutput, approval_guard=TRUSTED_PENDING_OPERATION_GUARD),
+	"prepare_quotation": ToolContract("prepare_quotation", "Selling", ToolOperation.PREPARE, SideEffectClass.PREPARE, "Prepare an ERPNext-calculated Quotation preview without writing.", False, QuotationPrepareInput, PrepareQuotationOutput, interaction_kinds=(InteractionKind.INPUT, InteractionKind.APPROVAL), approval_confirm_tool="confirm_quotation"),
+	"confirm_quotation": ToolContract("confirm_quotation", "Selling", ToolOperation.CONFIRM, SideEffectClass.CONFIRM_WRITE, "Create a prepared Draft Quotation after explicit approval.", True, QuotationConfirmInput, ConfirmQuotationOutput, approval_guard=TRUSTED_PENDING_OPERATION_GUARD),
 	"select_resolved_candidate": ToolContract("select_resolved_candidate", "Masters", ToolOperation.RESOLVE, SideEffectClass.RESOLVE, "Revalidate a user-selected Customer or Item reference without writing.", False, SelectedCandidateInput, SelectResolvedCandidateOutput, resolution_states=("resolved", "not_found", "error")),
 }
 

@@ -9,7 +9,7 @@ from unittest.mock import Mock, call, patch
 
 from mcp_erpnext.identity import resolve_frappe_user_for_runtime
 from mcp_erpnext.observability import ERPAccessNotConfiguredError, MCPIdentityConfigurationError
-from mcp_erpnext.settings import MCPSettings
+from mcp_erpnext.settings import ApprovalMode, MCPSettings
 from mcp_erpnext.transport_identity import RuntimeIdentity
 
 
@@ -30,6 +30,46 @@ def _settings(**overrides) -> MCPSettings:
 
 
 class SettingsIdentityTests(unittest.TestCase):
+	@patch.dict(os.environ, {"MCP_BACKEND": "direct", "MCP_FRAPPE_SITE": "test.localhost"}, clear=True)
+	def test_approval_mode_defaults_to_trusted_human(self):
+		self.assertEqual(MCPSettings.from_environment().approval_mode, ApprovalMode.TRUSTED_HUMAN)
+
+	@patch.dict(
+		os.environ,
+		{
+			"MCP_BACKEND": "direct",
+			"MCP_FRAPPE_SITE": "test.localhost",
+			"MCP_APPROVAL_MODE": "agent_delegated",
+		},
+		clear=True,
+	)
+	def test_agent_delegated_approval_mode_is_accepted(self):
+		self.assertEqual(MCPSettings.from_environment().approval_mode, ApprovalMode.AGENT_DELEGATED)
+
+	@patch.dict(
+		os.environ,
+		{
+			"MCP_BACKEND": "direct",
+			"MCP_FRAPPE_SITE": "test.localhost",
+			"MCP_APPROVAL_MODE": "trusted_human",
+		},
+		clear=True,
+	)
+	def test_explicit_trusted_human_approval_mode_is_accepted(self):
+		self.assertEqual(MCPSettings.from_environment().approval_mode, ApprovalMode.TRUSTED_HUMAN)
+
+	@patch.dict(
+		os.environ,
+		{
+			"MCP_BACKEND": "direct",
+			"MCP_FRAPPE_SITE": "test.localhost",
+			"MCP_APPROVAL_MODE": "unsafe",
+		},
+		clear=True,
+	)
+	def test_invalid_approval_mode_fails_deterministically(self):
+		with self.assertRaisesRegex(RuntimeError, "MCP_APPROVAL_MODE"):
+			MCPSettings.from_environment()
 	@patch.dict(os.environ, {"MCP_BACKEND": "direct", "MCP_FRAPPE_SITE": "test.localhost"}, clear=True)
 	def test_identity_mode_defaults_to_service(self):
 		settings = MCPSettings.from_environment()

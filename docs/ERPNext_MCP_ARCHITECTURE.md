@@ -115,6 +115,21 @@ permission enforcement. The current write capabilities are therefore:
 - Draft Sales Order creation
 - Draft Quotation creation
 
+## Conversational interaction contract
+
+The MCP server returns client-neutral semantic interaction guidance when an
+existing typed workflow needs a user continuation. It does not interpret chat
+language or own conversation state. `SELECTION` covers ambiguous candidates,
+`INPUT` covers structured missing business fields, and `APPROVAL` covers a
+prepared preview that must be reviewed. The Agent interprets the user's message
+or UI action and calls the existing structured selection, prepare, or confirm
+tool as appropriate.
+
+An `APPROVE` action is only semantic intent. The existing approval token and
+trusted server-side approval guard remain mandatory before a `CONFIRM_WRITE`
+tool can persist data. See
+[MCP Conversational Interaction Contract](architecture/MCP_CONVERSATIONAL_INTERACTION_CONTRACT.md).
+
 ## Shared approval boundary
 
 Every persistent creation path follows this boundary:

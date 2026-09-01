@@ -9,6 +9,7 @@ import frappe
 from frappe.utils import getdate, nowdate
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
+from ...contracts.interaction import approval_directive, input_directive
 from ...observability import new_error_reference
 
 
@@ -30,6 +31,16 @@ def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any
 		"message": message,
 		"reference": new_error_reference(),
 		"retryable": retryable,
+	}
+
+
+def _needs_input(missing: list[str], message: str | None = None) -> dict[str, Any]:
+	"""Keep existing missing-field payloads while exposing the shared input directive."""
+	return {
+		"status": "needs_input",
+		"missing": missing,
+		**({"message": message} if message else {}),
+		"interaction": input_directive().model_dump(mode="json"),
 	}
 
 
@@ -97,7 +108,7 @@ def _number(value: Any, *, field: str, positive: bool = False) -> tuple[float | 
 
 def _date(value: Any, *, field: str) -> tuple[Any | None, dict[str, Any] | None]:
 	if not isinstance(value, str) or not value.strip():
-		return None, {"status": "needs_input", "missing": [field]}
+		return None, _needs_input([field])
 	try:
 		return getdate(value), None
 	except Exception:
@@ -106,7 +117,7 @@ def _date(value: Any, *, field: str) -> tuple[Any | None, dict[str, Any] | None]
 
 def _prepare_items(items: Any) -> tuple[list[dict[str, Any]] | None, dict[str, Any] | None]:
 	if not isinstance(items, list) or not items:
-		return None, {"status": "needs_input", "missing": ["items"]}
+		return None, _needs_input(["items"])
 
 	prepared: list[dict[str, Any]] = []
 	for index, raw in enumerate(items, start=1):
@@ -221,7 +232,7 @@ def prepare_quotation(
 		return _error("INVALID_QUOTATION_DETAILS", "Valid till date cannot be before transaction date.")
 	resolved_company = _resolve_company(company)
 	if not resolved_company:
-		return {"status": "needs_input", "missing": ["company"], "message": "No permitted Company is available."}
+		return _needs_input(["company"], "No permitted Company is available.")
 	resolved_price_list, failure = _permitted_link("Price List", selling_price_list, label="Selling price list")
 	if failure:
 		return failure
@@ -274,11 +285,10 @@ def prepare_quotation(
 	doc.set_missing_values()
 	missing_defaults = [fieldname for fieldname in _COMMERCIAL_DEFAULTS if not doc.get(fieldname)]
 	if missing_defaults:
-		return {
-			"status": "needs_input",
-			"missing": missing_defaults,
-			"message": "ERPNext could not determine all commercial defaults for this Quotation.",
-		}
+		return _needs_input(
+			missing_defaults,
+			"ERPNext could not determine all commercial defaults for this Quotation.",
+		)
 	doc.calculate_taxes_and_totals()
 	doc.run_method("validate")
 	token = approvals.create(action=_ACTION, site=frappe.local.site, user=user, payload=_safe_doc_data(doc))
@@ -287,6 +297,7 @@ def prepare_quotation(
 		"approval_token": token,
 		"expires_in_seconds": APPROVAL_TTL_SECONDS,
 		"preview": _preview(doc),
+		"interaction": approval_directive().model_dump(mode="json"),
 	}
 
 

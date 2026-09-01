@@ -10,7 +10,7 @@ args = ["-m", "mcp_erpnext.mcp_server"]
 # Frappe's core file log handlers resolve paths from the bench `sites`
 # directory (for example, `../logs/database.log`).
 cwd = "/home/frappe/frappe-bench/sites"
-env_vars = ["MCP_BACKEND", "MCP_FRAPPE_SITE", "MCP_IDENTITY_MODE", "MCP_FRAPPE_USER"]
+env_vars = ["MCP_BACKEND", "MCP_FRAPPE_SITE", "MCP_IDENTITY_MODE", "MCP_FRAPPE_USER", "MCP_APPROVAL_MODE"]
 default_tools_approval_mode = "writes"
 ```
 
@@ -22,7 +22,15 @@ export MCP_BACKEND=direct
 export MCP_FRAPPE_SITE=your-site.localhost
 export MCP_IDENTITY_MODE=service
 export MCP_FRAPPE_USER=mcp-service@example.com
+export MCP_APPROVAL_MODE=agent_delegated
 ```
+
+`MCP_APPROVAL_MODE` is server configuration, never an MCP tool argument.
+`trusted_human` is the default and requires an independently verified,
+internally recorded human decision. `agent_delegated` is suitable for a trusted
+chat Agent/client that calls `confirm_*` only after the user explicitly
+approves the prepared preview; the server still validates the token, user,
+site, action, payload, expiry, replay protection, and Frappe permissions.
 
 Do not put an API secret, password, or real credential in this repository. A
 private `.env` file may be used by a local wrapper, but Codex does not

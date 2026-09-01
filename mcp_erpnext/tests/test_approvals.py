@@ -4,11 +4,13 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from mcp_erpnext.approvals import APPROVAL_TTL_SECONDS, ApprovalStore
+from mcp_erpnext.approvals import APPROVAL_TTL_SECONDS, ApprovalStore, approvals
+from mcp_erpnext.mcp_server import create_mcp
 from mcp_erpnext.services.masters import customer as customer_service
 from mcp_erpnext.services.masters import item as item_service
 from mcp_erpnext.services.selling import quotation as quotation_service
 from mcp_erpnext.services.selling import sales_order as sales_order_service
+from mcp_erpnext.settings import ApprovalMode, MCPSettings
 
 
 class ApprovalStoreTests(unittest.TestCase):
@@ -74,6 +76,127 @@ class ApprovalStoreTests(unittest.TestCase):
 		)
 		self.assertIsNone(approval)
 		self.assertEqual(state, "not_trusted")
+
+	def test_agent_delegated_claim_does_not_require_trusted_approval(self):
+		store = ApprovalStore(ApprovalMode.AGENT_DELEGATED)
+		token = store.create(
+			action="create_sales_order",
+			site="test.localhost",
+			user="sales@example.com",
+			payload={"doctype": "Sales Order"},
+		)
+
+		approval, state = store.claim_for_confirm_write(
+			token,
+			action="create_sales_order",
+			site="test.localhost",
+			user="sales@example.com",
+		)
+
+		self.assertIsNotNone(approval)
+		self.assertEqual(state, "available")
+
+	def test_server_settings_configure_the_shared_approval_policy(self):
+		def settings(mode: ApprovalMode) -> MCPSettings:
+			return MCPSettings(
+				backend="direct",
+				frappe_site="test.localhost",
+				frappe_user="sales@example.com",
+				identity_mode="service",
+				librechat_user_id=None,
+				librechat_user_email=None,
+				erpnext_base_url=None,
+				erpnext_api_key=None,
+				erpnext_api_secret=None,
+				approval_mode=mode,
+			)
+
+		create_mcp(settings(ApprovalMode.AGENT_DELEGATED))
+		token = approvals.create(
+			action="create_sales_order",
+			site="test.localhost",
+			user="sales@example.com",
+			payload={"doctype": "Sales Order"},
+		)
+		self.assertEqual(
+			approvals.claim_for_confirm_write(
+				token, action="create_sales_order", site="test.localhost", user="sales@example.com"
+			)[1],
+			"available",
+		)
+
+		create_mcp(settings(ApprovalMode.TRUSTED_HUMAN))
+		token = approvals.create(
+			action="create_sales_order",
+			site="test.localhost",
+			user="sales@example.com",
+			payload={"doctype": "Sales Order"},
+		)
+		self.assertEqual(
+			approvals.claim_for_confirm_write(
+				token, action="create_sales_order", site="test.localhost", user="sales@example.com"
+			)[1],
+			"not_trusted",
+		)
+
+	def test_agent_delegated_preserves_all_non_trust_bindings(self):
+		store = ApprovalStore(ApprovalMode.AGENT_DELEGATED)
+
+		def create() -> str:
+			return store.create(
+				action="create_sales_order",
+				site="test.localhost",
+				user="sales@example.com",
+				payload={"doctype": "Sales Order"},
+			)
+
+		for action, site, user in (
+			("create_quotation", "test.localhost", "sales@example.com"),
+			("create_sales_order", "other.localhost", "sales@example.com"),
+			("create_sales_order", "test.localhost", "other@example.com"),
+		):
+			with self.subTest(action=action, site=site, user=user):
+				approval, state = store.claim_for_confirm_write(create(), action=action, site=site, user=user)
+				self.assertIsNone(approval)
+				self.assertEqual(state, "unavailable")
+
+		token = create()
+		store._approvals[token].payload["doctype"] = "Quotation"
+		approval, state = store.claim_for_confirm_write(
+			token, action="create_sales_order", site="test.localhost", user="sales@example.com"
+		)
+		self.assertIsNone(approval)
+		self.assertEqual(state, "unavailable")
+
+		token = create()
+		store._approvals[token].created_at -= APPROVAL_TTL_SECONDS + 1
+		approval, state = store.claim_for_confirm_write(
+			token, action="create_sales_order", site="test.localhost", user="sales@example.com"
+		)
+		self.assertIsNone(approval)
+		self.assertEqual(state, "expired")
+
+		token = create()
+		store.cancel(token, action="create_sales_order", site="test.localhost", user="sales@example.com")
+		approval, state = store.claim_for_confirm_write(
+			token, action="create_sales_order", site="test.localhost", user="sales@example.com"
+		)
+		self.assertIsNone(approval)
+		self.assertEqual(state, "consumed")
+
+		token = create()
+		self.assertEqual(
+			store.claim_for_confirm_write(
+				token, action="create_sales_order", site="test.localhost", user="sales@example.com"
+			)[1],
+			"available",
+		)
+		self.assertEqual(
+			store.claim_for_confirm_write(
+				token, action="create_sales_order", site="test.localhost", user="sales@example.com"
+			)[1],
+			"consumed",
+		)
 
 	def test_trusted_approval_is_user_operation_and_payload_bound_then_single_use(self):
 		approval, state = self.store.record_trusted_user_approval(
@@ -168,6 +291,43 @@ class ApprovalStoreTests(unittest.TestCase):
 				with patch.object(service, "approvals", self.store), patch.object(service, "frappe", fake_frappe):
 					result = confirm(token, True)
 				self.assertEqual(result["code"], "TRUSTED_APPROVAL_UNAVAILABLE")
+
+	def test_delegated_sales_order_claim_reaches_the_write_path_without_trusted_approval(self):
+		class FakeDoc:
+			name = "SAL-ORD-TEST-0001"
+			docstatus = 0
+
+			def __init__(self):
+				self.insert_calls = 0
+
+			def insert(self, **_kwargs):
+				self.insert_calls += 1
+
+		store = ApprovalStore(ApprovalMode.AGENT_DELEGATED)
+		doc = FakeDoc()
+		commits: list[bool] = []
+		fake_frappe = SimpleNamespace(
+			session=SimpleNamespace(user="sales@example.com"),
+			local=SimpleNamespace(site="test.localhost"),
+			has_permission=lambda *_: True,
+			get_doc=lambda _payload: doc,
+			db=SimpleNamespace(commit=lambda: commits.append(True), rollback=lambda: None),
+		)
+		token = store.create(
+			action="create_sales_order",
+			site="test.localhost",
+			user="sales@example.com",
+			payload={"doctype": "Sales Order"},
+		)
+
+		with patch.object(sales_order_service, "approvals", store), patch.object(
+			sales_order_service, "frappe", fake_frappe
+		):
+			result = sales_order_service.confirm_sales_order(token, True)
+
+		self.assertEqual(result["status"], "created")
+		self.assertEqual(doc.insert_calls, 1)
+		self.assertEqual(commits, [True])
 
 	def test_sales_order_trusted_claim_rechecks_permission_and_is_single_use(self):
 		class FakeDoc:

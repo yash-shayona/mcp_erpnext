@@ -1,19 +1,23 @@
 # MCP Explicit User Approval Safety
 
-## Current deployment decision
+## Server-selected approval policy
 
-The current LibreChat bridge is classified as **Strategy C — no trusted approval
-channel is available**. Its `mcpServers.erpnext` configuration forwards an HTTP
-bearer credential and LibreChat user identity to this MCP server, but no
-server-verifiable per-tool human-approval decision. LibreChat v0.8.8-rc1 does
-contain an agent-run Human-in-the-Loop (`endpoints.agents.toolApproval`) feature,
-but it is not configured here and its UI decision is not delivered to this MCP
-server as an authenticated, payload-bound approval assertion.
+`MCP_APPROVAL_MODE` is a validated server setting and is never exposed as an
+MCP tool argument. It has two modes:
 
-Accordingly, every current `CONFIRM_WRITE` tool fails closed with
-`TRUSTED_APPROVAL_UNAVAILABLE`. `confirm=true` is only a requested execution
-step; it is never evidence of user approval and a model cannot self-grant it.
-No LibreChat or identity configuration was changed by this task.
+- `trusted_human` is the default and the stronger provenance policy. An
+  independently verified human decision must be recorded through the internal
+  approval seam before `confirm_*`; otherwise the server returns
+  `TRUSTED_APPROVAL_UNAVAILABLE`.
+- `agent_delegated` trusts the authenticated MCP Agent/client as the user's
+  delegated conversational orchestrator. The Agent/client must call
+  `confirm_*` only after the user explicitly approves the exact prepared
+  preview. The MCP server does not parse natural-language approval.
+
+The modes are not equally strong: `trusted_human` independently verifies human
+origin, while `agent_delegated` relies on the authenticated Agent/client to
+enforce that conversational step. No LibreChat, Codex, or other client-specific
+source change is required for a compatible client to use delegated mode.
 
 ## Shared pending-operation guard
 
@@ -22,30 +26,28 @@ at prepare time. The opaque handle is bound to the server-side action, Frappe
 site, authenticated Frappe user, and HMAC digest of the prepared payload. The
 raw prepared document is never accepted from a confirm tool.
 
-`claim_for_confirm_write()` revalidates each binding and atomically consumes a
-trusted operation before calling domain persistence. Reuse, cross-user or
-cross-tool replay, payload mutation, cancellation, and expiry are rejected.
-Frappe create permissions are checked again immediately before every insert.
+`claim_for_confirm_write()` centrally revalidates each binding and atomically
+consumes a policy-compliant operation before calling domain persistence. In
+`trusted_human` mode it additionally requires the trusted approval record; in
+`agent_delegated` mode that is the only policy difference. Reuse, cross-user or
+cross-tool replay, payload mutation, cancellation, and expiry are rejected in
+both modes. Frappe create permissions are checked again immediately before every
+insert.
 
 The internal `record_trusted_user_approval()` seam is deliberately not exposed
-as an MCP tool or a public argument. A future transport adapter may call it
-only after independently verifying a human-originated decision and binding it
-to the same operation. Until such an adapter exists, there is no path to mark a
-pending operation trusted in production.
-
-## Required follow-up integration
-
-A separate LibreChat integration task must implement a server-verifiable
-approval assertion or an authenticated non-model approval endpoint. It must
-bind the actual human decision to the pending operation token, Frappe user,
-site, action, and prepared payload before calling the internal approval seam.
-It must not trust model text, arbitrary MCP arguments, or an unverified client
-header. That task should also define durable shared storage before any
-multi-worker deployment is enabled.
+as an MCP tool or a public argument. A transport adapter may call it only after
+independently verifying a human-originated decision and binding it to the same
+operation. It remains mandatory in `trusted_human` mode and is optional in
+`agent_delegated` mode.
 
 ## Deployment boundary
 
-The current approval store is process-local and protected with a process-local
-lock. It is appropriate only for one local development process; restart loses
-pending operations and multiple workers do not share them. This limitation is
-safe today because confirms are blocked without the missing trusted adapter.
+The approval store is process-local and protected with a process-local lock.
+Restart loses pending operations and multiple workers do not share them. This
+task intentionally does not migrate it to Redis or Frappe DB; durable shared
+storage remains a future deployment/scaling concern.
+
+For a stricter deployment, retain `trusted_human` and provide a transport
+adapter that independently verifies a payload-bound human decision. For the
+current local chat-development flow, set `MCP_APPROVAL_MODE=agent_delegated` and
+keep explicit approval interpretation in the Agent/client, outside MCP.

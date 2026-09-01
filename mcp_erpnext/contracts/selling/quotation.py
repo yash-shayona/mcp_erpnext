@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 from pydantic import BeforeValidator, ConfigDict, Field, RootModel
 
 from ..common import CustomerReference, ItemReference, NonEmptyString, PublicContractModel, ToolError
+from ..interaction import InteractionDirective
 
 
 
@@ -116,12 +117,14 @@ class QuotationReady(PublicContractModel):
 	]
 	expires_in_seconds: Annotated[int, Field(gt=0)]
 	preview: QuotationPreview
+	interaction: InteractionDirective
 
 
 class QuotationNeedsInput(PublicContractModel):
 	status: Literal["needs_input"]
 	missing: list[NonEmptyString]
 	message: str | None = None
+	interaction: InteractionDirective
 
 
 class QuotationPermissionDenied(PublicContractModel):
@@ -150,7 +153,7 @@ class QuotationConfirmInput(PublicContractModel):
 	approval_token: NonEmptyString
 	confirm: Annotated[
 		bool,
-		Field(description="Requested confirmation step only; server-verified human approval is still required."),
+		Field(description="Requested confirmation step only; the server enforces its configured approval policy."),
 	]
 
 

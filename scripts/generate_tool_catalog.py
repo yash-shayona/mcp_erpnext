@@ -40,14 +40,15 @@ async def render_catalog() -> str:
 		"This catalog is generated from the source-registered MCP tools and their contract metadata. "
 		"`tools/list` remains the authoritative machine-readable schema.",
 		"",
-		"| Tool | Domain | Operation | Side effect | Approval | Contract status |",
-		"| --- | --- | --- | --- | --- | --- |",
+		"| Tool | Domain | Operation | Side effect | Interaction | Approval | Contract status |",
+		"| --- | --- | --- | --- | --- | --- | --- |",
 	]
 	for contract in TOOL_CONTRACTS.values():
 		status = "Legacy migration inventory" if contract.legacy else "Explicit typed contract"
 		lines.append(
 			f"| `{contract.name}` | {contract.domain} | {contract.operation.value.title()} | "
-			f"{contract.side_effect.value} | {'Trusted human approval required' if contract.approval_required else 'Not a final write'} | {status} |"
+			f"{contract.side_effect.value} | {', '.join(kind.value for kind in contract.interaction_kinds) or 'None'} | "
+			f"{'Explicit approval required; server policy enforced' if contract.approval_required else 'Not a final write'} | {status} |"
 		)
 
 	for contract in TOOL_CONTRACTS.values():
@@ -73,9 +74,17 @@ async def render_catalog() -> str:
 				),
 				f"- Side effect: `{contract.side_effect.value}`; approval "
 				+ (
-					f"requires server-verified human approval through `{contract.approval_guard}` before the final write."
+					f"requires explicit approval through `{contract.approval_guard}` before the final write; "
+					"the server-selected approval policy enforces the trust requirement."
 					if contract.approval_required
 					else "does not perform the final write."
+				),
+				(
+					"- Interaction: "
+					+ ", ".join(f"`{kind.value}`" for kind in contract.interaction_kinds)
+					+ "; emitted only for the documented result states."
+					if contract.interaction_kinds
+					else "- Interaction: none declared."
 				),
 			]
 		)

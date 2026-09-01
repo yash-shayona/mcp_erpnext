@@ -63,6 +63,21 @@ Future Warehouse, Supplier, and Link-field resolvers follow the same contract:
 their candidate reference must constrain its DocType, and their explicit
 selection must use the shared exact-revalidation primitive.
 
+## Conversational interaction directives
+
+When a typed result requires a user continuation, it uses the shared
+`InteractionDirective` from `contracts/interaction.py` rather than an
+ad-hoc boolean or client instruction. Its semantic kinds are `SELECTION`,
+`INPUT`, and `APPROVAL`; the only actions are `SELECT`, `PROVIDE_INPUT`,
+`MODIFY`, `APPROVE`, `REJECT`, and `CANCEL`.
+
+The directive is client-neutral guidance, not chat state or language parsing.
+It cannot contain a conversation, message, component, button, route, or
+client-specific identifier. Candidate lists, missing fields, previews, and
+approval tokens remain in their normal typed result payloads. See
+[Conversational Interaction Contract](MCP_CONVERSATIONAL_INTERACTION_CONTRACT.md)
+for the Agent responsibility and approval boundary.
+
 ## Layering
 
 ```text
@@ -110,6 +125,11 @@ proving direct model calls cannot authorize it.
 For a resolver change, completion additionally requires typed terminal states,
 typed candidate references, an explicit selection/revalidation path where
 needed, and tests proving ambiguity cannot select the first candidate.
+
+For a conversational result, completion additionally requires declaring whether
+it can require interaction, using the shared directive where it does, and
+documenting the allowed semantic actions. An `APPROVAL` directive never changes
+the guarded `CONFIRM_WRITE` requirement.
 
 ## Legacy migration policy
 

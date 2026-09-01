@@ -4,21 +4,21 @@
 
 This catalog is generated from the source-registered MCP tools and their contract metadata. `tools/list` remains the authoritative machine-readable schema.
 
-| Tool | Domain | Operation | Side effect | Approval | Contract status |
-| --- | --- | --- | --- | --- | --- |
-| `search_customers` | Masters | Search | READ | Not a final write | Explicit typed contract |
-| `resolve_customer` | Masters | Resolve | RESOLVE | Not a final write | Explicit typed contract |
-| `prepare_customer` | Masters | Prepare | PREPARE | Not a final write | Legacy migration inventory |
-| `confirm_customer` | Masters | Confirm | CONFIRM_WRITE | Trusted human approval required | Legacy migration inventory |
-| `search_items` | Masters | Search | READ | Not a final write | Explicit typed contract |
-| `resolve_item` | Masters | Resolve | RESOLVE | Not a final write | Explicit typed contract |
-| `prepare_item` | Masters | Prepare | PREPARE | Not a final write | Legacy migration inventory |
-| `confirm_item` | Masters | Confirm | CONFIRM_WRITE | Trusted human approval required | Legacy migration inventory |
-| `prepare_sales_order` | Selling | Prepare | PREPARE | Not a final write | Legacy migration inventory |
-| `confirm_sales_order` | Selling | Confirm | CONFIRM_WRITE | Trusted human approval required | Legacy migration inventory |
-| `prepare_quotation` | Selling | Prepare | PREPARE | Not a final write | Explicit typed contract |
-| `confirm_quotation` | Selling | Confirm | CONFIRM_WRITE | Trusted human approval required | Explicit typed contract |
-| `select_resolved_candidate` | Masters | Resolve | RESOLVE | Not a final write | Explicit typed contract |
+| Tool | Domain | Operation | Side effect | Interaction | Approval | Contract status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `search_customers` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
+| `resolve_customer` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
+| `prepare_customer` | Masters | Prepare | PREPARE | None | Not a final write | Legacy migration inventory |
+| `confirm_customer` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Legacy migration inventory |
+| `search_items` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
+| `resolve_item` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
+| `prepare_item` | Masters | Prepare | PREPARE | None | Not a final write | Legacy migration inventory |
+| `confirm_item` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Legacy migration inventory |
+| `prepare_sales_order` | Selling | Prepare | PREPARE | None | Not a final write | Legacy migration inventory |
+| `confirm_sales_order` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Legacy migration inventory |
+| `prepare_quotation` | Selling | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_quotation` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `select_resolved_candidate` | Masters | Resolve | RESOLVE | None | Not a final write | Explicit typed contract |
 
 ## `search_customers`
 
@@ -27,6 +27,7 @@ Find permitted active Customers with explicit candidate references.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `CustomerSearchOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- Interaction: `SELECTION`; emitted only for the documented result states.
 
 ## `resolve_customer`
 
@@ -35,6 +36,7 @@ Resolve one permitted Customer or return a terminal selection state.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `CustomerResolutionOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `RESOLVE`; approval does not perform the final write.
+- Interaction: `SELECTION`; emitted only for the documented result states.
 
 ## `prepare_customer`
 
@@ -43,6 +45,7 @@ Validate a Customer preview without writing.
 - Input: `Legacy public schema` — Required: `customer`
 - Output: `Legacy public schema`; legacy response shape pending focused migration.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: none declared.
 
 ## `confirm_customer`
 
@@ -50,7 +53,8 @@ Create a prepared Customer.
 
 - Input: `Legacy public schema` — Required: `approval_token`, `confirm`
 - Output: `Legacy public schema`; legacy response shape pending focused migration.
-- Side effect: `CONFIRM_WRITE`; approval requires server-verified human approval through `trusted_pending_operation` before the final write.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
 
 ## `search_items`
 
@@ -59,6 +63,7 @@ Find permitted sales Items with explicit candidate references.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `ItemSearchOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- Interaction: `SELECTION`; emitted only for the documented result states.
 
 ## `resolve_item`
 
@@ -67,6 +72,7 @@ Resolve one permitted sales Item or return a terminal selection state.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `ItemResolutionOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `RESOLVE`; approval does not perform the final write.
+- Interaction: `SELECTION`; emitted only for the documented result states.
 
 ## `prepare_item`
 
@@ -75,6 +81,7 @@ Validate an Item preview without writing.
 - Input: `Legacy public schema` — Required: `item`
 - Output: `Legacy public schema`; legacy response shape pending focused migration.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: none declared.
 
 ## `confirm_item`
 
@@ -82,7 +89,8 @@ Create a prepared Item.
 
 - Input: `Legacy public schema` — Required: `approval_token`, `confirm`
 - Output: `Legacy public schema`; legacy response shape pending focused migration.
-- Side effect: `CONFIRM_WRITE`; approval requires server-verified human approval through `trusted_pending_operation` before the final write.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
 
 ## `prepare_sales_order`
 
@@ -91,6 +99,7 @@ Prepare a Sales Order preview without writing.
 - Input: `Legacy public schema` — Required: `customer`, `items`
 - Output: `Legacy public schema`; legacy response shape pending focused migration.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: none declared.
 
 ## `confirm_sales_order`
 
@@ -98,7 +107,8 @@ Create a prepared Sales Order.
 
 - Input: `Legacy public schema` — Required: `approval_token`, `confirm`
 - Output: `Legacy public schema`; legacy response shape pending focused migration.
-- Side effect: `CONFIRM_WRITE`; approval requires server-verified human approval through `trusted_pending_operation` before the final write.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
 
 ## `prepare_quotation`
 
@@ -107,14 +117,16 @@ Prepare an ERPNext-calculated Quotation preview without writing.
 - Input: `QuotationPrepareInput` — Required: `customer`, `items`, `valid_till`
 - Output: `PrepareQuotationOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `INPUT`, `APPROVAL`; emitted only for the documented result states.
 
 ## `confirm_quotation`
 
-Create a prepared Draft Quotation after explicit server-verified human approval.
+Create a prepared Draft Quotation after explicit approval.
 
 - Input: `QuotationConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmQuotationOutput`; published through MCP `outputSchema`.
-- Side effect: `CONFIRM_WRITE`; approval requires server-verified human approval through `trusted_pending_operation` before the final write.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
 
 ## `select_resolved_candidate`
 
@@ -123,3 +135,4 @@ Revalidate a user-selected Customer or Item reference without writing.
 - Input: `SelectedCandidateInput` — Required: `doctype`, `name`
 - Output: `SelectResolvedCandidateOutput`; resolution states: `resolved`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `RESOLVE`; approval does not perform the final write.
+- Interaction: none declared.

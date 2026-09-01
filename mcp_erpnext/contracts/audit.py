@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import ast
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
+from .interaction import InteractionAction, InteractionKind
 from .registry import FROZEN_LEGACY_TOOL_NAMES, TOOL_CONTRACTS, ToolContract
 
 
@@ -20,6 +23,26 @@ _RUNTIME_FIELD_TERMS = (
 	"role",
 	"credential",
 	"secret",
+)
+
+_INTERACTION_CLIENT_FIELD_TERMS = (
+	"librechat",
+	"conversation",
+	"openai",
+	"gemini",
+	"langgraph",
+	"whatsapp",
+	"message_id",
+	"button",
+	"component",
+	"route",
+)
+
+_INTERACTION_IMPLEMENTATION_PATHS = (
+	Path(__file__).with_name("interaction.py"),
+	Path(__file__).parents[1] / "tools" / "masters" / "customer.py",
+	Path(__file__).parents[1] / "tools" / "masters" / "item.py",
+	Path(__file__).parents[1] / "tools" / "selling" / "quotation.py",
 )
 
 
@@ -59,11 +82,72 @@ def _declared_statuses(schema: Any) -> set[str]:
 	return statuses
 
 
+def _schema_references(schema: Any) -> set[str]:
+	if isinstance(schema, list):
+		return set().union(*(_schema_references(value) for value in schema))
+	if not isinstance(schema, dict):
+		return set()
+	references = {schema["$ref"]} if isinstance(schema.get("$ref"), str) else set()
+	for value in schema.values():
+		references.update(_schema_references(value))
+	return references
+
+
+def _schema_enum_values(schema: Any) -> set[str]:
+	if isinstance(schema, list):
+		return set().union(*(_schema_enum_values(value) for value in schema))
+	if not isinstance(schema, dict):
+		return set()
+	values = {value for value in schema.get("enum", []) if isinstance(value, str)}
+	for value in schema.values():
+		values.update(_schema_enum_values(value))
+	return values
+
+
+def _interaction_schema_issue(schema: Any) -> str | None:
+	"""Ensure a declared interaction uses the one shared client-neutral schema."""
+	if not isinstance(schema, dict):
+		return "typed interaction contract lacks an output schema."
+	definitions = schema.get("$defs")
+	if not isinstance(definitions, dict) or not isinstance(definitions.get("InteractionDirective"), dict):
+		return "interaction semantics do not use the shared InteractionDirective schema."
+	if "#/$defs/InteractionDirective" not in _schema_references(schema):
+		return "interaction semantics do not reference the shared InteractionDirective schema."
+	properties = definitions["InteractionDirective"].get("properties", {})
+	if not {"required", "kind", "allowed_actions", "reason_code", "instructions"}.issubset(properties):
+		return "shared InteractionDirective schema is incomplete."
+	if any(term in field.lower() for field in properties for term in _INTERACTION_CLIENT_FIELD_TERMS):
+		return "interaction contract exposes a client-specific field."
+	enum_values = _schema_enum_values(definitions)
+	if not {kind.value for kind in InteractionKind}.issubset(enum_values):
+		return "shared InteractionKind enum is incomplete."
+	if not {action.value for action in InteractionAction}.issubset(enum_values):
+		return "shared InteractionAction enum is incomplete."
+	return None
+
+
+def _has_natural_language_parser() -> bool:
+	"""Reject phrase-normalization and regex parsing in the interaction implementation."""
+	for path in _INTERACTION_IMPLEMENTATION_PATHS:
+		tree = ast.parse(path.read_text(), filename=str(path))
+		for node in ast.walk(tree):
+			if not isinstance(node, ast.Call):
+				continue
+			if isinstance(node.func, ast.Attribute) and node.func.attr in {"lower", "casefold"}:
+				return True
+			if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+				if node.func.value.id == "re" and node.func.attr in {"compile", "match", "search", "fullmatch"}:
+					return True
+	return False
+
+
 def audit_tool_contracts(
 	tools: Iterable[Any], contracts: dict[str, ToolContract] = TOOL_CONTRACTS
 ) -> list[str]:
 	"""Return policy violations for the registered public MCP tool inventory."""
 	issues: list[str] = []
+	if _has_natural_language_parser():
+		issues.append("Interaction implementation must not parse natural-language user intent.")
 	registered = {tool.name: tool for tool in tools}
 	if set(registered) != set(contracts):
 		issues.append("Registered tools and declared contract inventory differ.")
@@ -96,6 +180,21 @@ def audit_tool_contracts(
 			issues.append(f"{name}: input schema contains an arbitrary object.")
 		if not getattr(tool, "outputSchema", None):
 			issues.append(f"{name}: typed output contract is not published as outputSchema.")
+		if contract.interaction_kinds:
+			if interaction_issue := _interaction_schema_issue(getattr(tool, "outputSchema", None)):
+				issues.append(f"{name}: {interaction_issue}")
+			if meta.get("mcp_erpnext", {}).get("interaction_kinds") != [
+				kind.value for kind in contract.interaction_kinds
+			]:
+				issues.append(f"{name}: interaction-kind metadata is missing from public metadata.")
+		if InteractionKind.APPROVAL in contract.interaction_kinds:
+			confirm_contract = contracts.get(contract.approval_confirm_tool or "")
+			if (
+				confirm_contract is None
+				or confirm_contract.side_effect.value != "CONFIRM_WRITE"
+				or not confirm_contract.approval_guard
+			):
+				issues.append(f"{name}: APPROVAL interaction lacks a guarded CONFIRM_WRITE counterpart.")
 		if contract.operation.value == "RESOLVE" or contract.resolution_states:
 			if not contract.resolution_states:
 				issues.append(f"{name}: resolver contract does not declare supported resolution states.")

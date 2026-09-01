@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .approvals import approvals
 from .http_transport import create_http_app
 from .settings import MCPSettings
 from .tools import register_tools
@@ -19,6 +20,8 @@ def create_mcp(settings: MCPSettings | None = None):
 	if FastMCP is None or TransportSecuritySettings is None:
 		return None
 	settings = settings or MCPSettings.from_environment()
+	settings.validate_approval_mode()
+	approvals.configure_approval_mode(settings.approval_mode)
 	mcp = FastMCP(
 		"mcp_erpnext",
 		host=settings.http_host,

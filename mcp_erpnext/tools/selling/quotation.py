@@ -9,6 +9,7 @@ from mcp.server.fastmcp import Context
 from pydantic import TypeAdapter
 
 from ...contracts.common import CustomerReference, NonEmptyString
+from ...contracts.interaction import approval_directive, input_directive
 from ...contracts.registry import tool_meta
 from ...contracts.selling.quotation import (
 	ConfirmQuotationOutput,
@@ -30,6 +31,15 @@ from ...services.selling.quotation import (
 
 _prepare_result_adapter = TypeAdapter(PrepareQuotationResult)
 _confirm_result_adapter = TypeAdapter(ConfirmQuotationResult)
+
+
+def _with_interaction(result: dict[str, Any]) -> dict[str, Any]:
+	"""Attach client-neutral continuation guidance at the typed MCP boundary."""
+	if result.get("status") == "ready":
+		return {**result, "interaction": approval_directive().model_dump(mode="json")}
+	if result.get("status") == "needs_input":
+		return {**result, "interaction": input_directive().model_dump(mode="json")}
+	return result
 
 
 def prepare_quotation(
@@ -74,7 +84,7 @@ def prepare_quotation(
 			request.tc_name,
 		),
 	)
-	return PrepareQuotationOutput(root=_prepare_result_adapter.validate_python(result))
+	return PrepareQuotationOutput(root=_prepare_result_adapter.validate_python(_with_interaction(result)))
 
 
 def confirm_quotation(approval_token: str, confirm: bool, ctx: Context) -> ConfirmQuotationOutput:

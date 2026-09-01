@@ -68,6 +68,7 @@ confirm_quotation
 ```
 
 The current architecture, [public tool contract standard](docs/architecture/MCP_TOOL_CONTRACT_STANDARD.md),
+[conversational interaction contract](docs/architecture/MCP_CONVERSATIONAL_INTERACTION_CONTRACT.md),
 and generated [complete tool catalog](docs/TOOLS.md) document this boundary.
 The original, narrower Sales Order baseline is preserved in
 [`docs/MCP_SALES_ORDER_V1_FROZEN.md`](docs/MCP_SALES_ORDER_V1_FROZEN.md).
@@ -101,8 +102,8 @@ ERPNext write
 document behavior where their services implement them, and return a structured
 preview plus a pending-operation token. They do not perform the final
 persistent write. `confirm=true` is not user approval: a matching `confirm_*`
-tool can write only after the shared server-verified approval guard accepts the
-server-side prepared payload through normal Frappe document APIs.
+tool can write only after the shared server-configured approval guard accepts
+the server-side prepared payload through normal Frappe document APIs.
 
 For Customer and Item, the prepare services build an unsaved Frappe document
 and inspect the installed site's runtime DocField metadata. Explicit input,
@@ -116,15 +117,18 @@ Selects use runtime options, and Check/scalar values are normalized or rejected
 deterministically. This remains capability-scoped; the server does not expose
 arbitrary DocType resolution.
 
-The current LibreChat bridge does not provide this MCP service with a
-server-verifiable human approval signal, so every `confirm_*` write fails
-closed with `TRUSTED_APPROVAL_UNAVAILABLE`. The pending-operation state expires
-after 15 minutes and is bound to the capability action, Frappe site,
-authenticated Frappe user, and digest of the prepared payload; it is also
-single-use. See [explicit user approval safety](docs/architecture/MCP_EXPLICIT_USER_APPROVAL_SAFETY.md).
-This state is local to one MCP process; a remote or multi-worker deployment
-needs persistent approval storage and a trusted approval adapter before writes
-can be enabled.
+`MCP_APPROVAL_MODE` selects the server-side trust policy for every
+`CONFIRM_WRITE` tool; it is never a tool argument. Its secure default,
+`trusted_human`, requires an independently verified human approval recorded by
+an internal transport adapter and otherwise fails closed with
+`TRUSTED_APPROVAL_UNAVAILABLE`. `agent_delegated` instead trusts the
+authenticated MCP Agent/client to call `confirm_*` only after the user has
+explicitly approved the prepared preview. It still enforces the pending token's
+action, Frappe site, authenticated user, prepared-payload digest, 15-minute
+expiry, cancellation, single-use consumption, and final Frappe permission
+check. See [explicit user approval safety](docs/architecture/MCP_EXPLICIT_USER_APPROVAL_SAFETY.md).
+The state is local to one MCP process; restart loses pending operations and
+multiple workers do not share them.
 
 ## Runtime and permission boundary
 
@@ -164,6 +168,7 @@ export MCP_BACKEND=direct
 export MCP_FRAPPE_SITE=your-site.localhost
 export MCP_IDENTITY_MODE=service
 export MCP_FRAPPE_USER=mcp-service@example.com
+export MCP_APPROVAL_MODE=agent_delegated
 cd /home/frappe/frappe-bench/sites
 ../env/bin/python -m mcp_erpnext.mcp_server
 ```

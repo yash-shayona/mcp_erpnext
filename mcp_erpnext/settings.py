@@ -4,8 +4,16 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from enum import StrEnum
 
 from .observability import MCPIdentityConfigurationError
+
+
+class ApprovalMode(StrEnum):
+	"""Server-controlled trust policy for final prepared-operation writes."""
+
+	TRUSTED_HUMAN = "trusted_human"
+	AGENT_DELEGATED = "agent_delegated"
 
 
 @dataclass(frozen=True)
@@ -27,6 +35,7 @@ class MCPSettings:
 	http_path: str = "/mcp"
 	http_shared_secret: str | None = None
 	http_allowed_hosts: tuple[str, ...] = ("127.0.0.1:8765", "localhost:8765")
+	approval_mode: ApprovalMode = ApprovalMode.TRUSTED_HUMAN
 
 	@classmethod
 	def from_environment(cls) -> "MCPSettings":
@@ -52,7 +61,18 @@ class MCPSettings:
 				).split(",")
 				if host.strip()
 			),
+			approval_mode=cls._approval_mode_from_environment(),
 		)
+
+	@staticmethod
+	def _approval_mode_from_environment() -> ApprovalMode:
+		value = os.environ.get("MCP_APPROVAL_MODE", ApprovalMode.TRUSTED_HUMAN).strip().lower()
+		try:
+			return ApprovalMode(value)
+		except ValueError as error:
+			raise RuntimeError(
+				"MCP_APPROVAL_MODE must be either 'trusted_human' or 'agent_delegated'."
+			) from error
 
 	def validate(self) -> None:
 		"""Validate only the selected backend's required configuration."""
@@ -68,6 +88,16 @@ class MCPSettings:
 			)
 		self.validate_transport()
 		self.validate_identity_mode(require_librechat_user_id=self.transport == "stdio")
+		self.validate_approval_mode()
+
+	def validate_approval_mode(self) -> None:
+		"""Reject an unsafe or unknown final-write approval policy."""
+		try:
+			ApprovalMode(self.approval_mode)
+		except ValueError as error:
+			raise RuntimeError(
+				"MCP_APPROVAL_MODE must be either 'trusted_human' or 'agent_delegated'."
+			) from error
 
 	def validate_identity_mode(self, *, require_librechat_user_id: bool = True) -> None:
 		"""Validate identity settings without constraining an internal site override."""
