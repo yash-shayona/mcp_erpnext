@@ -63,11 +63,11 @@ def _candidate(candidate: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def search_items(query: str) -> dict[str, Any]:
+def _search_items(query: str, filters: dict[str, Any]) -> dict[str, Any]:
     candidates = find_candidates(
         "Item",
         query,
-        item_config.SEARCH_FILTERS,
+        filters,
         item_config.SEARCH_FIELDS,
         item_config.DISPLAY_FIELDS,
     )
@@ -79,19 +79,59 @@ def search_items(query: str) -> dict[str, Any]:
     }
 
 
-def resolve_sales_item(query: str) -> dict[str, Any]:
+def _resolve_item(query: str, filters: dict[str, Any]) -> dict[str, Any]:
     return resolve_candidate(
         "Item",
         query,
-        item_config.SEARCH_FILTERS,
+        filters,
         item_config.SEARCH_FIELDS,
         item_config.DISPLAY_FIELDS,
     )
 
 
+def search_items(query: str) -> dict[str, Any]:
+    """Search sales-enabled Items through the shared resolver implementation."""
+    return _search_items(query, item_config.SEARCH_FILTERS)
+
+
+def search_purchase_items(query: str) -> dict[str, Any]:
+    """Search purchase-enabled Items without duplicating resolver behavior."""
+    return _search_items(query, item_config.PURCHASE_SEARCH_FILTERS)
+
+
+def resolve_sales_item(query: str) -> dict[str, Any]:
+    return _resolve_item(query, item_config.SEARCH_FILTERS)
+
+
+def resolve_purchase_item(query: str) -> dict[str, Any]:
+    return _resolve_item(query, item_config.PURCHASE_SEARCH_FILTERS)
+
+
 def resolve_item_for_workflow(query: str) -> dict[str, Any]:
     """Return one terminal public resolution state for sales-Item lookup."""
     resolution = resolve_sales_item(query)
+    if resolution["status"] == "resolved":
+        return {
+            "status": "resolved",
+            "doctype": "Item",
+            "reference": _reference(resolution["candidate"]),
+            "match_type": resolution.get("match_type"),
+        }
+    if resolution["status"] == "ambiguous":
+        return {
+            "status": "ambiguous",
+            "doctype": "Item",
+            "query": query,
+            "candidates": [
+                _candidate(candidate) for candidate in resolution.get("candidates", [])
+            ],
+        }
+    return {"status": "not_found", "doctype": "Item", "query": query, "candidates": []}
+
+
+def resolve_purchase_item_for_workflow(query: str) -> dict[str, Any]:
+    """Return purchase-enabled Item resolution in the same public shape."""
+    resolution = resolve_purchase_item(query)
     if resolution["status"] == "resolved":
         return {
             "status": "resolved",
@@ -229,7 +269,9 @@ def confirm_item(approval_token: str, confirm: bool) -> dict[str, Any]:
     """Create the prepared Item only for the original site and authenticated user."""
     user = _current_user()
     if not confirm:
-        approvals.cancel(approval_token, action=_ACTION, site=frappe.local.site, user=user)
+        approvals.cancel(
+            approval_token, action=_ACTION, site=frappe.local.site, user=user
+        )
         return _confirmation_error(
             "CONFIRMATION_REQUIRED",
             "Review the Item preview before confirming it.",

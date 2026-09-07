@@ -1,11 +1,13 @@
 # ERPNext MCP Server
 
-`mcp_erpnext` is one local ERPNext MCP server. It exposes a small, controlled
+`mcp_erpnext` is one local ERPNext MCP app with explicit profile-specific server
+inventories. It exposes a small, controlled
 set of reusable ERPNext capabilities; it is not a generic ERPNext, Frappe, SQL,
 or arbitrary-DocType CRUD interface.
 
 The server supports local STDIO and an explicitly configured Streamable HTTP
-bridge. Both transports use the same registered tool catalog:
+bridge. Set `MCP_PROFILE=sales` (the backwards-compatible default) or
+`MCP_PROFILE=purchase`; both transports apply the same profile selection:
 
 ```text
 MCP Client / Agent
@@ -26,28 +28,23 @@ Frappe runtime and permissions
 ERPNext
 ```
 
-## Current capabilities
+## Current profiles
 
-One server contains multiple domain capabilities:
+One app exposes independent domain MCP instances:
 
 ```text
-ERPNext MCP Server
-|
-|-- Masters
-|   |-- Customer
-|   `-- Item
-|
-`-- Selling
-    |-- Quotation
-    `-- Sales Order
+MCP_PROFILE=sales                  MCP_PROFILE=purchase
+|                                  |
+|-- Customer / Item masters        |-- Supplier / purchase Item resolution
+`-- Quotation / Sales Order        `-- Purchase Order
 ```
 
-Customer and Item are reusable master capabilities. Quotation and Sales Order
-are Selling capabilities in this same server, not separate MCP servers. For
-example, a client can resolve or create a Customer through the Customer master
-capability before preparing either a Quotation or a Sales Order.
+Sales preserves its existing Customer and sales-Item capabilities. Purchase
+uses the same resolver and runtime infrastructure but exposes Supplier and
+purchase-enabled Item resolution plus the Purchase Order flow. No profile
+exposes the other profile's transactional tools.
 
-The source-registered MCP tools are:
+The Sales profile tools are:
 
 ```text
 search_customers
@@ -67,11 +64,24 @@ prepare_quotation
 confirm_quotation
 ```
 
+The Purchase profile tools are:
+
+```text
+search_suppliers
+resolve_supplier
+search_items
+resolve_item
+prepare_purchase_order
+confirm_purchase_order
+```
+
 The current architecture, [public tool contract standard](docs/architecture/MCP_TOOL_CONTRACT_STANDARD.md),
 [conversational interaction contract](docs/architecture/MCP_CONVERSATIONAL_INTERACTION_CONTRACT.md),
 and generated [complete tool catalog](docs/TOOLS.md) document this boundary.
 The original, narrower Sales Order baseline is preserved in
 [`docs/MCP_SALES_ORDER_V1_FROZEN.md`](docs/MCP_SALES_ORDER_V1_FROZEN.md).
+See [`docs/MCP_PROFILES.md`](docs/MCP_PROFILES.md) for exact stdio and
+Streamable HTTP startup commands plus the two LibreChat entries.
 
 ## Safe persistent writes
 
@@ -132,12 +142,8 @@ multiple workers do not share them.
 
 ## Runtime and permission boundary
 
-The default transport is local `stdio` with `MCP_BACKEND=direct` and a
-configured `MCP_FRAPPE_SITE`. The default `MCP_IDENTITY_MODE=service` preserves
-the existing `MCP_FRAPPE_USER` service-user flow. `MCP_IDENTITY_MODE=librechat`
-resolves the authoritative `MCP_LIBRECHAT_USER_ID` through an enabled
-**LibreChat User Mapping** to an existing enabled Frappe User. It never
-authorizes by email and never falls back to `MCP_FRAPPE_USER` in LibreChat mode.
+The default transport is local `stdio` with `MCP_BACKEND=direct`, a configured
+`MCP_FRAPPE_SITE`, and `MCP_FRAPPE_USER` for local development/testing.
 
 LibreChat login is sufficient to start this local MCP flow; an ERP-enabled
 LibreChat user still needs an administrator-created mapping, but does not need
@@ -147,14 +153,12 @@ caller cannot pick the user through a tool argument. All record lookup and
 persistence remains subject to normal Frappe permissions. Existing OAuth work
 is unchanged.
 
-For the controlled Docker-to-WSL bridge, set `MCP_TRANSPORT=streamable-http`
-with `MCP_IDENTITY_MODE=librechat`. HTTP requires a minimum 32-character
-`MCP_HTTP_SHARED_SECRET` in `Authorization: Bearer ...`; it rejects service
-identity mode. Each authenticated request supplies its authoritative
-`X-LibreChat-User-ID`, which is resolved through the same mapping DocType. The
-optional email header is diagnostic only. HTTP never uses
-`MCP_LIBRECHAT_USER_ID` or `MCP_FRAPPE_USER` as a fallback and clears the
-Frappe request context after every tool call.
+For the controlled Docker-to-WSL bridge, set `MCP_TRANSPORT=streamable-http`.
+HTTP requires a minimum 32-character `MCP_HTTP_SHARED_SECRET` in
+`Authorization: Bearer ...` and a verified `X-MCP-User-Email` on every
+request. `mcp_identity` resolves that email only after authentication. HTTP
+never uses `MCP_FRAPPE_USER` as a fallback and clears Frappe context after each
+tool call.
 
 The REST backend settings remain a future boundary and are not implemented by
 this server. Do not put credentials in this repository or expose them as tool
@@ -166,17 +170,14 @@ required environment:
 ```bash
 export MCP_BACKEND=direct
 export MCP_FRAPPE_SITE=your-site.localhost
-export MCP_IDENTITY_MODE=service
 export MCP_FRAPPE_USER=mcp-service@example.com
 export MCP_APPROVAL_MODE=agent_delegated
 cd /home/frappe/frappe-bench/sites
 ../env/bin/python -m mcp_erpnext.mcp_server
 ```
 
-For LibreChat mode, configure its YAML-defined STDIO server to pass
-`MCP_IDENTITY_MODE=librechat` and its `MCP_LIBRECHAT_USER_ID` placeholder. The
-optional `MCP_LIBRECHAT_USER_EMAIL` is reference-only and is never an
-authorization key.
+For HTTP clients such as LibreChat, configure the generic Bearer secret and
+verified `X-MCP-User-Email` header described in the HTTP setup document.
 
 See [`docs/CODEX_MCP_SETUP.md`](docs/CODEX_MCP_SETUP.md) for the Codex stdio
 registration and [`docs/LIBRECHAT_MCP_HTTP_SETUP.md`](docs/LIBRECHAT_MCP_HTTP_SETUP.md)

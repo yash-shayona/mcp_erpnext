@@ -12,6 +12,7 @@ from ..common import (
 	NonEmptyString,
 	PublicContractModel,
 	ResolvableDoctype,
+	SupplierReference,
 	ToolError,
 )
 from ..interaction import InteractionDirective
@@ -156,6 +157,73 @@ ItemResolutionResult = Annotated[
 
 class ItemResolutionOutput(RootModel[ItemResolutionResult]):
 	"""Root-shaped Item resolution result."""
+
+	model_config = ConfigDict(json_schema_extra={"type": "object"})
+
+
+class SupplierResolutionReference(SupplierReference):
+	"""A selected Supplier plus safe display information."""
+
+	supplier_name: str | None = None
+	supplier_group: str | None = None
+
+
+class SupplierResolutionCandidate(PublicContractModel):
+	reference: SupplierResolutionReference
+	label: NonEmptyString
+	score: float
+
+
+class SupplierSearchResult(PublicContractModel):
+	status: Literal["resolved", "ambiguous", "not_found"]
+	doctype: Literal["Supplier"]
+	query: NonEmptyString
+	candidates: list[SupplierResolutionCandidate]
+	interaction: InteractionDirective | None = None
+
+
+SupplierSearchResultContract = Annotated[
+	SupplierSearchResult | ToolError,
+	Field(discriminator="status"),
+]
+
+
+class SupplierSearchOutput(RootModel[SupplierSearchResultContract]):
+	"""Root-shaped Supplier search result with selectable references."""
+
+	model_config = ConfigDict(json_schema_extra={"type": "object"})
+
+
+class SupplierResolved(PublicContractModel):
+	status: Literal["resolved"]
+	doctype: Literal["Supplier"]
+	reference: SupplierResolutionReference
+	match_type: MatchType
+
+
+class SupplierAmbiguous(PublicContractModel):
+	status: Literal["ambiguous"]
+	doctype: Literal["Supplier"]
+	query: NonEmptyString
+	candidates: list[SupplierResolutionCandidate]
+	interaction: InteractionDirective
+
+
+class SupplierNotFound(PublicContractModel):
+	status: Literal["not_found"]
+	doctype: Literal["Supplier"]
+	query: NonEmptyString
+	candidates: list[SupplierResolutionCandidate] = Field(default_factory=list)
+
+
+SupplierResolutionResult = Annotated[
+	SupplierResolved | SupplierAmbiguous | SupplierNotFound | ToolError,
+	Field(discriminator="status"),
+]
+
+
+class SupplierResolutionOutput(RootModel[SupplierResolutionResult]):
+	"""Root-shaped Supplier resolution result."""
 
 	model_config = ConfigDict(json_schema_extra={"type": "object"})
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 SEARCH_FILTERS = {"disabled": ["!=", 1], "is_sales_item": 1}
+PURCHASE_SEARCH_FILTERS = {"disabled": ["!=", 1], "is_purchase_item": 1}
 SEARCH_FIELDS = ("name", "item_code", "item_name", "description")
 DISPLAY_FIELDS = ("item_code", "item_name", "stock_uom", "description")
 
@@ -19,8 +20,8 @@ CREATION_FIELDS = (
 # Link targets are always derived from runtime DocField metadata. Item Groups
 # must remain leaf nodes for Item creation; this is a capability candidate rule.
 REFERENCE_FILTERS = {
-	"item_group": {"is_group": 0},
-	"stock_uom": {},
+    "item_group": {"is_group": 0},
+    "stock_uom": {},
 }
 
 # This capability creates Items intended for Selling workflows. It is deliberate

@@ -106,9 +106,16 @@ def resolve_customer_for_workflow(query: str) -> dict[str, Any]:
             "status": "ambiguous",
             "doctype": "Customer",
             "query": query,
-            "candidates": [_candidate(candidate) for candidate in resolution.get("candidates", [])],
+            "candidates": [
+                _candidate(candidate) for candidate in resolution.get("candidates", [])
+            ],
         }
-    return {"status": "not_found", "doctype": "Customer", "query": query, "candidates": []}
+    return {
+        "status": "not_found",
+        "doctype": "Customer",
+        "query": query,
+        "candidates": [],
+    }
 
 
 def _normalise_identifier(fieldname: str, value: str) -> str:
@@ -339,7 +346,9 @@ def confirm_customer(approval_token: str, confirm: bool) -> dict[str, Any]:
     """Create the reviewed Customer only for its original site and authenticated user."""
     user = _current_user()
     if not confirm:
-        approvals.cancel(approval_token, action=_ACTION, site=frappe.local.site, user=user)
+        approvals.cancel(
+            approval_token, action=_ACTION, site=frappe.local.site, user=user
+        )
         return _confirmation_error(
             "CONFIRMATION_REQUIRED",
             "Review the Customer preview before confirming it.",

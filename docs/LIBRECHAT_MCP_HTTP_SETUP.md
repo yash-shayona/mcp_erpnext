@@ -11,8 +11,8 @@ explicit for this Docker-to-WSL development bridge only; it is not the default.
 ```bash
 export MCP_BACKEND=direct
 export MCP_FRAPPE_SITE=yob.localhost
-export MCP_IDENTITY_MODE=librechat
 export MCP_TRANSPORT=streamable-http
+export MCP_PROFILE=sales
 export MCP_HTTP_HOST=0.0.0.0
 export MCP_HTTP_PORT=8765
 export MCP_HTTP_PATH=/mcp
@@ -23,11 +23,10 @@ cd /home/frappe/frappe-bench/sites
 ../env/bin/python -m mcp_erpnext.mcp_server
 ```
 
-Do not set `MCP_LIBRECHAT_USER_ID` for HTTP identity. The server accepts only
-`MCP_IDENTITY_MODE=librechat`, verifies the Bearer secret, then resolves the
-current request's `X-LibreChat-User-ID` through **LibreChat User Mapping**.
-`X-LibreChat-User-Email` is reference-only. An unmapped or disabled user fails
-closed; it never becomes an Administrator or the process service user.
+For every HTTP request, the server verifies the Bearer secret and resolves the
+generic `X-MCP-User-Email` to an existing enabled Frappe User. Missing,
+unknown, or disabled users fail closed; HTTP never becomes Administrator or
+uses the process service user.
 
 Configure LibreChat's mounted YAML and its `.env` with the same secret. A
 LibreChat restart is an operator action.
@@ -38,19 +37,34 @@ mcpSettings:
     - "host.docker.internal:8765"
 
 mcpServers:
-  erpnext:
+  erpnext-sales:
     type: streamable-http
     url: "http://host.docker.internal:8765/mcp"
     headers:
       Authorization: "Bearer ${MCP_HTTP_SHARED_SECRET}"
-      X-LibreChat-User-ID: "{{LIBRECHAT_USER_ID}}"
-      X-LibreChat-User-Email: "{{LIBRECHAT_USER_EMAIL}}"
+      X-MCP-User-Email: "{{LIBRECHAT_USER_EMAIL}}"
     timeout: 120000
 ```
+
+To connect Purchase simultaneously, start a second process with
+`MCP_PROFILE=purchase`, `MCP_HTTP_PORT=8766`, and matching explicit allowed
+hosts. Add this second LibreChat entry:
+
+```yaml
+  erpnext-purchase:
+    type: streamable-http
+    url: "http://host.docker.internal:8766/mcp"
+    headers:
+      Authorization: "Bearer ${MCP_HTTP_SHARED_SECRET}"
+      X-MCP-User-Email: "{{LIBRECHAT_USER_EMAIL}}"
+    timeout: 120000
+```
+
+The complete two-process commands are in [`MCP_PROFILES.md`](MCP_PROFILES.md).
 
 ```dotenv
 MCP_HTTP_SHARED_SECRET=<same-secret-used-by-WSL-MCP-process>
 ```
 
 Do not send `X-Frappe-User`, roles, `run_as`, or `Administrator`. Frappe roles
-and User Permissions are evaluated only after the mapped Frappe User is set.
+and User Permissions are evaluated only after the resolved Frappe User is set.

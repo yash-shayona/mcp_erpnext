@@ -192,41 +192,32 @@ mcp_erpnext/
 |-- approvals.py
 |   Controlled persistent-write approval state
 |
-|-- identity.py
-|   Service-user or LibreChat-ID-to-Frappe-User resolution
-|
 `-- runtime.py
     Frappe site and resolved-user runtime context
 ```
 
 The tool wrappers call `runtime.ensure_context()` before invoking services.
 `runtime.py` supports only `MCP_BACKEND=direct` and initializes the configured
-Frappe site. The default `MCP_IDENTITY_MODE=service` sets
-`MCP_FRAPPE_USER`. In `MCP_IDENTITY_MODE=librechat`, it resolves only the
-authoritative `MCP_LIBRECHAT_USER_ID` through an enabled **LibreChat User
-Mapping** to an existing enabled Frappe User; email is reference-only and
-there is no `MCP_FRAPPE_USER` fallback. A tool caller cannot supply another
-user. The resolved identity remains subject to normal Frappe permission checks
-for reads and writes.
+Frappe site. Stdio uses `MCP_FRAPPE_USER` for local development/testing. HTTP
+uses `mcp_identity` to resolve the authenticated request's generic email to an
+enabled Frappe User, with no `MCP_FRAPPE_USER` fallback. A tool caller cannot
+supply another user. The resolved identity remains subject to normal Frappe
+permission checks for reads and writes.
 
 ## Security and runtime limits
 
 - `MCP_TRANSPORT=stdio` is the default. `MCP_TRANSPORT=streamable-http` is a
   controlled Docker-to-WSL bridge, not a public endpoint.
-- HTTP requires `MCP_IDENTITY_MODE=librechat`, an explicit non-wildcard allowed
-  Host list, and a minimum 32-character shared Bearer secret. The SDK's
+- HTTP requires an explicit non-wildcard allowed Host list, a minimum
+  32-character shared Bearer secret, and `X-MCP-User-Email`. The SDK's
   transport security validates the Host header before MCP processing.
-- HTTP reads the LibreChat ID afresh from the authenticated request context and
-  resolves it through **LibreChat User Mapping**. It never falls back to
-  `MCP_LIBRECHAT_USER_ID`, `MCP_FRAPPE_USER`, email, or a tool argument.
+- HTTP reads the generic email afresh from the authenticated request context.
+  It never falls back to `MCP_FRAPPE_USER` or a tool argument.
 - Each HTTP tool call initializes and destroys a separate Frappe context. Run
   exactly one MCP process/worker because approval storage remains process-local.
 - `MCP_BACKEND=direct` is required; the REST backend is not implemented.
-- `MCP_FRAPPE_SITE` configures the Frappe context. Service mode uses
-  `MCP_FRAPPE_USER`; LibreChat mode requires an administrator-managed mapping
-  for `MCP_LIBRECHAT_USER_ID` and does not use email for authorization.
-- LibreChat users do not need a Frappe Desk login for this local flow; their
-  mapped Frappe User's roles and User Permissions remain authoritative.
+- `MCP_FRAPPE_SITE` configures the Frappe context. The resolved Frappe User's
+  roles and User Permissions remain authoritative.
 - Persistent writes are protected by the prepare/preview/explicit-confirm
   boundary.
 - Services use Frappe ORM and document APIs with normal permission checks;

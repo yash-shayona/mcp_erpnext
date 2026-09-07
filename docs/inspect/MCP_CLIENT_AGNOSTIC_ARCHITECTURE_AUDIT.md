@@ -132,8 +132,7 @@ pyproject.toml / package metadata
 mcp_erpnext/mcp_server.py
 mcp_erpnext/settings.py
 mcp_erpnext/runtime.py
-mcp_erpnext/identity.py
-mcp_erpnext/transport_identity.py
+mcp_identity/identity.py
 mcp_erpnext/http_transport.py
 
 mcp_erpnext/contracts/**
@@ -154,16 +153,14 @@ Report the real paths discovered.
 
 ---
 
-# 5. Repository-Wide LibreChat Coupling Search
+# 5. Repository-Wide Client Coupling Search
 
 Search the entire repository for at least:
 
 ```text
-LibreChat
-librechat
-X-LibreChat
-X-LibreChat-User-ID
-LIBRECHAT
+client-specific identity
+provider-specific identity
+X-MCP-User-Email
 conversation_id
 message_id
 assistant_id
@@ -683,9 +680,9 @@ only if source evidence supports it.
 Expected candidates:
 
 ```text
-LibreChat user mapping adapter
-LibreChat-specific headers
-LibreChat deployment docs
+provider-specific identity adapter
+provider-specific headers
+client deployment docs
 client-specific approval adapter in future
 ```
 

@@ -10,7 +10,7 @@ args = ["-m", "mcp_erpnext.mcp_server"]
 # Frappe's core file log handlers resolve paths from the bench `sites`
 # directory (for example, `../logs/database.log`).
 cwd = "/home/frappe/frappe-bench/sites"
-env_vars = ["MCP_BACKEND", "MCP_FRAPPE_SITE", "MCP_IDENTITY_MODE", "MCP_FRAPPE_USER", "MCP_APPROVAL_MODE"]
+env_vars = ["MCP_BACKEND", "MCP_FRAPPE_SITE", "MCP_FRAPPE_USER", "MCP_APPROVAL_MODE", "MCP_PROFILE"]
 default_tools_approval_mode = "writes"
 ```
 
@@ -20,12 +20,15 @@ the process environment (or in the Codex `env` table):
 ```bash
 export MCP_BACKEND=direct
 export MCP_FRAPPE_SITE=your-site.localhost
-export MCP_IDENTITY_MODE=service
 export MCP_FRAPPE_USER=mcp-service@example.com
 export MCP_APPROVAL_MODE=agent_delegated
+export MCP_PROFILE=sales
 ```
 
 `MCP_APPROVAL_MODE` is server configuration, never an MCP tool argument.
+`MCP_PROFILE` is also server configuration. It defaults to `sales`; set it to
+`purchase` for a separate Purchase MCP registration. See
+[`MCP_PROFILES.md`](MCP_PROFILES.md) for both profile configurations.
 `trusted_human` is the default and requires an independently verified,
 internally recorded human decision. `agent_delegated` is suitable for a trusted
 chat Agent/client that calls `confirm_*` only after the user explicitly
@@ -37,15 +40,10 @@ private `.env` file may be used by a local wrapper, but Codex does not
 automatically load arbitrary `.env` files; use its `env`/`env_vars` settings or
 source the file before launching Codex.
 
-Codex normally uses the default service mode above. LibreChat mode is for a
-LibreChat YAML-defined STDIO server, not for a Codex tool argument: set
-`MCP_IDENTITY_MODE=librechat` and pass LibreChat's user-ID placeholder as
-`MCP_LIBRECHAT_USER_ID`. An administrator must map that ID to an existing,
-enabled Frappe User in **LibreChat User Mapping**. The optional email value is
-reference-only, never an authorization key, and LibreChat mode never falls
-back to `MCP_FRAPPE_USER`. Frappe roles and User Permissions remain the
-permission authority; Frappe Desk login is not required for this flow. Existing
-OAuth work is unchanged.
+Codex uses the local stdio setup above. HTTP clients supply a bearer secret and
+the generic `X-MCP-User-Email` header for each request; `mcp_identity` resolves
+the enabled Frappe User without a provider-specific mapping. Frappe roles and
+User Permissions remain the permission authority.
 
 The app must also be installed on the selected Frappe site before the server
 can use its ERPNext capabilities:
@@ -60,7 +58,7 @@ choose the site, and run it only when ready.
 Codex uses the local STDIO setup above. This app also provides a separately
 configured Streamable HTTP bridge for LibreChat; see
 [`LIBRECHAT_MCP_HTTP_SETUP.md`](LIBRECHAT_MCP_HTTP_SETUP.md). The HTTP bridge
-uses request-scoped LibreChat identity and is not configured through a Codex
+uses request-scoped generic identity and is not configured through a Codex
 tool argument. Its current controlled capabilities span Customer and Item
 masters plus Quotation and Sales Order workflows. The planned REST backend
 variables are documented in `.env.example` and are not active yet.

@@ -40,6 +40,6 @@ POLICY_VALUES: dict[str, object] = {}
 # Link targets are always derived from runtime DocField metadata. These filters
 # only narrow permitted candidates for fields this capability already exposes.
 REFERENCE_FILTERS = {
-	"customer_group": {},
-	"territory": {},
+    "customer_group": {},
+    "territory": {},
 }

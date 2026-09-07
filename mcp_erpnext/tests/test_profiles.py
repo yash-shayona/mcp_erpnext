@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+import asyncio
+import os
+import unittest
+from unittest.mock import patch
+
+from mcp_erpnext.contracts.audit import audit_tool_contracts
+from mcp_erpnext.mcp_server import create_mcp
+from mcp_erpnext.settings import MCPProfile, MCPSettings
+
+
+def _settings(profile: MCPProfile) -> MCPSettings:
+    return MCPSettings(
+        backend="direct",
+        frappe_site="test.localhost",
+        frappe_user="mcp@example.com",
+        erpnext_base_url=None,
+        erpnext_api_key=None,
+        erpnext_api_secret=None,
+        profile=profile,
+    )
+
+
+class ProfileRegistrationTests(unittest.TestCase):
+    def _tool_names(self, profile: MCPProfile) -> list[str]:
+        return [tool.name for tool in asyncio.run(create_mcp(_settings(profile)).list_tools())]
+
+    def test_sales_profile_preserves_sales_inventory_without_purchase_tools(self):
+        names = self._tool_names(MCPProfile.SALES)
+        self.assertIn("prepare_quotation", names)
+        self.assertIn("prepare_sales_order", names)
+        self.assertNotIn("prepare_purchase_order", names)
+        self.assertNotIn("search_suppliers", names)
+        self.assertEqual(
+            audit_tool_contracts(asyncio.run(create_mcp(_settings(MCPProfile.SALES)).list_tools())), []
+        )
+
+    def test_purchase_profile_exposes_only_purchase_inventory(self):
+        names = self._tool_names(MCPProfile.PURCHASE)
+        self.assertEqual(
+            names,
+            [
+                "search_suppliers",
+                "resolve_supplier",
+                "search_items",
+                "resolve_item",
+                "prepare_purchase_order",
+                "confirm_purchase_order",
+            ],
+        )
+        self.assertNotIn("prepare_quotation", names)
+        self.assertNotIn("prepare_sales_order", names)
+        self.assertEqual(
+            audit_tool_contracts(asyncio.run(create_mcp(_settings(MCPProfile.PURCHASE)).list_tools())), []
+        )
+
+    def test_unknown_profile_fails_at_configuration_load(self):
+        with patch.dict(os.environ, {"MCP_PROFILE": "accounts"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "MCP_PROFILE"):
+                MCPSettings.from_environment()
+
+
+if __name__ == "__main__":
+    unittest.main()
