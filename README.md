@@ -83,6 +83,9 @@ The original, narrower Sales Order baseline is preserved in
 See [`docs/MCP_PROFILES.md`](docs/MCP_PROFILES.md) for exact stdio and
 Streamable HTTP startup commands plus the two LibreChat entries.
 
+For direct manual HTTP testing, see the [Postman MCP HTTP testing guide](docs/testing/POSTMAN_MCP_HTTP_TESTING.md)
+and the [human-readable Hinglish system guide](docs/guides/MCP_SYSTEM_HUMAN_GUIDE_HINGLISH.md).
+
 ## Safe persistent writes
 
 Search and resolution tools locate records that the configured Frappe user may

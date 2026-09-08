@@ -13,6 +13,7 @@ from ..contracts.lifecycle import (
 	PrepareActionInput,
 	PrepareDeleteInput,
 	PrepareUpdateInput,
+	PrepareChildAddInput,
 )
 from ..contracts.registry import tool_meta
 from ..runtime import execute_tool_with_context
@@ -29,6 +30,14 @@ def register_lifecycle_tools(mcp: Any, profile: str) -> None:
 	@mcp.tool(description="Apply a prepared exact existing-document field update after approval.", meta=tool_meta("confirm_document_update"), structured_output=True)
 	def confirm_document_update(request: LifecycleConfirmInput, ctx: Context) -> LifecycleResult:
 		return result_adapter.validate_python(execute_tool_with_context(ctx, "confirm_document_update", lambda: lifecycle.confirm("update", request.approval_token, request.confirm, profile)))
+
+	@mcp.tool(description="Prepare adding one resolved Item as a new row to an exact existing Draft transaction.", meta=tool_meta("prepare_document_child_add"), structured_output=True)
+	def prepare_document_child_add(request: PrepareChildAddInput, ctx: Context) -> LifecycleResult:
+		return result_adapter.validate_python(execute_tool_with_context(ctx, "prepare_document_child_add", lambda: lifecycle.prepare_child_add(request.target.model_dump(), request.item.model_dump(), request.qty, request.rate, profile)))
+
+	@mcp.tool(description="Apply a prepared new item row after approval.", meta=tool_meta("confirm_document_child_add"), structured_output=True)
+	def confirm_document_child_add(request: LifecycleConfirmInput, ctx: Context) -> LifecycleResult:
+		return result_adapter.validate_python(execute_tool_with_context(ctx, "confirm_document_child_add", lambda: lifecycle.confirm("child_add", request.approval_token, request.confirm, profile)))
 
 	def prepare(name: str, action: str):
 		@mcp.tool(name=name, description=f"Prepare an exact existing-document {action} action.", meta=tool_meta(name), structured_output=True)

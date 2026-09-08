@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from copy import deepcopy
 from typing import Any
 
 import frappe
 from frappe.model.delete_doc import get_dynamic_linked_docs, get_linked_docs
+from frappe.utils import get_datetime, getdate
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
@@ -15,6 +17,14 @@ from ...observability import new_error_reference
 PROFILE_DOCTYPES = {
 	"sales": frozenset({"Quotation", "Sales Order", "Customer", "Item"}),
 	"purchase": frozenset({"Purchase Order", "Supplier", "Item"}),
+}
+
+CHILD_ADD_TARGETS = {
+	"sales": {
+		"Quotation": ("items", "Quotation Item"),
+		"Sales Order": ("items", "Sales Order Item"),
+	},
+	"purchase": {"Purchase Order": ("items", "Purchase Order Item")},
 }
 
 _SYSTEM_FIELDS = frozenset(
@@ -144,6 +154,92 @@ def prepare_update(target: dict[str, Any], changes: list[dict[str, Any]], profil
 	return _create("update", doc, profile, {"changes": validated}, preview)
 
 
+def _child_add_target(doc: Any, profile: str) -> tuple[Any, Any] | dict[str, Any]:
+	configured = CHILD_ADD_TARGETS.get(profile, {}).get(doc.doctype)
+	if not configured:
+		return _error("CHILD_TARGET_NOT_ALLOWED", f"Adding item rows is not allowed for {doc.doctype} in the {profile} MCP profile.")
+	table, expected_doctype = configured
+	field = doc.meta.get_field(table) if doc.meta.has_field(table) else None
+	if not field or field.fieldtype != "Table" or field.options != expected_doctype:
+		return _error("INVALID_CHILD_TARGET", f"The approved items table is not valid on {doc.doctype}.")
+	return field, frappe.get_meta(expected_doctype)
+
+
+def _item_for_child_add(item: dict[str, Any], profile: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+	name = item.get("name") if isinstance(item, dict) else None
+	if not isinstance(name, str) or not name.strip():
+		return None, _error("INVALID_ITEM", "A resolved Item reference is required.")
+	filters = {"disabled": ["!=", 1], "is_purchase_item" if profile == "purchase" else "is_sales_item": 1}
+	rows = frappe.get_list("Item", filters={"name": name.strip(), **filters}, fields=["name", "item_code", "item_name", "stock_uom"], limit_page_length=1, ignore_permissions=False)
+	if not rows:
+		return None, _error("INVALID_ITEM", f"Item {name.strip()} is not available to the authenticated user.")
+	return rows[0], None
+
+
+def _child_row_values(row: Any, meta: Any) -> dict[str, Any]:
+	values = {}
+	for field in getattr(meta, "fields", []):
+		if field.fieldname in _SYSTEM_FIELDS or field.fieldtype in {"Section Break", "Column Break", "HTML", "Button", "Table"}:
+			continue
+		value = row.get(field.fieldname)
+		if value not in (None, "", 0, 0.0, []):
+			values[field.fieldname] = _json(value)
+	return values
+
+
+def _restore_child_row_types(values: dict[str, Any], meta: Any) -> dict[str, Any]:
+	"""Restore typed date values before passing an approval payload to Frappe."""
+	restored = deepcopy(values)
+	for field in getattr(meta, "fields", []):
+		value = restored.get(field.fieldname)
+		if value in (None, ""):
+			continue
+		if field.fieldtype == "Date":
+			restored[field.fieldname] = getdate(value)
+		elif field.fieldtype == "Datetime":
+			restored[field.fieldname] = get_datetime(value)
+	return restored
+
+
+def prepare_child_add(target: dict[str, Any], item: dict[str, Any], qty: Any, rate: Any, profile: str) -> dict[str, Any]:
+	doc, failure = _load(target, profile, "write")
+	if failure:
+		return failure
+	if int(doc.docstatus) != 0:
+		return _error("INVALID_DOCUMENT_STATE", f"{doc.doctype} {doc.name} is {_status(doc)} and cannot receive a new item row.")
+	configured = _child_add_target(doc, profile)
+	if isinstance(configured, dict):
+		return configured
+	field, child_meta = configured
+	item_record, failure = _item_for_child_add(item, profile)
+	if failure:
+		return failure
+	if isinstance(qty, bool) or not isinstance(qty, (int, float)) or not math.isfinite(qty) or qty <= 0:
+		return _error("INVALID_ITEM_DETAILS", "Item quantity must be greater than zero.")
+	if rate is not None and (isinstance(rate, bool) or not isinstance(rate, (int, float)) or not math.isfinite(rate) or rate < 0):
+		return _error("INVALID_ITEM_DETAILS", "Item rate must be zero or greater.")
+	item_code = item_record["name"]
+	duplicates = [row for row in doc.get(field.fieldname) or [] if row.get("item_code") == item_code]
+	if duplicates:
+		return _error("DUPLICATE_ITEM_ROW", f"Item {item_code} already exists in {doc.doctype} {doc.name}; no new row was prepared.")
+	row = {"item_code": item_code, "qty": qty}
+	if rate is not None:
+		row["rate"] = rate
+	try:
+		new_row = doc.append(field.fieldname, row)
+		if hasattr(doc, "set_missing_values"):
+			doc.set_missing_values()
+		if hasattr(doc, "calculate_taxes_and_totals"):
+			doc.calculate_taxes_and_totals()
+		if hasattr(doc, "run_method"):
+			doc.run_method("validate")
+	except Exception as error:
+		return _error("LIFECYCLE_VALIDATION_FAILED", str(error))
+	prepared_row = _child_row_values(new_row, child_meta)
+	preview = {**_base_preview(doc, "ADD_ITEM"), "new_row": prepared_row, "message": "This will add a new item row."}
+	return _create("child_add", doc, profile, {"child_table": field.fieldname, "child_doctype": getattr(child_meta, "name", field.options), "row": prepared_row, "item_code": item_code}, preview)
+
+
 def _prepare_action(action: str, target: dict[str, Any], profile: str) -> dict[str, Any]:
 	doc, failure = _load(target, profile, "read")
 	if failure:
@@ -191,6 +287,8 @@ def _blocked(action: str, doc: Any, blockers: list[dict[str, Any]]) -> dict[str,
 
 
 def _revalidate(approval: Any, profile: str) -> tuple[Any, dict[str, Any] | None]:
+	if approval.payload.get("profile") != profile:
+		return None, _error("PROFILE_MISMATCH", "The prepared action belongs to another MCP profile.")
 	doc, failure = _load({"doctype": approval.payload["doctype"], "name": approval.payload["name"]}, profile, "read")
 	if failure:
 		return None, failure
@@ -212,7 +310,23 @@ def confirm(action: str, token: str, confirm: bool, profile: str) -> dict[str, A
 	if failure:
 		return failure
 	try:
-		if action == "update":
+		if action == "child_add":
+			doc.check_permission("write")
+			field_name = approval.payload["child_table"]
+			configured = _child_add_target(doc, profile)
+			if isinstance(configured, dict) or configured[0].fieldname != field_name:
+				return _error("CHILD_TARGET_NOT_ALLOWED", "The prepared child-row target is no longer allowed.")
+			if any(row.get("item_code") == approval.payload["item_code"] for row in doc.get(field_name) or []):
+				return _error("STALE_CONFIRMATION", "The item already exists in the document. Please prepare the action again.")
+			_, child_meta = configured
+			row_values = _restore_child_row_types(approval.payload["row"], child_meta)
+			doc.append(field_name, row_values)
+			if hasattr(doc, "set_missing_values"):
+				doc.set_missing_values()
+			if hasattr(doc, "calculate_taxes_and_totals"):
+				doc.calculate_taxes_and_totals()
+			doc.save(ignore_permissions=False)
+		elif action == "update":
 			for change in approval.payload["changes"]:
 				if change["child_table"]:
 					row, row_failure = _find_child(doc, change["input"])
@@ -253,7 +367,7 @@ def confirm(action: str, token: str, confirm: bool, profile: str) -> dict[str, A
 	except Exception as error:
 		frappe.db.rollback()
 		return _error("LIFECYCLE_VALIDATION_FAILED", str(error))
-	result_status = {"update": "updated", "submit": "submitted", "cancel": "cancelled", "delete": "deleted"}[action]
+	result_status = {"update": "updated", "child_add": "added", "submit": "submitted", "cancel": "cancelled", "delete": "deleted"}[action]
 	return {"status": result_status, "document": {"doctype": doc.doctype, "name": doc.name, "docstatus": int(doc.docstatus)}}
 
 

@@ -13,6 +13,7 @@ from .lifecycle import (
 	PrepareActionInput,
 	PrepareDeleteInput,
 	PrepareUpdateInput,
+	PrepareChildAddInput,
 )
 from .masters.resolution import (
     CustomerResolutionOutput,
@@ -336,6 +337,7 @@ TOOL_CONTRACTS = {
 
 for _name, _operation, _purpose, _input_model, _confirm_tool in (
 	("prepare_document_update", ToolOperation.PREPARE, "Prepare an exact existing-document field update without writing.", PrepareUpdateInput, "confirm_document_update"),
+	("prepare_document_child_add", ToolOperation.PREPARE, "Prepare adding one resolved Item as a new row to an exact Draft transaction.", PrepareChildAddInput, "confirm_document_child_add"),
 	("prepare_document_submit", ToolOperation.PREPARE, "Prepare submission of an exact existing document.", PrepareActionInput, "confirm_document_submit"),
 	("prepare_document_cancel", ToolOperation.PREPARE, "Prepare cancellation of an exact existing document.", PrepareActionInput, "confirm_document_cancel"),
 	("prepare_document_delete", ToolOperation.PREPARE, "Prepare deletion of an exact existing document with link preflight.", PrepareDeleteInput, "confirm_document_delete"),
@@ -347,6 +349,7 @@ for _name, _operation, _purpose, _input_model, _confirm_tool in (
 
 for _name, _action, _purpose, _input_model in (
 	("confirm_document_update", "update", "Apply a prepared exact existing-document update after approval.", LifecycleConfirmInput),
+	("confirm_document_child_add", "child_add", "Apply a prepared new transaction item row after approval.", LifecycleConfirmInput),
 	("confirm_document_submit", "submit", "Submit a prepared exact existing document after approval.", LifecycleConfirmInput),
 	("confirm_document_cancel", "cancel", "Cancel a prepared exact existing document after approval.", LifecycleConfirmInput),
 	("confirm_document_delete", "delete", "Delete a prepared exact existing document after approval.", LifecycleConfirmInput),

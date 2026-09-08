@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -32,6 +33,7 @@ class FakeMeta:
 	def __init__(self, *fields, is_submittable=False):
 		self._fields = {field.fieldname: field for field in fields}
 		self.is_submittable = is_submittable
+		self.fields = list(self._fields.values())
 
 	def get_field(self, fieldname):
 		return self._fields.get(fieldname)
@@ -52,11 +54,45 @@ class FakeDocument:
 	def has_permission(self, permission):
 		return permission in {"read", "write", "submit", "cancel", "delete"}
 
+	def check_permission(self, permission):
+		if not self.has_permission(permission):
+			raise PermissionError(permission)
+
 	def get(self, fieldname):
 		return getattr(self, fieldname, None)
 
 	def set(self, fieldname, value):
 		setattr(self, fieldname, value)
+
+
+class FakeChildRow:
+	def __init__(self, values, name="new-row"):
+		self.name = name
+		self.idx = values.get("idx", 1)
+		self.values = values
+
+	def get(self, fieldname):
+		return self.values.get(fieldname)
+
+
+class FakeChildDocument(FakeDocument):
+	def __init__(self, **kwargs):
+		super().__init__(**kwargs)
+		self.items = [FakeChildRow({"item_code": "OLD-ITEM", "qty": 1}, "row-1")]
+		self.saved = False
+		self.meta = FakeMeta(
+			FakeField("remarks"), FakeField("items", "Table", options=f"{self.doctype} Item"),
+			is_submittable=True,
+		)
+
+	def append(self, table, values):
+		values = {**values, "delivery_date": values.get("delivery_date", date(2026, 9, 10))}
+		row = FakeChildRow(values, f"row-{len(self.items) + 1}")
+		self.items.append(row)
+		return row
+
+	def save(self, **kwargs):
+		self.saved = True
 
 
 class LifecycleServiceTests(unittest.TestCase):
@@ -65,8 +101,10 @@ class LifecycleServiceTests(unittest.TestCase):
 		self.store = ApprovalStore(ApprovalMode.AGENT_DELEGATED)
 		self.frappe_patches = [
 			patch.object(lifecycle.frappe, "get_doc", return_value=self.doc),
+			patch.object(lifecycle.frappe, "get_meta", return_value=FakeMeta(FakeField("item_code"), FakeField("qty"))),
+			patch.object(lifecycle.frappe, "db", SimpleNamespace(commit=lambda: None, rollback=lambda: None)),
 			patch.object(lifecycle.frappe, "get_list", return_value=[{"name": "CUST-001"}]),
-			patch.object(lifecycle.frappe, "local", SimpleNamespace(site="test.localhost")),
+			patch.object(lifecycle.frappe, "local", SimpleNamespace(site="test.localhost", db=SimpleNamespace(commit=lambda: None, rollback=lambda: None))),
 			patch.object(lifecycle.frappe, "session", SimpleNamespace(user="user@example.com")),
 			patch.object(lifecycle, "approvals", self.store),
 		]
@@ -120,6 +158,77 @@ class LifecycleServiceTests(unittest.TestCase):
 		result = lifecycle.confirm("update", prepared["approval_token"], True, "sales")
 		self.assertEqual(result["code"], "STALE_CONFIRMATION")
 		self.assertEqual(self.doc.remarks, "")
+
+	def test_prepare_child_add_is_preview_only_and_binds_profile(self):
+		self.doc = FakeChildDocument()
+		lifecycle.frappe.get_doc.return_value = self.doc
+		lifecycle.frappe.get_list.return_value = [{"name": "NEW-ITEM", "item_code": "NEW-ITEM", "item_name": "New", "stock_uom": "Nos"}]
+		lifecycle.frappe.get_meta.return_value = FakeMeta(
+			FakeField("item_code"), FakeField("qty"), FakeField("rate"),
+		)
+		result = lifecycle.prepare_child_add(
+			{"doctype": "Sales Order", "name": "SO-001"},
+			{"doctype": "Item", "name": "NEW-ITEM"}, 2, None, "sales",
+		)
+		self.assertEqual(result["status"], "ready")
+		self.assertEqual(result["preview"]["action"], "ADD_ITEM")
+		self.assertEqual(result["preview"]["new_row"]["item_code"], "NEW-ITEM")
+		self.assertEqual(len(self.doc.items), 2)
+		self.assertFalse(self.doc.saved)
+		approval, state = lifecycle.approvals.lookup(result["approval_token"], action="lifecycle_child_add", site="test.localhost", user="user@example.com")
+		self.assertEqual(state, "available")
+		self.assertEqual(approval.payload["profile"], "sales")
+
+	def test_confirm_child_add_uses_native_save_and_preserves_old_row(self):
+		self.doc = FakeChildDocument()
+		confirm_doc = FakeChildDocument()
+		lifecycle.frappe.get_doc.side_effect = [self.doc, confirm_doc]
+		lifecycle.frappe.get_list.return_value = [{"name": "NEW-ITEM", "item_code": "NEW-ITEM", "item_name": "New", "stock_uom": "Nos"}]
+		lifecycle.frappe.get_meta.return_value = FakeMeta(FakeField("item_code"), FakeField("qty"))
+		prepared = lifecycle.prepare_child_add(
+			{"doctype": "Sales Order", "name": "SO-001"},
+			{"doctype": "Item", "name": "NEW-ITEM"}, 2, None, "sales",
+		)
+		result = lifecycle.confirm("child_add", prepared["approval_token"], True, "sales")
+		self.assertEqual(result["status"], "added", result)
+		self.assertTrue(confirm_doc.saved)
+		self.assertEqual([row.get("item_code") for row in confirm_doc.items], ["OLD-ITEM", "NEW-ITEM"])
+
+	def test_child_add_rejects_duplicate_and_non_draft(self):
+		self.doc = FakeChildDocument()
+		self.doc.items.append(FakeChildRow({"item_code": "NEW-ITEM", "qty": 1}, "row-2"))
+		lifecycle.frappe.get_doc.return_value = self.doc
+		lifecycle.frappe.get_list.return_value = [{"name": "NEW-ITEM", "item_code": "NEW-ITEM", "item_name": "New", "stock_uom": "Nos"}]
+		lifecycle.frappe.get_meta.return_value = FakeMeta(FakeField("item_code"), FakeField("qty"))
+		duplicate = lifecycle.prepare_child_add({"doctype": "Sales Order", "name": "SO-001"}, {"doctype": "Item", "name": "NEW-ITEM"}, 2, None, "sales")
+		self.assertEqual(duplicate["code"], "DUPLICATE_ITEM_ROW")
+		self.doc.docstatus = FakeDocStatus(1)
+		submitted = lifecycle.prepare_child_add({"doctype": "Sales Order", "name": "SO-001"}, {"doctype": "Item", "name": "OTHER-ITEM"}, 2, None, "sales")
+		self.assertEqual(submitted["code"], "INVALID_DOCUMENT_STATE")
+
+	def test_confirm_child_add_restores_date_fields_before_append(self):
+		self.doc = FakeChildDocument()
+		confirm_doc = FakeChildDocument()
+		lifecycle.frappe.get_doc.side_effect = [self.doc, confirm_doc]
+		lifecycle.frappe.get_list.return_value = [{"name": "NEW-ITEM", "item_code": "NEW-ITEM"}]
+		lifecycle.frappe.get_meta.return_value = FakeMeta(
+			FakeField("item_code"), FakeField("qty"), FakeField("delivery_date", "Date")
+		)
+		prepared = lifecycle.prepare_child_add(
+			{"doctype": "Sales Order", "name": "SO-001"},
+			{"doctype": "Item", "name": "NEW-ITEM"}, 2, None, "sales",
+		)
+		approval, state = lifecycle.approvals.lookup(
+			prepared["approval_token"],
+			action="lifecycle_child_add",
+			site="test.localhost",
+			user="user@example.com",
+		)
+		self.assertEqual(state, "available")
+		self.assertEqual(approval.payload["row"]["delivery_date"], "2026-09-10")
+		result = lifecycle.confirm("child_add", prepared["approval_token"], True, "sales")
+		self.assertEqual(result["status"], "added")
+		self.assertIsInstance(confirm_doc.items[-1].get("delivery_date"), date)
 
 
 if __name__ == "__main__":

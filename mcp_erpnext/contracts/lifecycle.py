@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from .common import NonEmptyString, PublicContractModel
+from .common import ItemReference, NonEmptyString, PublicContractModel
 from .interaction import InteractionDirective
 
 
@@ -32,6 +32,13 @@ class LifecycleChange(PublicContractModel):
 class PrepareUpdateInput(PublicContractModel):
 	target: LifecycleTarget
 	changes: list[LifecycleChange] = Field(min_length=1)
+
+
+class PrepareChildAddInput(PublicContractModel):
+	target: LifecycleTarget
+	item: ItemReference
+	qty: float = Field(gt=0)
+	rate: float | None = Field(default=None, ge=0)
 
 
 class LifecycleConfirmInput(PublicContractModel):

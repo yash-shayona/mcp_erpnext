@@ -1,0 +1,883 @@
+{
+  "info": {
+    "_postman_id": "mcp-erpnext-http-testing",
+    "name": "mcp_erpnext Streamable HTTP (safe examples)",
+    "description": "Manual MCP JSON-RPC requests for the current mcp_erpnext Streamable HTTP server. The final write request is disabled and manual-only.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 - MCP Protocol / Discovery",
+      "item": [
+        {
+          "name": "Initialize",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"initialize\",\n  \"params\": {\n    \"protocolVersion\": \"{{protocol_version}}\",\n    \"capabilities\": {},\n    \"clientInfo\": {\n      \"name\": \"postman\",\n      \"version\": \"1.0\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Initialize returns HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const sessionId = pm.response.headers.get('mcp-session-id');",
+                  "if (sessionId) pm.environment.set('mcp_session_id', sessionId);",
+                  "const dataLine = pm.response.text().split(/\\r?\\n/).find(line => line.startsWith('data: '));",
+                  "if (dataLine) {",
+                  "  const message = JSON.parse(dataLine.slice(6));",
+                  "  pm.test('Initialize returns a JSON-RPC result', function () { pm.expect(message.result).to.exist; });",
+                  "  if (message.result && message.result.protocolVersion) pm.environment.set('protocol_version', String(message.result.protocolVersion));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Initialized notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"notifications/initialized\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "List tools",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 2,\n  \"method\": \"tools/list\",\n  \"params\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('tools/list returns HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "const dataLine = pm.response.text().split(/\\r?\\n/).find(line => line.startsWith('data: '));",
+                  "if (dataLine) { const message = JSON.parse(dataLine.slice(6)); pm.test('tools/list returns tools', function () { pm.expect(message.result.tools).to.be.an('array'); }); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Tools - Read",
+      "item": [
+        {
+          "name": "Search customers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 3,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"search_customers\",\n    \"arguments\": {\n      \"query\": \"Acme\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Search items",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 4,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"search_items\",\n    \"arguments\": {\n      \"query\": \"Item\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Resolver / Ambiguity",
+      "item": [
+        {
+          "name": "Resolve customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 5,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"resolve_customer\",\n    \"arguments\": {\n      \"query\": \"Acme\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Revalidate selected Customer (replace name)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 6,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"select_resolved_candidate\",\n    \"arguments\": {\n      \"doctype\": \"Customer\",\n      \"name\": \"{{test_customer}}\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Prepare - No Final Write",
+      "item": [
+        {
+          "name": "Prepare quotation preview",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 7,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"prepare_quotation\",\n    \"arguments\": {\n      \"customer\": {\n        \"doctype\": \"Customer\",\n        \"name\": \"{{test_customer}}\"\n      },\n      \"items\": [\n        {\n          \"item\": {\n            \"doctype\": \"Item\",\n            \"name\": \"{{test_item}}\"\n          },\n          \"qty\": 1\n        }\n      ],\n      \"valid_till\": \"2027-01-01\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "90 - Negative Auth / Identity",
+      "item": [
+        {
+          "name": "Missing bearer (initialize)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"initialize\",\n  \"params\": {\n    \"protocolVersion\": \"{{protocol_version}}\",\n    \"capabilities\": {},\n    \"clientInfo\": {\n      \"name\": \"postman\",\n      \"version\": \"1.0\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Wrong bearer (initialize)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer definitely-not-the-server-secret"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"initialize\",\n  \"params\": {\n    \"protocolVersion\": \"{{protocol_version}}\",\n    \"capabilities\": {},\n    \"clientInfo\": {\n      \"name\": \"postman\",\n      \"version\": \"1.0\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Missing session (tools/list)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 92,\n  \"method\": \"tools/list\",\n  \"params\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Unsupported protocol version",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "2099-01-01"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 93,\n  \"method\": \"tools/list\",\n  \"params\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Invalid session ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "not-a-real-session"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 94,\n  \"method\": \"tools/list\",\n  \"params\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Missing user identity (tools/call)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 95,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"search_customers\",\n    \"arguments\": {\n      \"query\": \"Acme\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Invalid email (tools/call)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "not-an-email"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 96,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"search_customers\",\n    \"arguments\": {\n      \"query\": \"Acme\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Unknown user (tools/call)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "unknown-user-do-not-create@example.com"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 97,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"search_customers\",\n    \"arguments\": {\n      \"query\": \"Acme\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Bad Origin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "Origin",
+                "value": "http://not-allowed.example"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 98,\n  \"method\": \"tools/list\",\n  \"params\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Bad Accept",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 99,\n  \"method\": \"tools/list\",\n  \"params\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        },
+        {
+          "name": "Bad Content-Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 100,\n  \"method\": \"tools/list\",\n  \"params\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "99 - Confirm Write - MANUAL / TEST SITE ONLY",
+      "description": "Disabled by design. Never run from a collection runner. Requires explicit authorization, a same-process prepared token, and a development/test site.",
+      "item": [
+        {
+          "name": "WRITE disabled - confirm quotation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{shared_secret}}"
+              },
+              {
+                "key": "X-MCP-User-Email",
+                "value": "{{verified_user_email}}"
+              },
+              {
+                "key": "mcp-session-id",
+                "value": "{{mcp_session_id}}"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "{{protocol_version}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 101,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"confirm_quotation\",\n    \"arguments\": {\n      \"approval_token\": \"{{approval_token}}\",\n      \"confirm\": true\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{mcp_url}}"
+          },
+          "disabled": true,
+          "description": "WRITE / TEST SITE ONLY. Raw Postman confirmation normally returns TRUSTED_APPROVAL_UNAVAILABLE in trusted_human mode. Enable only for an authorized development/test-site procedure."
+        }
+      ]
+    }
+  ]
+}

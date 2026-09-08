@@ -24,6 +24,8 @@ This catalog is generated from the profile-registered MCP tools and their contra
 | `confirm_quotation` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_update` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_child_add` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_child_add` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_submit` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
@@ -170,6 +172,24 @@ Apply a prepared exact existing-document update after approval.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 
+### `prepare_document_child_add`
+
+Prepare adding one resolved Item as a new row to an exact Draft transaction.
+
+- Input: `PrepareChildAddInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_child_add`
+
+Apply a prepared new transaction item row after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
 ### `prepare_document_submit`
 
 Prepare submission of an exact existing document.
@@ -272,6 +292,8 @@ Search permitted Quotations with bounded business filters.
 | `confirm_purchase_order` | Buying | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_update` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_child_add` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_child_add` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_submit` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
@@ -347,6 +369,24 @@ Prepare an exact existing-document field update without writing.
 ### `confirm_document_update`
 
 Apply a prepared exact existing-document update after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_document_child_add`
+
+Prepare adding one resolved Item as a new row to an exact Draft transaction.
+
+- Input: `PrepareChildAddInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_child_add`
+
+Apply a prepared new transaction item row after approval.
 
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.

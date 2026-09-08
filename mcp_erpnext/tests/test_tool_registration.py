@@ -42,6 +42,8 @@ class ToolRegistrationTests(unittest.TestCase):
 				"confirm_quotation",
 				"prepare_document_update",
 				"confirm_document_update",
+				"prepare_document_child_add",
+				"confirm_document_child_add",
 				"prepare_document_submit",
 				"confirm_document_submit",
 				"prepare_document_cancel",
