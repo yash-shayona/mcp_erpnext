@@ -45,9 +45,19 @@ class ProfileRegistrationTests(unittest.TestCase):
                 "resolve_supplier",
                 "search_items",
                 "resolve_item",
-                "prepare_purchase_order",
-                "confirm_purchase_order",
-            ],
+				"prepare_purchase_order",
+				"confirm_purchase_order",
+				"prepare_document_update",
+				"confirm_document_update",
+				"prepare_document_submit",
+				"confirm_document_submit",
+				"prepare_document_cancel",
+				"confirm_document_cancel",
+				"prepare_document_delete",
+				"confirm_document_delete",
+				"get_purchase_order",
+				"search_purchase_orders",
+			],
         )
         self.assertNotIn("prepare_quotation", names)
         self.assertNotIn("prepare_sales_order", names)

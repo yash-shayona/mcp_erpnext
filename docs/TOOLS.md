@@ -22,6 +22,18 @@ This catalog is generated from the profile-registered MCP tools and their contra
 | `confirm_sales_order` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Legacy migration inventory |
 | `prepare_quotation` | Selling | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_quotation` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_update` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_submit` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_cancel` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_delete` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `get_sales_order` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `search_sales_orders` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
+| `get_quotation` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `search_quotations` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
 
 ### `search_customers`
 
@@ -140,6 +152,114 @@ Create a prepared Draft Quotation after explicit approval.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 
+### `prepare_document_update`
+
+Prepare an exact existing-document field update without writing.
+
+- Input: `PrepareUpdateInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_update`
+
+Apply a prepared exact existing-document update after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_document_submit`
+
+Prepare submission of an exact existing document.
+
+- Input: `PrepareActionInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_submit`
+
+Submit a prepared exact existing document after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_document_cancel`
+
+Prepare cancellation of an exact existing document.
+
+- Input: `PrepareActionInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_cancel`
+
+Cancel a prepared exact existing document after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_document_delete`
+
+Prepare deletion of an exact existing document with link preflight.
+
+- Input: `PrepareDeleteInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_delete`
+
+Delete a prepared exact existing document after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `get_sales_order`
+
+Retrieve a permitted existing Sales Order summary.
+
+- Input: `DocumentReadInput` — Required: `request`
+- Output: `DocumentReadOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `search_sales_orders`
+
+Search permitted Sales Orders with bounded business filters.
+
+- Input: `DocumentSearchInput` — Required: `request`
+- Output: `DocumentSearchOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `get_quotation`
+
+Retrieve a permitted existing Quotation summary.
+
+- Input: `DocumentReadInput` — Required: `request`
+- Output: `DocumentReadOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `search_quotations`
+
+Search permitted Quotations with bounded business filters.
+
+- Input: `DocumentSearchInput` — Required: `request`
+- Output: `DocumentSearchOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
 ## Purchase profile
 
 | Tool | Domain | Operation | Side effect | Interaction | Approval | Contract status |
@@ -150,6 +270,16 @@ Create a prepared Draft Quotation after explicit approval.
 | `resolve_item` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
 | `prepare_purchase_order` | Buying | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_purchase_order` | Buying | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_update` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_submit` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_cancel` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_delete` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `get_purchase_order` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `search_purchase_orders` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
 
 ### `search_suppliers`
 
@@ -203,4 +333,94 @@ Create a prepared Draft Purchase Order after explicit approval.
 - Input: `PurchaseOrderConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmPurchaseOrderOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_document_update`
+
+Prepare an exact existing-document field update without writing.
+
+- Input: `PrepareUpdateInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_update`
+
+Apply a prepared exact existing-document update after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_document_submit`
+
+Prepare submission of an exact existing document.
+
+- Input: `PrepareActionInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_submit`
+
+Submit a prepared exact existing document after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_document_cancel`
+
+Prepare cancellation of an exact existing document.
+
+- Input: `PrepareActionInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_cancel`
+
+Cancel a prepared exact existing document after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_document_delete`
+
+Prepare deletion of an exact existing document with link preflight.
+
+- Input: `PrepareDeleteInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_delete`
+
+Delete a prepared exact existing document after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `get_purchase_order`
+
+Retrieve a permitted existing Purchase Order summary.
+
+- Input: `DocumentReadInput` — Required: `request`
+- Output: `DocumentReadOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `search_purchase_orders`
+
+Search permitted Purchase Orders with bounded business filters.
+
+- Input: `DocumentSearchInput` — Required: `request`
+- Output: `DocumentSearchOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.

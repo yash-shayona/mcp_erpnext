@@ -14,3 +14,9 @@ def register_purchase_profile(mcp: Any) -> None:
     register_supplier_tools(mcp)
     register_purchase_item_tools(mcp)
     register_purchase_order_tools(mcp)
+    from ..tools.lifecycle import register_lifecycle_tools
+
+    register_lifecycle_tools(mcp, "purchase")
+    from ..tools.read import register_purchase_read_tools
+
+    register_purchase_read_tools(mcp)

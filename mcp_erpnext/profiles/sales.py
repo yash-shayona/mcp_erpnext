@@ -10,3 +10,9 @@ def register_sales_profile(mcp: Any) -> None:
     from ..tools import register_sales_tools
 
     register_sales_tools(mcp)
+    from ..tools.lifecycle import register_lifecycle_tools
+
+    register_lifecycle_tools(mcp, "sales")
+    from ..tools.read import register_sales_read_tools
+
+    register_sales_read_tools(mcp)
