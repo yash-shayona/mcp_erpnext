@@ -20,3 +20,9 @@ def register_purchase_profile(mcp: Any) -> None:
     from ..tools.read import register_purchase_read_tools
 
     register_purchase_read_tools(mcp)
+    from ..tools.pdf import register_document_pdf_tools
+
+    register_document_pdf_tools(mcp, "purchase")
+    from ..tools.email import register_document_email_tools
+
+    register_document_email_tools(mcp, "purchase")

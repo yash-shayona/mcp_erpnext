@@ -19,3 +19,9 @@ def register_sales_profile(mcp: Any) -> None:
     from ..tools.read import register_sales_read_tools
 
     register_sales_read_tools(mcp)
+    from ..tools.pdf import register_document_pdf_tools
+
+    register_document_pdf_tools(mcp, "sales")
+    from ..tools.email import register_document_email_tools
+
+    register_document_email_tools(mcp, "sales")

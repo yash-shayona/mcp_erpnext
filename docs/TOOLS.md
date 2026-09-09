@@ -4,6 +4,8 @@
 
 This catalog is generated from the profile-registered MCP tools and their contract metadata. `tools/list` remains the authoritative machine-readable schema.
 
+The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/MCP_DOCUMENT_PDF.md), and the generic email capability is documented in [MCP_DOCUMENT_EMAIL.md](architecture/MCP_DOCUMENT_EMAIL.md).
+
 
 ## Sales profile
 
@@ -38,6 +40,9 @@ This catalog is generated from the profile-registered MCP tools and their contra
 | `query_sales_order_items` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
 | `get_quotation` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `search_quotations` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
+| `render_document_pdf` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `prepare_document_email` | Existing Documents | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_email` | Existing Documents | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 
 ### `search_customers`
 
@@ -300,6 +305,33 @@ Search permitted Quotations with bounded business filters.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 
+### `render_document_pdf`
+
+Render one permitted existing transactional document as an ephemeral PDF artifact.
+
+- Input: `RenderDocumentPdfInput` — Required: `doctype`, `name`
+- Output: `RenderDocumentPdfOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `prepare_document_email`
+
+Prepare an exact email preview with a permission-checked generic PDF attachment.
+
+- Input: `DocumentEmailPrepareInput` — Required: `request`
+- Output: `DocumentEmailPrepareOutput`; resolution states: `ready_for_approval`, `needs_input`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `INPUT`, `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_email`
+
+Queue one exact prepared document email through Frappe's native Email Queue.
+
+- Input: `DocumentEmailConfirmInput` — Required: `request`
+- Output: `DocumentEmailConfirmOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
 ## Purchase profile
 
 | Tool | Domain | Operation | Side effect | Interaction | Approval | Contract status |
@@ -322,6 +354,9 @@ Search permitted Quotations with bounded business filters.
 | `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `get_purchase_order` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `search_purchase_orders` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
+| `render_document_pdf` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `prepare_document_email` | Existing Documents | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_email` | Existing Documents | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 
 ### `search_suppliers`
 
@@ -483,4 +518,31 @@ Search permitted Purchase Orders with bounded business filters.
 - Input: `DocumentSearchInput` — Required: `request`
 - Output: `DocumentSearchOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `render_document_pdf`
+
+Render one permitted existing transactional document as an ephemeral PDF artifact.
+
+- Input: `RenderDocumentPdfInput` — Required: `doctype`, `name`
+- Output: `RenderDocumentPdfOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `prepare_document_email`
+
+Prepare an exact email preview with a permission-checked generic PDF attachment.
+
+- Input: `DocumentEmailPrepareInput` — Required: `request`
+- Output: `DocumentEmailPrepareOutput`; resolution states: `ready_for_approval`, `needs_input`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `INPUT`, `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_email`
+
+Queue one exact prepared document email through Frappe's native Email Queue.
+
+- Input: `DocumentEmailConfirmInput` — Required: `request`
+- Output: `DocumentEmailConfirmOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.

@@ -54,6 +54,13 @@ from .read import (
     DocumentSearchInput,
     DocumentSearchOutput,
 )
+from .pdf import RenderDocumentPdfInput, RenderDocumentPdfOutput
+from .email import (
+    DocumentEmailConfirmInput,
+    DocumentEmailConfirmOutput,
+    DocumentEmailPrepareInput,
+    DocumentEmailPrepareOutput,
+)
 
 
 class ToolOperation(StrEnum):
@@ -527,6 +534,42 @@ TOOL_CONTRACTS["query_sales_order_items"] = ToolContract(
     False,
     SalesOrderItemQueryInput,
     SalesOrderItemQueryOutput,
+)
+TOOL_CONTRACTS["render_document_pdf"] = ToolContract(
+    "render_document_pdf",
+    "Existing Documents",
+    ToolOperation.RESOLVE,
+    SideEffectClass.READ,
+    "Render one permitted existing transactional document as an ephemeral PDF artifact.",
+    False,
+    RenderDocumentPdfInput,
+    RenderDocumentPdfOutput,
+    resolution_states=("ok", "not_found", "error"),
+)
+
+TOOL_CONTRACTS["prepare_document_email"] = ToolContract(
+	"prepare_document_email",
+	"Existing Documents",
+	ToolOperation.PREPARE,
+	SideEffectClass.PREPARE,
+	"Prepare an exact email preview with a permission-checked generic PDF attachment.",
+	False,
+	DocumentEmailPrepareInput,
+	DocumentEmailPrepareOutput,
+	resolution_states=("ready_for_approval", "needs_input", "not_found", "error"),
+	interaction_kinds=(InteractionKind.INPUT, InteractionKind.APPROVAL),
+	approval_confirm_tool="confirm_document_email",
+)
+TOOL_CONTRACTS["confirm_document_email"] = ToolContract(
+	"confirm_document_email",
+	"Existing Documents",
+	ToolOperation.CONFIRM,
+	SideEffectClass.CONFIRM_WRITE,
+	"Queue one exact prepared document email through Frappe's native Email Queue.",
+	True,
+	DocumentEmailConfirmInput,
+	DocumentEmailConfirmOutput,
+	approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
 )
 
 

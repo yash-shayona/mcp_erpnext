@@ -56,5 +56,8 @@ class ToolRegistrationTests(unittest.TestCase):
 				"query_sales_order_items",
 				"get_quotation",
 				"search_quotations",
+				"render_document_pdf",
+				"prepare_document_email",
+				"confirm_document_email",
 			],
 		)

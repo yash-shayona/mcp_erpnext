@@ -59,6 +59,9 @@ class ProfileRegistrationTests(unittest.TestCase):
 				"confirm_document_delete",
 				"get_purchase_order",
 				"search_purchase_orders",
+				"render_document_pdf",
+				"prepare_document_email",
+				"confirm_document_email",
 			],
         )
         self.assertNotIn("prepare_quotation", names)

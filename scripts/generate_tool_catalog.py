@@ -37,6 +37,9 @@ async def render_catalog() -> str:
 		"This catalog is generated from the profile-registered MCP tools and their contract metadata. "
 		"`tools/list` remains the authoritative machine-readable schema.",
 		"",
+		"The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/MCP_DOCUMENT_PDF.md), "
+		"and the generic email capability is documented in [MCP_DOCUMENT_EMAIL.md](architecture/MCP_DOCUMENT_EMAIL.md).",
+		"",
 	]
 	for profile in MCPProfile:
 		settings = replace(MCPSettings.from_environment(), profile=profile)
