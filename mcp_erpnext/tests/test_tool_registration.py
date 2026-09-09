@@ -52,6 +52,8 @@ class ToolRegistrationTests(unittest.TestCase):
 				"confirm_document_delete",
 				"get_sales_order",
 				"search_sales_orders",
+				"aggregate_sales_orders",
+				"query_sales_order_items",
 				"get_quotation",
 				"search_quotations",
 			],

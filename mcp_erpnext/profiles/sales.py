@@ -13,6 +13,9 @@ def register_sales_profile(mcp: Any) -> None:
     from ..tools.lifecycle import register_lifecycle_tools
 
     register_lifecycle_tools(mcp, "sales")
+    from ..tools.selling.sales_order_read import register_sales_order_read_tools
+
+    register_sales_order_read_tools(mcp)
     from ..tools.read import register_sales_read_tools
 
     register_sales_read_tools(mcp)

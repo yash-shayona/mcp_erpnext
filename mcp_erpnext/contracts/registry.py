@@ -8,12 +8,12 @@ from typing import Any
 
 from .interaction import InteractionKind
 from .lifecycle import (
-	LifecycleConfirmInput,
-	LifecycleResult,
-	PrepareActionInput,
-	PrepareDeleteInput,
-	PrepareUpdateInput,
-	PrepareChildAddInput,
+    LifecycleConfirmInput,
+    LifecycleResult,
+    PrepareActionInput,
+    PrepareDeleteInput,
+    PrepareUpdateInput,
+    PrepareChildAddInput,
 )
 from .masters.resolution import (
     CustomerResolutionOutput,
@@ -38,7 +38,22 @@ from .selling.quotation import (
     QuotationConfirmInput,
     QuotationPrepareInput,
 )
-from .read import DocumentReadInput, DocumentReadOutput, DocumentSearchInput, DocumentSearchOutput
+from .selling.sales_order_read import (
+    GetSalesOrderInput,
+    GetSalesOrderOutput,
+    SalesOrderAggregateInput,
+    SalesOrderAggregateOutput,
+    SalesOrderItemQueryInput,
+    SalesOrderItemQueryOutput,
+    SalesOrderSearchInput,
+    SalesOrderSearchOutput,
+)
+from .read import (
+    DocumentReadInput,
+    DocumentReadOutput,
+    DocumentSearchInput,
+    DocumentSearchOutput,
+)
 
 
 class ToolOperation(StrEnum):
@@ -336,42 +351,183 @@ TOOL_CONTRACTS = {
 }
 
 for _name, _operation, _purpose, _input_model, _confirm_tool in (
-	("prepare_document_update", ToolOperation.PREPARE, "Prepare an exact existing-document field update without writing.", PrepareUpdateInput, "confirm_document_update"),
-	("prepare_document_child_add", ToolOperation.PREPARE, "Prepare adding one resolved Item as a new row to an exact Draft transaction.", PrepareChildAddInput, "confirm_document_child_add"),
-	("prepare_document_submit", ToolOperation.PREPARE, "Prepare submission of an exact existing document.", PrepareActionInput, "confirm_document_submit"),
-	("prepare_document_cancel", ToolOperation.PREPARE, "Prepare cancellation of an exact existing document.", PrepareActionInput, "confirm_document_cancel"),
-	("prepare_document_delete", ToolOperation.PREPARE, "Prepare deletion of an exact existing document with link preflight.", PrepareDeleteInput, "confirm_document_delete"),
+    (
+        "prepare_document_update",
+        ToolOperation.PREPARE,
+        "Prepare an exact existing-document field update without writing.",
+        PrepareUpdateInput,
+        "confirm_document_update",
+    ),
+    (
+        "prepare_document_child_add",
+        ToolOperation.PREPARE,
+        "Prepare adding one resolved Item as a new row to an exact Draft transaction.",
+        PrepareChildAddInput,
+        "confirm_document_child_add",
+    ),
+    (
+        "prepare_document_submit",
+        ToolOperation.PREPARE,
+        "Prepare submission of an exact existing document.",
+        PrepareActionInput,
+        "confirm_document_submit",
+    ),
+    (
+        "prepare_document_cancel",
+        ToolOperation.PREPARE,
+        "Prepare cancellation of an exact existing document.",
+        PrepareActionInput,
+        "confirm_document_cancel",
+    ),
+    (
+        "prepare_document_delete",
+        ToolOperation.PREPARE,
+        "Prepare deletion of an exact existing document with link preflight.",
+        PrepareDeleteInput,
+        "confirm_document_delete",
+    ),
 ):
-	TOOL_CONTRACTS[_name] = ToolContract(
-		_name, "Lifecycle", _operation, SideEffectClass.PREPARE, _purpose, False,
-		_input_model, LifecycleResult, interaction_kinds=(InteractionKind.APPROVAL,), approval_confirm_tool=_confirm_tool,
-	)
+    TOOL_CONTRACTS[_name] = ToolContract(
+        _name,
+        "Lifecycle",
+        _operation,
+        SideEffectClass.PREPARE,
+        _purpose,
+        False,
+        _input_model,
+        LifecycleResult,
+        interaction_kinds=(InteractionKind.APPROVAL,),
+        approval_confirm_tool=_confirm_tool,
+    )
 
 for _name, _action, _purpose, _input_model in (
-	("confirm_document_update", "update", "Apply a prepared exact existing-document update after approval.", LifecycleConfirmInput),
-	("confirm_document_child_add", "child_add", "Apply a prepared new transaction item row after approval.", LifecycleConfirmInput),
-	("confirm_document_submit", "submit", "Submit a prepared exact existing document after approval.", LifecycleConfirmInput),
-	("confirm_document_cancel", "cancel", "Cancel a prepared exact existing document after approval.", LifecycleConfirmInput),
-	("confirm_document_delete", "delete", "Delete a prepared exact existing document after approval.", LifecycleConfirmInput),
+    (
+        "confirm_document_update",
+        "update",
+        "Apply a prepared exact existing-document update after approval.",
+        LifecycleConfirmInput,
+    ),
+    (
+        "confirm_document_child_add",
+        "child_add",
+        "Apply a prepared new transaction item row after approval.",
+        LifecycleConfirmInput,
+    ),
+    (
+        "confirm_document_submit",
+        "submit",
+        "Submit a prepared exact existing document after approval.",
+        LifecycleConfirmInput,
+    ),
+    (
+        "confirm_document_cancel",
+        "cancel",
+        "Cancel a prepared exact existing document after approval.",
+        LifecycleConfirmInput,
+    ),
+    (
+        "confirm_document_delete",
+        "delete",
+        "Delete a prepared exact existing document after approval.",
+        LifecycleConfirmInput,
+    ),
 ):
-	TOOL_CONTRACTS[_name] = ToolContract(
-		_name, "Lifecycle", ToolOperation.CONFIRM, SideEffectClass.CONFIRM_WRITE, _purpose, True,
-		_input_model, LifecycleResult, approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
-	)
+    TOOL_CONTRACTS[_name] = ToolContract(
+        _name,
+        "Lifecycle",
+        ToolOperation.CONFIRM,
+        SideEffectClass.CONFIRM_WRITE,
+        _purpose,
+        True,
+        _input_model,
+        LifecycleResult,
+        approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+    )
 
-for _name, _doctype, _operation, _purpose, _input_model, _output_model in (
-	("get_sales_order", "Sales Order", ToolOperation.RESOLVE, "Retrieve a permitted existing Sales Order summary.", DocumentReadInput, DocumentReadOutput),
-	("search_sales_orders", "Sales Order", ToolOperation.SEARCH, "Search permitted Sales Orders with bounded business filters.", DocumentSearchInput, DocumentSearchOutput),
-	("get_quotation", "Quotation", ToolOperation.RESOLVE, "Retrieve a permitted existing Quotation summary.", DocumentReadInput, DocumentReadOutput),
-	("search_quotations", "Quotation", ToolOperation.SEARCH, "Search permitted Quotations with bounded business filters.", DocumentSearchInput, DocumentSearchOutput),
-	("get_purchase_order", "Purchase Order", ToolOperation.RESOLVE, "Retrieve a permitted existing Purchase Order summary.", DocumentReadInput, DocumentReadOutput),
-	("search_purchase_orders", "Purchase Order", ToolOperation.SEARCH, "Search permitted Purchase Orders with bounded business filters.", DocumentSearchInput, DocumentSearchOutput),
+for _name, _domain, _operation, _purpose, _input_model, _output_model in (
+    (
+        "get_sales_order",
+        "Selling",
+        ToolOperation.RESOLVE,
+        "Retrieve selected fields from one permitted Sales Order by exact reference.",
+        GetSalesOrderInput,
+        GetSalesOrderOutput,
+    ),
+    (
+        "search_sales_orders",
+        "Selling",
+        ToolOperation.SEARCH,
+        "Search permitted Sales Orders using typed filters, projection, sorting, and pagination.",
+        SalesOrderSearchInput,
+        SalesOrderSearchOutput,
+    ),
+    (
+        "get_quotation",
+        "Existing Documents",
+        ToolOperation.RESOLVE,
+        "Retrieve a permitted existing Quotation summary.",
+        DocumentReadInput,
+        DocumentReadOutput,
+    ),
+    (
+        "search_quotations",
+        "Existing Documents",
+        ToolOperation.SEARCH,
+        "Search permitted Quotations with bounded business filters.",
+        DocumentSearchInput,
+        DocumentSearchOutput,
+    ),
+    (
+        "get_purchase_order",
+        "Existing Documents",
+        ToolOperation.RESOLVE,
+        "Retrieve a permitted existing Purchase Order summary.",
+        DocumentReadInput,
+        DocumentReadOutput,
+    ),
+    (
+        "search_purchase_orders",
+        "Existing Documents",
+        ToolOperation.SEARCH,
+        "Search permitted Purchase Orders with bounded business filters.",
+        DocumentSearchInput,
+        DocumentSearchOutput,
+    ),
 ):
-	TOOL_CONTRACTS[_name] = ToolContract(
-		_name, "Existing Documents", _operation, SideEffectClass.READ, _purpose, False,
-		_input_model, _output_model,
-		resolution_states=("ok", "not_found", "error") if _operation == ToolOperation.RESOLVE else (),
-	)
+    TOOL_CONTRACTS[_name] = ToolContract(
+        _name,
+        _domain,
+        _operation,
+        SideEffectClass.READ,
+        _purpose,
+        False,
+        _input_model,
+        _output_model,
+        resolution_states=(
+            ("ok", "not_found", "error") if _operation == ToolOperation.RESOLVE else ()
+        ),
+    )
+
+TOOL_CONTRACTS["aggregate_sales_orders"] = ToolContract(
+    "aggregate_sales_orders",
+    "Selling",
+    ToolOperation.SEARCH,
+    SideEffectClass.READ,
+    "Calculate deterministic permission-aware Sales Order metrics on the server.",
+    False,
+    SalesOrderAggregateInput,
+    SalesOrderAggregateOutput,
+)
+TOOL_CONTRACTS["query_sales_order_items"] = ToolContract(
+    "query_sales_order_items",
+    "Selling",
+    ToolOperation.SEARCH,
+    SideEffectClass.READ,
+    "Query permitted Sales Order Item history and optional server-side item metrics.",
+    False,
+    SalesOrderItemQueryInput,
+    SalesOrderItemQueryOutput,
+)
 
 
 def get_tool_contract(name: str) -> ToolContract:

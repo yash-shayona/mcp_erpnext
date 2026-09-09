@@ -24,14 +24,6 @@ def _search(request: DocumentSearchInput, ctx: Context, doctype: str, profile: s
 
 
 def register_sales_read_tools(mcp: Any) -> None:
-	@mcp.tool(name="get_sales_order", description="Retrieve one permitted Sales Order summary by exact document name.", meta=tool_meta("get_sales_order"), structured_output=True)
-	def get_sales_order(request: DocumentReadInput, ctx: Context) -> DocumentReadOutput:
-		return _get(request, ctx, "sales")
-
-	@mcp.tool(name="search_sales_orders", description="Search permitted Sales Orders with bounded business filters.", meta=tool_meta("search_sales_orders"), structured_output=True)
-	def search_sales_orders(request: DocumentSearchInput, ctx: Context) -> DocumentSearchOutput:
-		return _search(request, ctx, "Sales Order", "sales")
-
 	@mcp.tool(name="get_quotation", description="Retrieve one permitted Quotation summary by exact document name.", meta=tool_meta("get_quotation"), structured_output=True)
 	def get_quotation(request: DocumentReadInput, ctx: Context) -> DocumentReadOutput:
 		return _get(request, ctx, "sales")

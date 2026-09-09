@@ -7,7 +7,13 @@ from typing import Annotated, Literal
 
 from pydantic import BeforeValidator, ConfigDict, Field, RootModel
 
-from ..common import ItemReference, NonEmptyString, PublicContractModel, SupplierReference, ToolError
+from ..common import (
+    ItemReference,
+    NonEmptyString,
+    PublicContractModel,
+    SupplierReference,
+    ToolError,
+)
 from ..interaction import InteractionDirective
 
 
@@ -107,7 +113,10 @@ class PurchaseOrderPermissionDenied(PublicContractModel):
 
 
 PreparePurchaseOrderResult = Annotated[
-    PurchaseOrderReady | PurchaseOrderNeedsInput | PurchaseOrderPermissionDenied | ToolError,
+    PurchaseOrderReady
+    | PurchaseOrderNeedsInput
+    | PurchaseOrderPermissionDenied
+    | ToolError,
     Field(discriminator="status"),
 ]
 
@@ -122,7 +131,9 @@ class PurchaseOrderConfirmInput(PublicContractModel):
     approval_token: NonEmptyString
     confirm: Annotated[
         bool,
-        Field(description="Requested confirmation only; server policy remains authoritative."),
+        Field(
+            description="Requested confirmation only; server policy remains authoritative."
+        ),
     ]
 
 

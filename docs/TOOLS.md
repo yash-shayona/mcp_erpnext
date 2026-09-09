@@ -32,8 +32,10 @@ This catalog is generated from the profile-registered MCP tools and their contra
 | `confirm_document_cancel` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_delete` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `get_sales_order` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `search_sales_orders` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
+| `get_sales_order` | Selling | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `search_sales_orders` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
+| `aggregate_sales_orders` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
+| `query_sales_order_items` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
 | `get_quotation` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `search_quotations` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
 
@@ -246,19 +248,37 @@ Delete a prepared exact existing document after approval.
 
 ### `get_sales_order`
 
-Retrieve a permitted existing Sales Order summary.
+Retrieve selected fields from one permitted Sales Order by exact reference.
 
-- Input: `DocumentReadInput` — Required: `request`
-- Output: `DocumentReadOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Input: `GetSalesOrderInput` — Required: `sales_order`
+- Output: `GetSalesOrderOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 
 ### `search_sales_orders`
 
-Search permitted Sales Orders with bounded business filters.
+Search permitted Sales Orders using typed filters, projection, sorting, and pagination.
 
-- Input: `DocumentSearchInput` — Required: `request`
-- Output: `DocumentSearchOutput`; published through MCP `outputSchema`.
+- Input: `SalesOrderSearchInput` — Required: none
+- Output: `SalesOrderSearchOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `aggregate_sales_orders`
+
+Calculate deterministic permission-aware Sales Order metrics on the server.
+
+- Input: `SalesOrderAggregateInput` — Required: `metrics`
+- Output: `SalesOrderAggregateOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `query_sales_order_items`
+
+Query permitted Sales Order Item history and optional server-side item metrics.
+
+- Input: `SalesOrderItemQueryInput` — Required: none
+- Output: `SalesOrderItemQueryOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 

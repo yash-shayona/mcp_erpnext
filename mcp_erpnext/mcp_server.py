@@ -7,6 +7,16 @@ from .http_transport import create_http_app
 from .settings import MCPSettings
 from .tools import register_tools
 
+SALES_RESPONSE_PRECISION_INSTRUCTION = """\
+RESPONSE PRECISION POLICY: Answer only the information the user asked for.
+Do not dump unrelated fields or internal tool metadata. For a Sales Order
+status, date, or total request, return only that value (and currency for a
+total). For a request for Sales Order IDs without requested columns, return
+only IDs. For counts, totals, and averages, return the computed result without
+listing source records. Ask only when a missing distinction materially changes
+the answer.
+"""
+
 try:
     from mcp.server.fastmcp import FastMCP
     from mcp.server.transport_security import TransportSecuritySettings
@@ -25,6 +35,11 @@ def create_mcp(settings: MCPSettings | None = None):
     approvals.configure_approval_mode(settings.approval_mode)
     mcp = FastMCP(
         f"mcp_erpnext_{settings.profile.value}",
+        instructions=(
+            SALES_RESPONSE_PRECISION_INSTRUCTION
+            if settings.profile.value == "sales"
+            else None
+        ),
         host=settings.http_host,
         port=settings.http_port_number(),
         streamable_http_path=settings.http_path,
