@@ -29,10 +29,15 @@ class ProfileRegistrationTests(unittest.TestCase):
     def test_sales_profile_preserves_sales_inventory_without_purchase_tools(self):
         names = self._tool_names(MCPProfile.SALES)
         self.assertIn("prepare_quotation", names)
+        self.assertIn("prepare_quotation_to_sales_order", names)
+        self.assertIn("confirm_quotation_to_sales_order", names)
         self.assertIn("prepare_sales_order", names)
         self.assertIn("get_customer", names)
         self.assertIn("query_customers", names)
         self.assertIn("aggregate_customers", names)
+        self.assertIn("get_item", names)
+        self.assertIn("query_items", names)
+        self.assertIn("aggregate_items", names)
         self.assertNotIn("prepare_purchase_order", names)
         self.assertNotIn("search_suppliers", names)
         self.assertEqual(
@@ -68,10 +73,15 @@ class ProfileRegistrationTests(unittest.TestCase):
 			],
         )
         self.assertNotIn("prepare_quotation", names)
+        self.assertNotIn("prepare_quotation_to_sales_order", names)
+        self.assertNotIn("confirm_quotation_to_sales_order", names)
         self.assertNotIn("prepare_sales_order", names)
         self.assertNotIn("get_customer", names)
         self.assertNotIn("query_customers", names)
         self.assertNotIn("aggregate_customers", names)
+        self.assertNotIn("get_item", names)
+        self.assertNotIn("query_items", names)
+        self.assertNotIn("aggregate_items", names)
         self.assertEqual(
             audit_tool_contracts(asyncio.run(create_mcp(_settings(MCPProfile.PURCHASE)).list_tools())), []
         )

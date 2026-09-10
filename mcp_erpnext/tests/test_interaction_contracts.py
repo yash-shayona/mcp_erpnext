@@ -96,6 +96,17 @@ class InteractionContractTests(unittest.TestCase):
 			result = item_tools.resolve_item("ITEM-001", object()).root
 		self.assertNotIn("interaction", result.model_dump())
 
+	def test_not_found_item_does_not_request_selection_interaction(self):
+		service_result = {
+			"status": "not_found",
+			"doctype": "Item",
+			"query": "Web Development Services",
+			"candidates": [],
+		}
+		with patch.object(item_tools, "execute_tool_with_context", return_value=service_result):
+			result = item_tools.resolve_item("Web Development Services", object()).root
+		self.assertNotIn("interaction", result.model_dump())
+
 	def test_quotation_ready_and_missing_input_use_semantic_directives(self):
 		ready = {
 			"status": "ready",

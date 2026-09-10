@@ -10,7 +10,11 @@ from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...config.masters import item as item_config
 from ...observability import new_error_reference
 from ..common.creation_contract import missing_input_response, resolve_creation_contract
-from ..common.entity_resolution import find_candidates, resolve_candidate, search_status
+from ..common.entity_resolution import (
+    find_candidates,
+    normalize,
+    resolve_ranked_candidates,
+)
 from ..common.field_value_resolver import resolve_contract_values
 
 _ACTION = "create_item"
@@ -71,8 +75,11 @@ def _search_items(query: str, filters: dict[str, Any]) -> dict[str, Any]:
         item_config.SEARCH_FIELDS,
         item_config.DISPLAY_FIELDS,
     )
+    classification = _classify_item_candidates(query, candidates)
+    if classification["status"] == "not_found":
+        candidates = []
     return {
-        "status": search_status(query, candidates),
+        "status": classification["status"],
         "doctype": "Item",
         "query": query,
         "candidates": [_candidate(candidate) for candidate in candidates],
@@ -80,13 +87,37 @@ def _search_items(query: str, filters: dict[str, Any]) -> dict[str, Any]:
 
 
 def _resolve_item(query: str, filters: dict[str, Any]) -> dict[str, Any]:
-    return resolve_candidate(
+    candidates = find_candidates(
         "Item",
         query,
         filters,
         item_config.SEARCH_FIELDS,
         item_config.DISPLAY_FIELDS,
     )
+    return _classify_item_candidates(query, candidates)
+
+
+def _classify_item_candidates(query: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    """Keep weak related Items out of the explicit-selection state.
+
+    The shared resolver remains authoritative for exact matches, strong spelling
+    corrections, and credible ambiguity. Item-only weak candidates are treated
+    as discovery noise so a missing Item can reach controlled creation.
+    """
+    result = resolve_ranked_candidates(query, candidates)
+    if result["status"] == "ambiguous" and candidates:
+        normalized_query = normalize(query)
+        exact = [
+            candidate
+            for candidate in candidates
+            if normalized_query
+            in {normalize(candidate.get("value")), normalize(candidate.get("label"))}
+        ]
+        if len(exact) > 1:
+            return result
+        if max(candidate.get("score", 0.0) for candidate in candidates) < item_config.MIN_CREDIBLE_AMBIGUITY_SCORE:
+            return {"status": "not_found", "query": query, "candidates": []}
+    return result
 
 
 def search_items(query: str) -> dict[str, Any]:

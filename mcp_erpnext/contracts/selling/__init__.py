@@ -10,6 +10,12 @@ from .quotation import (
 	QuotationItemInput,
 	QuotationPrepareInput,
 )
+from .quotation_to_sales_order import (
+	ConfirmQuotationToSalesOrderOutput,
+	ConfirmQuotationToSalesOrderResult,
+	PrepareQuotationToSalesOrderOutput,
+	PrepareQuotationToSalesOrderResult,
+)
 
 __all__ = [
 	"ConfirmQuotationResult",
@@ -20,4 +26,8 @@ __all__ = [
 	"QuotationItemInput",
 	"QuotationItems",
 	"QuotationPrepareInput",
+	"ConfirmQuotationToSalesOrderOutput",
+	"ConfirmQuotationToSalesOrderResult",
+	"PrepareQuotationToSalesOrderOutput",
+	"PrepareQuotationToSalesOrderResult",
 ]

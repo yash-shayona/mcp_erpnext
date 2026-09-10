@@ -145,6 +145,41 @@ class ItemServiceTests(unittest.TestCase):
 		)
 		self.assertEqual(find_candidates.call_args.args[2], {"disabled": ["!=", 1], "is_sales_item": 1})
 
+	def test_weak_related_candidates_become_not_found_for_item_resolution_and_search(self):
+		candidates = [
+			{"value": "SV-WEBAPP-DEVELOPMENT", "label": "Custom Web Application Development", "score": 0.677},
+			{"value": "SV-FRAPPE-DEVELOPMENT", "label": "Frappe Custom App Development", "score": 0.561},
+			{"value": "SV-API-INTEGRATION", "label": "API Integration Development", "score": 0.499},
+		]
+		with patch.object(item_service, "find_candidates", return_value=candidates):
+			resolved = item_service.resolve_sales_item("Web Development Services")
+			searched = item_service.search_items("Web Development Services")
+		self.assertEqual(resolved, {"status": "not_found", "query": "Web Development Services", "candidates": []})
+		self.assertEqual(searched["status"], "not_found")
+		self.assertEqual(searched["candidates"], [])
+
+	def test_item_ambiguity_and_strong_spelling_correction_are_preserved(self):
+		ambiguous = [
+			{"value": "SV-WEBSITE-DEVELOPMENT", "label": "Website Development", "score": 0.693},
+			{"value": "SV-FRAPPE-DEVELOPMENT", "label": "Frappe Custom App Development", "score": 0.597},
+		]
+		with patch.object(item_service, "find_candidates", return_value=ambiguous):
+			result = item_service.resolve_sales_item("Development Item")
+		self.assertEqual(result["status"], "ambiguous")
+		self.assertEqual(len(result["candidates"]), 2)
+
+		strong = [{"value": "ITEM-001", "label": "Blue Polo", "score": 0.92}]
+		with patch.object(item_service, "find_candidates", return_value=strong):
+			result = item_service.resolve_sales_item("Blue Plo")
+		self.assertEqual(result["status"], "resolved")
+		self.assertEqual(result["match_type"], "spelling_correction")
+
+	def test_purchase_item_resolution_keeps_purchase_filters(self):
+		with patch.object(item_service, "find_candidates", return_value=[]) as find_candidates:
+			item_service.search_purchase_items("ITEM-001")
+			item_service.resolve_purchase_item("ITEM-001")
+		self.assertEqual(find_candidates.call_args.args[2], {"disabled": ["!=", 1], "is_purchase_item": 1})
+
 	def test_duplicate_item_code_blocks_preparation(self):
 		self.list_rows = {"NEW-ITEM-001": [{"name": "NEW-ITEM-001", "item_code": "NEW-ITEM-001", "item_name": "Existing", "stock_uom": "Nos", "disabled": 0}]}
 		result = item_service.prepare_item(self.valid_item())

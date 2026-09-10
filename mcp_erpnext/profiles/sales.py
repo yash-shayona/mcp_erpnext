@@ -19,6 +19,9 @@ def register_sales_profile(mcp: Any) -> None:
     from ..tools.masters.customer_read import register_customer_read_tools
 
     register_customer_read_tools(mcp)
+    from ..tools.masters.item_read import register_item_read_tools
+
+    register_item_read_tools(mcp)
     from ..tools.read import register_sales_read_tools
 
     register_sales_read_tools(mcp)

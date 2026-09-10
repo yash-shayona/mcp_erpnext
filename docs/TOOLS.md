@@ -24,6 +24,8 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `confirm_sales_order` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Legacy migration inventory |
 | `prepare_quotation` | Selling | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_quotation` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_quotation_to_sales_order` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_quotation_to_sales_order` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_update` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_child_add` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
@@ -41,6 +43,9 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `get_customer` | Masters | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `query_customers` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
 | `aggregate_customers` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
+| `get_item` | Masters | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `query_items` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
+| `aggregate_items` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
 | `get_quotation` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `search_quotations` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
 | `render_document_pdf` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
@@ -161,6 +166,24 @@ Create a prepared Draft Quotation after explicit approval.
 
 - Input: `QuotationConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmQuotationOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_quotation_to_sales_order`
+
+Prepare a Draft Sales Order preview from an eligible Submitted Customer Quotation using ERPNext native mapping.
+
+- Input: `QuotationToSalesOrderInput` — Required: `quotation`
+- Output: `PrepareQuotationToSalesOrderOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_quotation_to_sales_order`
+
+Create the reviewed Draft Sales Order from a prepared Quotation conversion after the configured approval guard succeeds.
+
+- Input: `QuotationToSalesOrderConfirmInput` — Required: `approval_token`, `confirm`
+- Output: `ConfirmQuotationToSalesOrderOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 
@@ -314,6 +337,33 @@ Calculate deterministic permission-aware Customer counts on the server.
 
 - Input: `CustomerAggregateInput` — Required: none
 - Output: `CustomerAggregateOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `get_item`
+
+Retrieve selected fields from one permitted Item by exact reference.
+
+- Input: `ItemGetInput` — Required: `item`
+- Output: `ItemGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `query_items`
+
+Query permitted Items with exact field filters, projection, sorting, and pagination; never fuzzy-match.
+
+- Input: `ItemQueryInput` — Required: none
+- Output: `ItemQueryOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `aggregate_items`
+
+Calculate deterministic permission-aware Item counts, optionally grouped by an allowlisted field.
+
+- Input: `ItemAggregateInput` — Required: none
+- Output: `ItemAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 

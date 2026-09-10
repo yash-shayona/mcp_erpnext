@@ -85,6 +85,16 @@ class ToolContractTests(unittest.TestCase):
 			{"resolved", "not_found", "error"},
 		)
 
+	def test_item_read_schemas_are_typed_permission_safe_and_sales_only(self):
+		tools = {tool.name: tool for tool in self.registered_tools()}
+		for name in ("get_item", "query_items", "aggregate_items"):
+			with self.subTest(name=name):
+				self.assertEqual(tools[name].inputSchema["type"], "object")
+				self.assertEqual(tools[name].outputSchema["type"], "object")
+				self.assertEqual(tools[name].meta["mcp_erpnext"]["side_effect"], "READ")
+		self.assertIn("item_name", tools["query_items"].inputSchema["properties"])
+		self.assertNotIn("standard_rate", dumps(tools["query_items"].inputSchema))
+
 	def test_quotation_request_rejects_legacy_or_invalid_reference_shapes(self):
 		valid = {
 			"customer": {"doctype": "Customer", "name": "CUST-001"},

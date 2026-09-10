@@ -34,6 +34,14 @@ from .masters.customer_read import (
     CustomerQueryInput,
     CustomerQueryOutput,
 )
+from .masters.item_read import (
+    ItemAggregateInput,
+    ItemAggregateOutput,
+    ItemGetInput,
+    ItemGetOutput,
+    ItemQueryInput,
+    ItemQueryOutput,
+)
 from .buying.purchase_order import (
     ConfirmPurchaseOrderOutput,
     PreparePurchaseOrderOutput,
@@ -45,6 +53,12 @@ from .selling.quotation import (
     PrepareQuotationOutput,
     QuotationConfirmInput,
     QuotationPrepareInput,
+)
+from .selling.quotation_to_sales_order import (
+	ConfirmQuotationToSalesOrderOutput,
+	PrepareQuotationToSalesOrderOutput,
+	QuotationToSalesOrderInput,
+	QuotationToSalesOrderConfirmInput,
 )
 from .selling.sales_order_read import (
     GetSalesOrderInput,
@@ -329,6 +343,29 @@ TOOL_CONTRACTS = {
         ConfirmQuotationOutput,
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
+    "prepare_quotation_to_sales_order": ToolContract(
+        "prepare_quotation_to_sales_order",
+        "Selling",
+        ToolOperation.PREPARE,
+        SideEffectClass.PREPARE,
+        "Prepare a Draft Sales Order preview from an eligible Submitted Customer Quotation using ERPNext native mapping.",
+        False,
+        QuotationToSalesOrderInput,
+        PrepareQuotationToSalesOrderOutput,
+        interaction_kinds=(InteractionKind.APPROVAL,),
+        approval_confirm_tool="confirm_quotation_to_sales_order",
+    ),
+    "confirm_quotation_to_sales_order": ToolContract(
+        "confirm_quotation_to_sales_order",
+        "Selling",
+        ToolOperation.CONFIRM,
+        SideEffectClass.CONFIRM_WRITE,
+        "Create the reviewed Draft Sales Order from a prepared Quotation conversion after the configured approval guard succeeds.",
+        True,
+        QuotationToSalesOrderConfirmInput,
+        ConfirmQuotationToSalesOrderOutput,
+        approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+    ),
     "prepare_purchase_order": ToolContract(
         "prepare_purchase_order",
         "Buying",
@@ -573,6 +610,37 @@ TOOL_CONTRACTS["aggregate_customers"] = ToolContract(
     False,
     CustomerAggregateInput,
     CustomerAggregateOutput,
+)
+TOOL_CONTRACTS["get_item"] = ToolContract(
+    "get_item",
+    "Masters",
+    ToolOperation.RESOLVE,
+    SideEffectClass.READ,
+    "Retrieve selected fields from one permitted Item by exact reference.",
+    False,
+    ItemGetInput,
+    ItemGetOutput,
+    resolution_states=("ok", "not_found", "error"),
+)
+TOOL_CONTRACTS["query_items"] = ToolContract(
+    "query_items",
+    "Masters",
+    ToolOperation.SEARCH,
+    SideEffectClass.READ,
+    "Query permitted Items with exact field filters, projection, sorting, and pagination; never fuzzy-match.",
+    False,
+    ItemQueryInput,
+    ItemQueryOutput,
+)
+TOOL_CONTRACTS["aggregate_items"] = ToolContract(
+    "aggregate_items",
+    "Masters",
+    ToolOperation.SEARCH,
+    SideEffectClass.READ,
+    "Calculate deterministic permission-aware Item counts, optionally grouped by an allowlisted field.",
+    False,
+    ItemAggregateInput,
+    ItemAggregateOutput,
 )
 TOOL_CONTRACTS["render_document_pdf"] = ToolContract(
     "render_document_pdf",
