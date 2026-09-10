@@ -26,6 +26,14 @@ from .masters.resolution import (
     SupplierResolutionOutput,
     SupplierSearchOutput,
 )
+from .masters.customer_read import (
+    CustomerAggregateInput,
+    CustomerAggregateOutput,
+    CustomerGetInput,
+    CustomerGetOutput,
+    CustomerQueryInput,
+    CustomerQueryOutput,
+)
 from .buying.purchase_order import (
     ConfirmPurchaseOrderOutput,
     PreparePurchaseOrderOutput,
@@ -534,6 +542,37 @@ TOOL_CONTRACTS["query_sales_order_items"] = ToolContract(
     False,
     SalesOrderItemQueryInput,
     SalesOrderItemQueryOutput,
+)
+TOOL_CONTRACTS["get_customer"] = ToolContract(
+    "get_customer",
+    "Masters",
+    ToolOperation.RESOLVE,
+    SideEffectClass.READ,
+    "Retrieve selected fields from one permitted Customer by exact reference.",
+    False,
+    CustomerGetInput,
+    CustomerGetOutput,
+    resolution_states=("ok", "not_found", "error"),
+)
+TOOL_CONTRACTS["query_customers"] = ToolContract(
+    "query_customers",
+    "Masters",
+    ToolOperation.SEARCH,
+    SideEffectClass.READ,
+    "Query permitted Customers with exact filters, projection, sorting, and pagination.",
+    False,
+    CustomerQueryInput,
+    CustomerQueryOutput,
+)
+TOOL_CONTRACTS["aggregate_customers"] = ToolContract(
+    "aggregate_customers",
+    "Masters",
+    ToolOperation.SEARCH,
+    SideEffectClass.READ,
+    "Calculate deterministic permission-aware Customer counts on the server.",
+    False,
+    CustomerAggregateInput,
+    CustomerAggregateOutput,
 )
 TOOL_CONTRACTS["render_document_pdf"] = ToolContract(
     "render_document_pdf",

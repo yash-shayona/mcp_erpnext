@@ -38,6 +38,9 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `search_sales_orders` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
 | `aggregate_sales_orders` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
 | `query_sales_order_items` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
+| `get_customer` | Masters | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `query_customers` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
+| `aggregate_customers` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
 | `get_quotation` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `search_quotations` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
 | `render_document_pdf` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
@@ -284,6 +287,33 @@ Query permitted Sales Order Item history and optional server-side item metrics.
 
 - Input: `SalesOrderItemQueryInput` — Required: none
 - Output: `SalesOrderItemQueryOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `get_customer`
+
+Retrieve selected fields from one permitted Customer by exact reference.
+
+- Input: `CustomerGetInput` — Required: `customer`
+- Output: `CustomerGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `query_customers`
+
+Query permitted Customers with exact filters, projection, sorting, and pagination.
+
+- Input: `CustomerQueryInput` — Required: none
+- Output: `CustomerQueryOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `aggregate_customers`
+
+Calculate deterministic permission-aware Customer counts on the server.
+
+- Input: `CustomerAggregateInput` — Required: none
+- Output: `CustomerAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 

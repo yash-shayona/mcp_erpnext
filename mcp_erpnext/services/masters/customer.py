@@ -16,6 +16,22 @@ from ..common.field_value_resolver import resolve_contract_values
 _ACTION = "create_customer"
 
 
+def _requires_structured_query(query: str) -> bool:
+    """Keep obvious email input out of the name resolver's token search."""
+    local_part, separator, domain = query.partition("@")
+    return bool(local_part.strip() and separator and "." in domain and domain.strip("."))
+
+
+def _structured_query_required(query: str) -> dict[str, Any]:
+    return {
+        "status": "error",
+        "code": "CUSTOMER_STRUCTURED_QUERY_REQUIRED",
+        "message": "Email-shaped input must use query_customers with the exact email_id filter.",
+        "reference": new_error_reference(),
+        "retryable": False,
+    }
+
+
 def _current_user() -> str:
     user = getattr(frappe.session, "user", None)
     if not user or user in {"Guest", "guest"}:
@@ -66,6 +82,8 @@ def _confirmation_error(code: str, message: str, *, retryable: bool) -> dict[str
 
 
 def search_customers(query: str) -> dict[str, Any]:
+    if _requires_structured_query(query):
+        return _structured_query_required(query)
     candidates = find_candidates(
         "Customer",
         query,
@@ -82,6 +100,8 @@ def search_customers(query: str) -> dict[str, Any]:
 
 
 def resolve_customer(query: str) -> dict[str, Any]:
+    if _requires_structured_query(query):
+        return _structured_query_required(query)
     return resolve_candidate(
         "Customer",
         query,
@@ -94,6 +114,8 @@ def resolve_customer(query: str) -> dict[str, Any]:
 def resolve_customer_for_workflow(query: str) -> dict[str, Any]:
     """Return one terminal public resolution state for Customer lookup."""
     resolution = resolve_customer(query)
+    if resolution["status"] == "error":
+        return resolution
     if resolution["status"] == "resolved":
         return {
             "status": "resolved",

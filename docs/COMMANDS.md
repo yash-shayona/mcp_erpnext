@@ -1,48 +1,91 @@
 # MCP ERPNext Commands
 
-These commands start one MCP process for each public profile. Run them from
-`/home/frappe/frappe-bench/sites`.
+These commands start one MCP HTTP process for each public profile as the
+Bench-owning Linux user. Run each process in its own terminal from the bench
+`sites` directory. The MCP server does not load `.env` automatically, so each
+command sources `apps/mcp_erpnext/.env` explicitly.
 
-## Stdio
+## Prepare
 
-### Sales Profile
-
-```bash
-MCP_BACKEND=direct MCP_FRAPPE_SITE=your-site.localhost \
-MCP_FRAPPE_USER=mcp-service@example.com MCP_APPROVAL_MODE=agent_delegated \
-MCP_PROFILE=sales ../env/bin/python -m mcp_erpnext.mcp_server
-```
-
-### Purchase Profile
+Copy the example configuration and edit the site, user, and secret values:
 
 ```bash
-MCP_BACKEND=direct MCP_FRAPPE_SITE=your-site.localhost \
-MCP_FRAPPE_USER=mcp-service@example.com MCP_APPROVAL_MODE=agent_delegated \
-MCP_PROFILE=purchase ../env/bin/python -m mcp_erpnext.mcp_server
+BENCH_ROOT="/path/to/your/frappe-bench"
+cd "$BENCH_ROOT"
+cp apps/mcp_erpnext/.env.example apps/mcp_erpnext/.env
+chmod 600 apps/mcp_erpnext/.env
 ```
+
+The HTTP shared secret must be at least 32 characters. Keep `.env` private and
+never commit it.
 
 ## Streamable HTTP
 
+Open a separate terminal for each profile and run the profile-specific block
+below as the Linux user that owns the Bench directory and can read
+`apps/mcp_erpnext/.env`. If necessary, switch to that OS user using the normal
+user-switching method for the host. Do not use an ERPNext login email as the
+Linux username.
+
 ### Sales Profile
 
 ```bash
-MCP_BACKEND=direct MCP_FRAPPE_SITE=your-site.localhost \
-MCP_TRANSPORT=streamable-http MCP_PROFILE=sales \
-MCP_HTTP_HOST=0.0.0.0 MCP_HTTP_PORT=8765 MCP_HTTP_PATH=/mcp \
-MCP_HTTP_SHARED_SECRET='<minimum-32-character-secret>' \
-MCP_HTTP_ALLOWED_HOSTS='host.docker.internal:8765,localhost:8765,127.0.0.1:8765' \
-../env/bin/python -m mcp_erpnext.mcp_server
+BENCH_ROOT="/path/to/your/frappe-bench"
+cd "$BENCH_ROOT/sites"
+source ../env/bin/activate
+set -a
+source ../apps/mcp_erpnext/.env
+set +a
+export MCP_PROFILE=sales
+export MCP_HTTP_PORT=8765
+export MCP_HTTP_ALLOWED_HOSTS='127.0.0.1:8765,localhost:8765,host.docker.internal:8765'
+exec python -m mcp_erpnext.mcp_server
 ```
 
 ### Purchase Profile
 
 ```bash
-MCP_BACKEND=direct MCP_FRAPPE_SITE=your-site.localhost \
-MCP_TRANSPORT=streamable-http MCP_PROFILE=purchase \
-MCP_HTTP_HOST=0.0.0.0 MCP_HTTP_PORT=8766 MCP_HTTP_PATH=/mcp \
-MCP_HTTP_SHARED_SECRET='<minimum-32-character-secret>' \
-MCP_HTTP_ALLOWED_HOSTS='host.docker.internal:8766,localhost:8766,127.0.0.1:8766' \
-../env/bin/python -m mcp_erpnext.mcp_server
+BENCH_ROOT="/path/to/your/frappe-bench"
+cd "$BENCH_ROOT/sites"
+source ../env/bin/activate
+set -a
+source ../apps/mcp_erpnext/.env
+set +a
+export MCP_PROFILE=purchase
+export MCP_HTTP_PORT=8766
+export MCP_HTTP_ALLOWED_HOSTS='127.0.0.1:8766,localhost:8766,host.docker.internal:8766'
+exec python -m mcp_erpnext.mcp_server
+```
+
+The endpoints are:
+
+```text
+Sales:    http://127.0.0.1:8765/mcp
+Purchase: http://127.0.0.1:8766/mcp
+```
+
+After both processes are running, configure VS Code to connect to these HTTP
+endpoints. VS Code must not start these servers as `stdio` processes.
+
+Use the same shared secret for both entries and send the ERPNext identity in
+the `X-MCP-User-Email` header.
+
+## Stdio
+
+Stdio is for a client that starts its own MCP process. It runs as the current
+Linux user and should not be used together with the manually managed HTTP
+processes above.
+
+```bash
+BENCH_ROOT="/path/to/your/frappe-bench"
+cd "$BENCH_ROOT/sites"
+source ../env/bin/activate
+set -a
+source ../apps/mcp_erpnext/.env
+set +a
+export MCP_TRANSPORT=stdio
+export MCP_PROFILE=sales
+exec python -m mcp_erpnext.mcp_server
 ```
 
 Replace placeholders with local environment values. Never put real passwords,
