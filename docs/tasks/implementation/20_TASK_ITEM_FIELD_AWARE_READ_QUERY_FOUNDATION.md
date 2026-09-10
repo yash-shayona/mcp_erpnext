@@ -212,7 +212,7 @@ mcp_erpnext/tests/test_tool_contracts.py
 scripts/generate_tool_catalog.py
 docs/TOOLS.md
 
-docs/tasks/07B_GENERIC_AMBIGUOUS_ENTITY_SELECTION_ENFORCEMENT.md
+docs/tasks/implementation/07B_GENERIC_AMBIGUOUS_ENTITY_SELECTION_ENFORCEMENT.md
 ```
 
 Also inspect any newer files that the working tree proves are part of the actual path.

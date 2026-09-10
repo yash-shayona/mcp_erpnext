@@ -8,6 +8,8 @@ import frappe
 
 from mcp_erpnext.approvals import APPROVAL_TTL_SECONDS, approvals
 from mcp_erpnext.config.masters import item as item_config
+from mcp_erpnext.services.common.effective_requirements import EffectiveRequirementContext, RequirementStatus
+from mcp_erpnext.services.integrations.india_compliance_item import india_compliance_item_preflight
 from mcp_erpnext.services.masters import item as item_service
 from mcp_erpnext.services.selling import sales_order
 
@@ -47,6 +49,11 @@ class ItemServiceTests(unittest.TestCase):
 		self.commit_count = 0
 		self.rollback_count = 0
 		self.defaults: dict[str, object] = {}
+		self.installed_apps: list[str] = []
+		self.gst_settings: tuple[object, object] | None = (0, "6")
+		self.item_group_hsn: str | None = None
+		self.item_group_read_error = False
+		self.hsn_rows: list[dict[str, object]] = []
 		self.meta_fields = [
 			SimpleNamespace(fieldname="item_code", label="Item Code", fieldtype="Data", reqd=1),
 			SimpleNamespace(fieldname="item_name", label="Item Name", fieldtype="Data", reqd=0),
@@ -60,6 +67,8 @@ class ItemServiceTests(unittest.TestCase):
 			local=SimpleNamespace(site="test.localhost"),
 			get_meta=lambda _: FakeMeta(self.meta_fields),
 			new_doc=lambda _: DefaultDocument(self.defaults),
+			get_installed_apps=lambda: self.installed_apps,
+			get_cached_value=lambda *args: self.gst_settings,
 			has_permission=lambda *_: True,
 			get_list=self._get_list,
 			get_doc=self._get_doc,
@@ -75,7 +84,13 @@ class ItemServiceTests(unittest.TestCase):
 			active_patch.stop()
 
 	def _get_list(self, doctype, *, filters=None, **kwargs):
+		if doctype == "GST HSN Code":
+			return self.hsn_rows
 		if doctype == "Item Group":
+			if filters and "name" in filters:
+				if self.item_group_read_error:
+					raise RuntimeError("item group read failed")
+				return [{"name": filters["name"], "gst_hsn_code": self.item_group_hsn}]
 			query = (kwargs.get("or_filters") or [[None, None, None, ""]])[0][3].strip("%").casefold()
 			return [] if query == "missing" else [{"name": "Products"}]
 		if doctype == "UOM":
@@ -204,6 +219,127 @@ class ItemServiceTests(unittest.TestCase):
 		prepared = item_service.prepare_item(self.valid_item(stock_uom=""))
 		self.assertEqual(prepared["status"], "ready")
 		self.assertEqual(approvals._approvals[prepared["approval_token"]].payload["stock_uom"], "Nos")
+
+	def _enable_hsn_requirement(self):
+		self.installed_apps = ["india_compliance"]
+		self.gst_settings = (1, "6")
+		self.meta_fields.append(
+			SimpleNamespace(
+				fieldname="gst_hsn_code",
+				label="HSN/SAC",
+				fieldtype="Link",
+				options="GST HSN Code",
+				fetch_from="item_group.gst_hsn_code",
+				fetch_if_empty=1,
+			)
+		)
+
+	def test_erpnext_only_item_creation_does_not_require_or_carry_hsn(self):
+		result = item_service.prepare_item(self.valid_item(gst_hsn_code="123456", unknown_field="ignored"))
+		self.assertEqual(result["status"], "ready")
+		payload = approvals._approvals[result["approval_token"]].payload
+		self.assertNotIn("gst_hsn_code", payload)
+		self.assertNotIn("unknown_field", payload)
+
+	def test_installed_india_compliance_with_disabled_validation_does_not_require_hsn(self):
+		self._enable_hsn_requirement()
+		self.gst_settings = (0, "6")
+		result = item_service.prepare_item(self.valid_item())
+		self.assertEqual(result["status"], "ready")
+
+	def test_active_hsn_requirement_stops_before_approval_when_missing(self):
+		self._enable_hsn_requirement()
+		result = item_service.prepare_item(self.valid_item())
+		self.assertEqual(result["status"], "needs_input")
+		self.assertEqual(result["missing"], ["item.gst_hsn_code"])
+		self.assertIn("HSN/SAC", result["message"])
+		self.assertEqual(approvals._approvals, {})
+
+	def test_supplied_hsn_continuation_is_resolved_and_bound_to_approval(self):
+		self._enable_hsn_requirement()
+		self.hsn_rows = [{"name": "123456"}]
+		first = item_service.prepare_item(self.valid_item())
+		self.assertEqual(first["status"], "needs_input")
+		second = item_service.prepare_item(self.valid_item(gst_hsn_code="123456"))
+		self.assertEqual(second["status"], "ready")
+		self.assertEqual(
+			approvals._approvals[second["approval_token"]].payload["gst_hsn_code"],
+			"123456",
+		)
+
+	def test_active_hsn_requirement_accepts_six_and_eight_digits(self):
+		self._enable_hsn_requirement()
+		for item_code, hsn in (("NEW-ITEM-006", "123456"), ("NEW-ITEM-008", "12345678")):
+			self.hsn_rows = [{"name": hsn}]
+			result = item_service.prepare_item(self.valid_item(item_code=item_code, gst_hsn_code=hsn))
+			self.assertEqual(result["status"], "ready")
+
+	def test_active_hsn_requirement_rejects_invalid_length_before_approval(self):
+		self._enable_hsn_requirement()
+		self.hsn_rows = [{"name": "1234"}]
+		result = item_service.prepare_item(self.valid_item(gst_hsn_code="1234"))
+		self.assertEqual(result["status"], "needs_input")
+		self.assertIn("6, 8", result["message"])
+		self.assertEqual(approvals._approvals, {})
+
+	def test_item_group_hsn_is_safely_inherited(self):
+		self._enable_hsn_requirement()
+		self.item_group_hsn = "123456"
+		self.hsn_rows = [{"name": "123456"}]
+		original_get_meta = self.fake_frappe.get_meta
+		self.fake_frappe.get_meta = lambda doctype: (
+			FakeMeta(self.meta_fields + [SimpleNamespace(fieldname="gst_hsn_code", fieldtype="Link")])
+			if doctype == "Item Group"
+			else original_get_meta(doctype)
+		)
+		result = item_service.prepare_item(self.valid_item())
+		self.assertEqual(result["status"], "ready")
+		self.assertEqual(
+			approvals._approvals[result["approval_token"]].payload["gst_hsn_code"],
+			"123456",
+		)
+
+	def test_item_group_hsn_read_failure_does_not_satisfy_requirement(self):
+		self._enable_hsn_requirement()
+		self.item_group_read_error = True
+		result = item_service.prepare_item(self.valid_item())
+		self.assertEqual(result["status"], "error")
+		self.assertEqual(result["code"], "ITEM_RUNTIME_REQUIREMENT_UNAVAILABLE")
+		self.assertEqual(approvals._approvals, {})
+
+	def test_hsn_settings_failure_does_not_silently_disable_requirement(self):
+		self._enable_hsn_requirement()
+		self.gst_settings = None
+		result = item_service.prepare_item(self.valid_item())
+		self.assertEqual(result["status"], "error")
+		self.assertEqual(result["code"], "ITEM_RUNTIME_REQUIREMENT_UNAVAILABLE")
+		self.assertNotIn("gst_settings", result["message"])
+		self.assertEqual(approvals._approvals, {})
+
+	def test_provider_does_not_apply_to_non_sales_item(self):
+		self._enable_hsn_requirement()
+		result = india_compliance_item_preflight(
+			EffectiveRequirementContext(
+				doctype="Item",
+				site="test.localhost",
+				values={"is_sales_item": 0, "item_group": "Products"},
+				input_values={},
+				fields={"gst_hsn_code": self.meta_fields[-1]},
+				get_installed_apps=lambda: self.installed_apps,
+				get_cached_value=lambda *args: self.gst_settings,
+				get_meta=self.fake_frappe.get_meta,
+				get_list=self._get_list,
+			)
+		)
+		self.assertEqual(result.status, RequirementStatus.NOT_APPLICABLE)
+
+	def test_active_provider_without_hsn_metadata_does_not_inject_field(self):
+		self.installed_apps = ["india_compliance"]
+		self.gst_settings = (1, "6")
+		result = item_service.prepare_item(self.valid_item(gst_hsn_code="123456"))
+		self.assertEqual(result["status"], "ready")
+		payload = approvals._approvals[result["approval_token"]].payload
+		self.assertNotIn("gst_hsn_code", payload)
 
 	def test_metadata_driven_custom_required_item_field_is_reported(self):
 		self.meta_fields.append(SimpleNamespace(fieldname="custom_material_grade", label="Material Grade", fieldtype="Data", reqd=1))

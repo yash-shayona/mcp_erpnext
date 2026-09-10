@@ -10,8 +10,8 @@ VERIFIED** end to end.
 
 ## 2. Exact source files inspected
 
-- `docs/tasks/20_TASK_ITEM_FIELD_AWARE_READ_QUERY_FOUNDATION.md`
-- `docs/tasks/07B_GENERIC_AMBIGUOUS_ENTITY_SELECTION_ENFORCEMENT.md`
+- `docs/tasks/implementation/20_TASK_ITEM_FIELD_AWARE_READ_QUERY_FOUNDATION.md`
+- `docs/tasks/implementation/07B_GENERIC_AMBIGUOUS_ENTITY_SELECTION_ENFORCEMENT.md`
 - `docs/inspect/CUSTOMER_FIELD_AWARE_READ_QUERY_IMPLEMENTATION_REPORT.md`
 - `mcp_erpnext/config/masters/item.py`
 - `mcp_erpnext/contracts/masters/resolution.py`

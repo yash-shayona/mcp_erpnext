@@ -32,6 +32,7 @@ The implementation uses `erpnext.selling.doctype.quotation.quotation.make_sales_
 - `get_ordered_items()` reads submitted Quotation Item rows with positive `ordered_qty`; `update_item()` subtracts ordered quantity from source `stock_qty` and derives the target quantity from the remaining stock quantity and conversion factor.
 - The native row condition excludes exhausted rows and, without explicit selected rows, excludes alternative rows according to ERPNext's own rules. The MCP service does not implement custom quantity or alternative selection logic.
 - Native mapping invokes target `set_missing_values()` and `calculate_taxes_and_totals()`, and the service previews the resulting mapped values rather than reconstructing them from Customer/Item inputs.
+- Before preview and confirmation, the conversion reuses the standalone Sales Order delivery-date default: an absent mapped date falls back to the mapped transaction date. It then calls the native Sales Order `validate()` method so ERPNext can apply its normal parent/item delivery-date validation and any other target validation rules.
 
 In installed Frappe `frappe.model.mapper.get_mapped_doc()` with `ignore_permissions=False`:
 
@@ -102,8 +103,8 @@ The source read and target create checks run under the authenticated request-sco
 
 ## H. Tests run
 
-- `../../env/bin/python -m unittest mcp_erpnext.tests.test_quotation_to_sales_order mcp_erpnext.tests.test_tool_registration mcp_erpnext.tests.test_tool_contracts mcp_erpnext.tests.test_profiles` — 22 tests passed.
-- `../../env/bin/python -m unittest discover -s mcp_erpnext/tests -p 'test_*.py'` — 194 tests passed.
+- `../../env/bin/python -m unittest mcp_erpnext.tests.test_quotation_to_sales_order mcp_erpnext.tests.test_tool_registration mcp_erpnext.tests.test_tool_contracts mcp_erpnext.tests.test_profiles` — 23 tests passed.
+- `../../env/bin/python -m unittest discover -s mcp_erpnext/tests -p 'test_*.py'` — 195 tests passed.
 - `../../env/bin/python scripts/generate_tool_catalog.py` — completed successfully.
 - `../../env/bin/python -m compileall -q mcp_erpnext` — completed successfully.
 - `git diff --check` — no whitespace errors.

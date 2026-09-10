@@ -11,6 +11,7 @@ import frappe
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
 from ...observability import public_error
+from .sales_order import _set_sales_order_delivery_date
 
 _ACTION = "convert_quotation_to_sales_order"
 _SOURCE_DOCTYPE = "Quotation"
@@ -211,6 +212,12 @@ def _fingerprint(quotation: Any, preview: dict[str, Any], mapped_doc: Any) -> st
 def _map_and_preview(quotation: Any) -> tuple[Any | None, dict[str, Any] | None, dict[str, Any] | None]:
     try:
         sales_order = _map_source(quotation)
+        if not _set_sales_order_delivery_date(sales_order):
+            return None, None, _error(
+                "CONVERSION_UNAVAILABLE",
+                "The mapped Sales Order has an invalid delivery date.",
+            )
+        sales_order.run_method("validate")
     except frappe.PermissionError:
         return None, None, _error("PERMISSION_DENIED", "The authenticated user cannot perform that conversion.")
     except Exception:

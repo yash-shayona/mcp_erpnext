@@ -32,6 +32,17 @@ class FakeDocument:
 		self.items = values.get("items", [])
 		self.taxes = values.get("taxes", [])
 		self.insert_calls = []
+		self.run_methods = []
+
+	def __setattr__(self, name, value):
+		object.__setattr__(self, name, value)
+		if name == "delivery_date" and "values" in self.__dict__:
+			self.values[name] = value
+
+	def __getattr__(self, name):
+		if name in self.values:
+			return self.values[name]
+		raise AttributeError(name)
 
 	def get(self, fieldname, default=None):
 		if fieldname == "items":
@@ -45,6 +56,10 @@ class FakeDocument:
 
 	def insert(self, **kwargs):
 		self.insert_calls.append(kwargs)
+		return self
+
+	def run_method(self, method):
+		self.run_methods.append(method)
 		return self
 
 
@@ -150,6 +165,16 @@ class QuotationToSalesOrderServiceTests(unittest.TestCase):
 		self.assertEqual(item["prevdoc_docname"], "SAL-QTN-0001")
 		self.assertEqual(self.native.insert_calls, [])
 
+	def test_prepare_defaults_delivery_date_and_runs_native_validation(self):
+		self.native.values["delivery_date"] = None
+		result = self.prepare()
+		self.assertEqual(result["status"], "ready")
+		self.assertEqual(
+			result["preview"]["sales_order"]["delivery_date"],
+			"2026-09-10",
+		)
+		self.assertEqual(self.native.run_methods, ["validate"])
+
 	def test_draft_and_unsupported_party_are_rejected_before_native_mapper(self):
 		self.source.docstatus = 0
 		with patch.object(service, "_native_make_sales_order") as native:
@@ -217,4 +242,3 @@ class QuotationToSalesOrderServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
-

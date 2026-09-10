@@ -78,8 +78,8 @@ Implementation-related files changed in the app worktree are:
 - `mcp_erpnext/tools/pdf.py`
 - `scripts/generate_tool_catalog.py`
 
-The task files `docs/tasks/16_GENERIC_DOCUMENT_PDF_FOUNDATION_TASK.md` and
-`docs/tasks/17_TASK_GENERIC_DOCUMENT_PDF_FOUNDATION.md` were already present as
+The task files `docs/tasks/implementation/16_GENERIC_DOCUMENT_PDF_FOUNDATION_TASK.md` and
+`docs/tasks/implementation/17_TASK_GENERIC_DOCUMENT_PDF_FOUNDATION.md` were already present as
 uncommitted work and were not edited.
 
 ## 4. Final MCP Tool Contract

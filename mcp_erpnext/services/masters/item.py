@@ -15,7 +15,14 @@ from ..common.entity_resolution import (
     normalize,
     resolve_ranked_candidates,
 )
-from ..common.field_value_resolver import resolve_contract_values
+from ..common.effective_requirements import (
+    EffectiveRequirementContext,
+    RequirementResult,
+    RequirementStatus,
+    run_effective_requirements,
+)
+from ..common.field_value_resolver import resolve_contract_values, resolve_field_value
+from ..integrations.india_compliance_item import india_compliance_item_preflight
 
 _ACTION = "create_item"
 
@@ -215,7 +222,73 @@ def _item_data(item: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]
     )
     if resolved_fields["status"] != "resolved":
         return None, resolved_fields
-    return {"doctype": "Item", **resolved_fields["values"]}, None
+    data = {"doctype": "Item", **resolved_fields["values"]}
+
+    runtime_requirements = run_effective_requirements(
+        EffectiveRequirementContext(
+            doctype="Item",
+            site=getattr(frappe.local, "site", ""),
+            values=data,
+            input_values=item,
+            fields=contract["fields"],
+            get_installed_apps=getattr(frappe, "get_installed_apps", lambda: []),
+            get_cached_value=getattr(frappe, "get_cached_value", None),
+            get_meta=frappe.get_meta,
+            get_list=frappe.get_list,
+        ),
+        (india_compliance_item_preflight,),
+    )
+    if runtime_requirements.status in {
+        RequirementStatus.MISSING,
+        RequirementStatus.INVALID,
+        RequirementStatus.UNAVAILABLE,
+    }:
+        return None, _runtime_requirement_response(runtime_requirements)
+
+    for fieldname, value in runtime_requirements.values.items():
+        field_result = resolve_field_value(
+            fieldname=fieldname,
+            field=contract["fields"].get(fieldname),
+            path_prefix="item",
+            value=value,
+            source="runtime_requirement",
+            resolved_values=data,
+            link_filters={},
+            get_list=frappe.get_list,
+        )
+        if field_result["status"] != "resolved":
+            return None, field_result
+        data[fieldname] = field_result["value"]
+    return data, None
+
+
+def _runtime_requirement_response(result: RequirementResult) -> dict[str, Any]:
+    """Map internal provider outcomes to the frozen legacy Item result shape."""
+    if result.status in {RequirementStatus.MISSING, RequirementStatus.INVALID}:
+        requirement = result.requirement
+        assert requirement is not None
+        path = f"item.{requirement.fieldname}"
+        return {
+            "status": "needs_input",
+            "missing": [path],
+            "missing_fields": [
+                {
+                    "doctype": requirement.doctype,
+                    "fieldname": requirement.fieldname,
+                    "path": path,
+                    "label": requirement.label,
+                    "fieldtype": "Link",
+                    "reason": requirement.reason,
+                    "source": "runtime_requirement",
+                }
+            ],
+            "message": requirement.guidance,
+        }
+    return _confirmation_error(
+        "ITEM_RUNTIME_REQUIREMENT_UNAVAILABLE",
+        "Item creation requirements could not be safely determined. Ask an authorized administrator or support team to check the site configuration.",
+        retryable=True,
+    )
 
 
 def _duplicate_matches(item_code: str) -> list[dict[str, Any]]:

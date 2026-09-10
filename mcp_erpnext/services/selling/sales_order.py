@@ -45,6 +45,18 @@ def _resolve_company(company: str | None) -> str | None:
     return resolved
 
 
+def _set_sales_order_delivery_date(doc: Any, delivery_date: Any = None) -> bool:
+    """Apply the standalone Sales Order delivery-date default before validation."""
+    transaction_date = getdate(doc.transaction_date)
+    resolved_delivery_date = getdate(
+        delivery_date or doc.get("delivery_date") or transaction_date
+    )
+    if resolved_delivery_date < transaction_date:
+        return False
+    doc.delivery_date = resolved_delivery_date
+    return True
+
+
 def _coerce_quantity(value: Any) -> float | None:
     if value in (None, ""):
         return None
@@ -188,12 +200,6 @@ def prepare_sales_order(
             "message": "No default Company is configured for the authenticated service user.",
         }
     transaction_date = getdate(nowdate())
-    resolved_delivery_date = getdate(delivery_date or transaction_date)
-    if resolved_delivery_date < transaction_date:
-        return public_error(
-            "INVALID_ORDER_DETAILS",
-            message="Delivery date cannot be before the transaction date.",
-        )
 
     doc = frappe.new_doc("Sales Order")
     doc.naming_series = "SAL-ORD-.YYYY.-"
@@ -201,7 +207,11 @@ def prepare_sales_order(
     doc.company = resolved_company
     doc.order_type = "Sales"
     doc.transaction_date = transaction_date
-    doc.delivery_date = resolved_delivery_date
+    if not _set_sales_order_delivery_date(doc, delivery_date):
+        return public_error(
+            "INVALID_ORDER_DETAILS",
+            message="Delivery date cannot be before the transaction date.",
+        )
     if selling_price_list:
         doc.selling_price_list = selling_price_list
     for item in item_result["items"]:
