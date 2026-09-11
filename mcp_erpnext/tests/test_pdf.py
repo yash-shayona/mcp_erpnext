@@ -80,6 +80,10 @@ class PdfServiceTests(unittest.TestCase):
 		result = self.run_service(FakeFrappe(), doctype="Quotation")
 		self.assertEqual(result["status"], "ok")
 
+	def test_sales_profile_supports_sales_invoice(self):
+		result = self.run_service(FakeFrappe(), doctype="Sales Invoice")
+		self.assertEqual(result["status"], "ok")
+
 	def test_purchase_profile_supports_purchase_order(self):
 		result = self.run_service(FakeFrappe(), profile="purchase", doctype="Purchase Order")
 		self.assertEqual(result["status"], "ok")
@@ -134,6 +138,11 @@ class PdfServiceTests(unittest.TestCase):
 		with patch.object(pdf, "frappe", fake):
 			result = pdf.render_document_pdf("Purchase Order", "PO-1", "sales")
 
+		self.assertEqual(result["code"], "DOCTYPE_NOT_ALLOWED")
+
+	def test_purchase_profile_rejects_sales_invoice(self):
+		fake = FakeFrappe()
+		result = self.run_service(fake, profile="purchase", doctype="Sales Invoice")
 		self.assertEqual(result["code"], "DOCTYPE_NOT_ALLOWED")
 
 	def test_unsupported_doctype_is_rejected(self):

@@ -72,6 +72,55 @@ class ReadServiceTests(unittest.TestCase):
 		result = read.search_documents("Sales Order", {"party": "CUST-NONE", "limit": 20}, "sales")
 		self.assertEqual(result, {"status": "ok", "doctype": "Sales Order", "results": [], "count": 0, "limit": 20})
 
+	def test_sales_invoice_get_uses_customer_posting_and_due_dates(self):
+		self.doc = FakeRow(
+			name="SINV-001",
+			customer="CUST-001",
+			posting_date=date(2026, 9, 3),
+			due_date=date(2026, 10, 3),
+			docstatus=1,
+			status="Paid",
+			currency="INR",
+			grand_total=300.0,
+			items=[{"item_code": "ITEM-1", "qty": 3, "amount": 300, "secret": "hidden"}],
+		)
+		self.doc.has_permission = lambda permission: permission == "read"
+		result = read.get_document({"doctype": "Sales Invoice", "name": "SINV-001"}, "sales")
+
+		self.assertEqual(result["status"], "ok")
+		document = result["document"]
+		self.assertEqual(document["party"], "CUST-001")
+		self.assertEqual(document["transaction_date"], date(2026, 9, 3))
+		self.assertEqual(document["secondary_date"], date(2026, 10, 3))
+		self.assertEqual(document["items"], [{"item_code": "ITEM-1", "qty": 3, "amount": 300}])
+
+	def test_sales_invoice_search_uses_posting_date_and_customer(self):
+		self.rows = []
+		result = read.search_documents(
+			"Sales Invoice",
+			{
+				"party": "CUST-001",
+				"docstatus": 1,
+				"status": "Paid",
+				"date_from": date(2026, 9, 1),
+				"date_to": date(2026, 9, 30),
+			},
+			"sales",
+		)
+
+		self.assertEqual(result["status"], "ok")
+		self.assertEqual(self.last_query[1]["filters"], {
+			"customer": "CUST-001",
+			"docstatus": 1,
+			"status": "Paid",
+			"posting_date": ["between", ["2026-09-01", "2026-09-30"]],
+		})
+		self.assertEqual(self.last_query[1]["order_by"], "posting_date desc, name desc")
+
+	def test_sales_invoice_is_not_available_to_purchase_profile(self):
+		result = read.search_documents("Sales Invoice", {}, "purchase")
+		self.assertEqual(result["code"], "DOCTYPE_NOT_ALLOWED")
+
 
 if __name__ == "__main__":
 	unittest.main()

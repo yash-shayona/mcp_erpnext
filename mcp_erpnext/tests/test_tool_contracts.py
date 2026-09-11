@@ -72,6 +72,22 @@ class ToolContractTests(unittest.TestCase):
 		self.assertNotIn("extra_fields", dumps(prepare.inputSchema))
 		self.assertNotIn("ignore_permissions", dumps(prepare.inputSchema))
 
+	def test_standalone_sales_invoice_contract_is_typed_and_bounded(self):
+		tools = {tool.name: tool for tool in self.registered_tools()}
+		prepare = tools["prepare_sales_invoice"]
+		confirm = tools["confirm_sales_invoice"]
+		self.assertEqual(prepare.inputSchema["required"], ["customer", "items"])
+		self.assertEqual(confirm.inputSchema["required"], ["approval_token", "confirm"])
+		self.assertEqual(prepare.meta["mcp_erpnext"]["side_effect"], "PREPARE")
+		self.assertEqual(confirm.meta["mcp_erpnext"]["side_effect"], "CONFIRM_WRITE")
+		self.assertEqual(
+			get_tool_contract("prepare_sales_invoice").approval_confirm_tool,
+			"confirm_sales_invoice",
+		)
+		self.assertNotIn("extra_fields", dumps(prepare.inputSchema))
+		self.assertNotIn("update_stock", dumps(prepare.inputSchema))
+		self.assertNotIn("sales_order", dumps(prepare.inputSchema))
+
 	def test_public_schemas_do_not_expose_server_approval_policy_internals(self):
 		schemas = dumps(
 			[

@@ -28,6 +28,8 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `confirm_quotation_to_sales_order` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_sales_order_to_sales_invoice` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_sales_order_to_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_sales_invoice` | Selling | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_update` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_child_add` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
@@ -50,6 +52,8 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `aggregate_items` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
 | `get_quotation` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `search_quotations` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
+| `get_sales_invoice` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `search_sales_invoices` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
 | `render_document_pdf` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `prepare_document_email` | Existing Documents | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_email` | Existing Documents | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
@@ -204,6 +208,24 @@ Create the reviewed Draft Sales Invoice from a prepared Sales Order conversion a
 
 - Input: `SalesOrderToSalesInvoiceConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmSalesOrderToSalesInvoiceOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_sales_invoice`
+
+Prepare a standalone ERPNext-calculated Draft Sales Invoice preview without writing.
+
+- Input: `SalesInvoicePrepareInput` — Required: `customer`, `items`
+- Output: `PrepareSalesInvoiceOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `INPUT`, `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_sales_invoice`
+
+Create a prepared standalone Draft Sales Invoice after explicit approval.
+
+- Input: `SalesInvoiceConfirmInput` — Required: `approval_token`, `confirm`
+- Output: `ConfirmSalesInvoiceOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 
@@ -399,6 +421,24 @@ Retrieve a permitted existing Quotation summary.
 ### `search_quotations`
 
 Search permitted Quotations with bounded business filters.
+
+- Input: `DocumentSearchInput` — Required: `request`
+- Output: `DocumentSearchOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `get_sales_invoice`
+
+Retrieve a permitted existing Sales Invoice summary.
+
+- Input: `DocumentReadInput` — Required: `request`
+- Output: `DocumentReadOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `search_sales_invoices`
+
+Search permitted Sales Invoices with bounded business filters.
 
 - Input: `DocumentSearchInput` — Required: `request`
 - Output: `DocumentSearchOutput`; published through MCP `outputSchema`.

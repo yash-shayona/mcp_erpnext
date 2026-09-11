@@ -10,7 +10,7 @@ from .common import NonEmptyString, PublicContractModel, ToolError
 from .interaction import InteractionDirective
 
 
-DocumentEmailDoctype = Literal["Quotation", "Sales Order", "Purchase Order"]
+DocumentEmailDoctype = Literal["Quotation", "Sales Order", "Purchase Order", "Sales Invoice"]
 EmailSubject = Annotated[str, StringConstraints(min_length=1, max_length=255)]
 EmailMessage = Annotated[str, StringConstraints(min_length=1, max_length=10_000)]
 

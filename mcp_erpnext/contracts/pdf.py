@@ -9,7 +9,7 @@ from pydantic import Field, RootModel
 from .common import NonEmptyString, PublicContractModel, ToolError
 
 
-DocumentPdfDoctype = Literal["Quotation", "Sales Order", "Purchase Order"]
+DocumentPdfDoctype = Literal["Quotation", "Sales Order", "Purchase Order", "Sales Invoice"]
 
 
 class RenderDocumentPdfInput(PublicContractModel):

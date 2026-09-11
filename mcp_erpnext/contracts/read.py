@@ -10,7 +10,7 @@ from pydantic import Field, RootModel
 from .common import NonEmptyString, PublicContractModel, ToolError
 
 
-DocumentDoctype = Literal["Quotation", "Sales Order", "Purchase Order"]
+DocumentDoctype = Literal["Quotation", "Sales Order", "Purchase Order", "Sales Invoice"]
 
 
 class ExistingDocumentTarget(PublicContractModel):

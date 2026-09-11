@@ -49,7 +49,7 @@ class FakeDocument:
 		self.docstatus = FakeDocStatus(docstatus)
 		self.modified = modified
 		self.remarks = ""
-		self.meta = FakeMeta(FakeField("remarks"), is_submittable=doctype in {"Sales Order", "Quotation", "Purchase Order"})
+		self.meta = FakeMeta(FakeField("remarks"), is_submittable=doctype in {"Sales Order", "Quotation", "Purchase Order", "Sales Invoice"})
 
 	def has_permission(self, permission):
 		return permission in {"read", "write", "submit", "cancel", "delete"}
@@ -133,6 +133,43 @@ class LifecycleServiceTests(unittest.TestCase):
 			"sales",
 		)
 		self.assertEqual(result["code"], "DOCTYPE_NOT_ALLOWED")
+
+	def test_sales_invoice_policy_allows_only_submit_cancel_delete(self):
+		for action in ("submit", "cancel", "delete"):
+			with self.subTest(action=action):
+				self.assertTrue(lifecycle.is_action_allowed("sales", "Sales Invoice", action))
+		for action in ("update", "child_add"):
+			with self.subTest(action=action):
+				self.assertFalse(lifecycle.is_action_allowed("sales", "Sales Invoice", action))
+
+	def test_sales_invoice_submit_reaches_existing_prepare_flow(self):
+		result = lifecycle.prepare_submit({"doctype": "Sales Invoice", "name": "SINV-001"}, "sales")
+		self.assertEqual(result["status"], "ready")
+		self.assertEqual(result["preview"]["action"], "SUBMIT")
+
+	def test_sales_invoice_update_and_child_add_are_denied_before_approval(self):
+		update = lifecycle.prepare_update(
+			{"doctype": "Sales Invoice", "name": "SINV-001"},
+			[{"field": "remarks", "value": "x"}],
+			"sales",
+		)
+		child_add = lifecycle.prepare_child_add(
+			{"doctype": "Sales Invoice", "name": "SINV-001"},
+			{"doctype": "Item", "name": "ITEM-001"},
+			1,
+			None,
+			"sales",
+		)
+		self.assertEqual(update["code"], "DOCTYPE_NOT_ALLOWED")
+		self.assertEqual(child_add["code"], "DOCTYPE_NOT_ALLOWED")
+		self.assertEqual(self.store._approvals, {})
+
+	def test_lifecycle_approval_cannot_be_reused_for_another_action(self):
+		prepared = lifecycle.prepare_submit(
+			{"doctype": "Sales Invoice", "name": "SINV-001"}, "sales"
+		)
+		result = lifecycle.confirm("update", prepared["approval_token"], True, "sales")
+		self.assertEqual(result["code"], "CONFIRMATION_UNAVAILABLE")
 
 	def test_system_field_is_not_writable(self):
 		result = lifecycle.prepare_update(

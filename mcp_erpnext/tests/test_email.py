@@ -182,6 +182,17 @@ class EmailServiceTests(unittest.TestCase):
 				self.assertEqual(result["preview"]["doctype"], doctype)
 			self.doc.doctype = "Sales Order"
 
+	def test_sales_invoice_resolves_customer_party(self):
+		self.doc.doctype = "Sales Invoice"
+		result = email.prepare_document_email("Sales Invoice", "SINV-001", "sales")
+		self.assertEqual(result["status"], "ready_for_approval")
+		self.assertEqual(result["preview"]["doctype"], "Sales Invoice")
+		self.assertEqual(result["preview"]["recipient"], "customer@example.com")
+
+	def test_purchase_profile_rejects_sales_invoice_email(self):
+		result = email.prepare_document_email("Sales Invoice", "SINV-001", "purchase")
+		self.assertEqual(result["code"], "DOCTYPE_NOT_ALLOWED")
+
 	def test_missing_or_invalid_recipient_is_rejected(self):
 		self.doc.values["contact_email"] = None
 		with patch.object(email, "_party_email", return_value=None), patch.object(email, "_contact_candidates", return_value=[]):
