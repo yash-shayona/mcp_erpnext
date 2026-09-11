@@ -42,6 +42,8 @@ class ToolRegistrationTests(unittest.TestCase):
 				"confirm_quotation",
 				"prepare_quotation_to_sales_order",
 				"confirm_quotation_to_sales_order",
+				"prepare_sales_order_to_sales_invoice",
+				"confirm_sales_order_to_sales_invoice",
 				"prepare_document_update",
 				"confirm_document_update",
 				"prepare_document_child_add",

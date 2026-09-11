@@ -12,7 +12,12 @@ from pydantic import ValidationError
 
 from mcp_erpnext.contracts.audit import audit_tool_contracts
 from mcp_erpnext.contracts.common import CustomerReference
-from mcp_erpnext.contracts.registry import SideEffectClass, ToolContract, ToolOperation
+from mcp_erpnext.contracts.registry import (
+	SideEffectClass,
+	ToolContract,
+	ToolOperation,
+	get_tool_contract,
+)
 from mcp_erpnext.contracts.selling.quotation import QuotationPrepareInput
 from mcp_erpnext.mcp_server import create_mcp
 from mcp_erpnext.tools.selling import quotation as quotation_tools
@@ -51,6 +56,21 @@ class ToolContractTests(unittest.TestCase):
 		for name in ("prepare_quotation", "confirm_quotation"):
 			with self.subTest(name=name):
 				self.assertEqual(tools[name].outputSchema["type"], "object")
+
+	def test_sales_order_to_sales_invoice_contract_is_typed_and_bounded(self):
+		tools = {tool.name: tool for tool in self.registered_tools()}
+		prepare = tools["prepare_sales_order_to_sales_invoice"]
+		confirm = tools["confirm_sales_order_to_sales_invoice"]
+		self.assertEqual(prepare.inputSchema["required"], ["sales_order"])
+		self.assertEqual(confirm.inputSchema["required"], ["approval_token", "confirm"])
+		self.assertEqual(prepare.meta["mcp_erpnext"]["side_effect"], "PREPARE")
+		self.assertEqual(confirm.meta["mcp_erpnext"]["side_effect"], "CONFIRM_WRITE")
+		self.assertEqual(
+			get_tool_contract("prepare_sales_order_to_sales_invoice").approval_confirm_tool,
+			"confirm_sales_order_to_sales_invoice",
+		)
+		self.assertNotIn("extra_fields", dumps(prepare.inputSchema))
+		self.assertNotIn("ignore_permissions", dumps(prepare.inputSchema))
 
 	def test_public_schemas_do_not_expose_server_approval_policy_internals(self):
 		schemas = dumps(

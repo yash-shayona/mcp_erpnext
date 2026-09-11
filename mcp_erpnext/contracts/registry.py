@@ -60,6 +60,12 @@ from .selling.quotation_to_sales_order import (
 	QuotationToSalesOrderInput,
 	QuotationToSalesOrderConfirmInput,
 )
+from .selling.sales_order_to_sales_invoice import (
+	ConfirmSalesOrderToSalesInvoiceOutput,
+	PrepareSalesOrderToSalesInvoiceOutput,
+	SalesOrderToSalesInvoiceInput,
+	SalesOrderToSalesInvoiceConfirmInput,
+)
 from .selling.sales_order_read import (
     GetSalesOrderInput,
     GetSalesOrderOutput,
@@ -364,6 +370,29 @@ TOOL_CONTRACTS = {
         True,
         QuotationToSalesOrderConfirmInput,
         ConfirmQuotationToSalesOrderOutput,
+        approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+    ),
+    "prepare_sales_order_to_sales_invoice": ToolContract(
+        "prepare_sales_order_to_sales_invoice",
+        "Selling",
+        ToolOperation.PREPARE,
+        SideEffectClass.PREPARE,
+        "Prepare a Draft Sales Invoice preview from an eligible Submitted Sales Order using ERPNext native mapping.",
+        False,
+        SalesOrderToSalesInvoiceInput,
+        PrepareSalesOrderToSalesInvoiceOutput,
+        interaction_kinds=(InteractionKind.APPROVAL,),
+        approval_confirm_tool="confirm_sales_order_to_sales_invoice",
+    ),
+    "confirm_sales_order_to_sales_invoice": ToolContract(
+        "confirm_sales_order_to_sales_invoice",
+        "Selling",
+        ToolOperation.CONFIRM,
+        SideEffectClass.CONFIRM_WRITE,
+        "Create the reviewed Draft Sales Invoice from a prepared Sales Order conversion after the configured approval guard succeeds.",
+        True,
+        SalesOrderToSalesInvoiceConfirmInput,
+        ConfirmSalesOrderToSalesInvoiceOutput,
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "prepare_purchase_order": ToolContract(

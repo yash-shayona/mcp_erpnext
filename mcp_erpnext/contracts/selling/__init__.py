@@ -16,6 +16,12 @@ from .quotation_to_sales_order import (
 	PrepareQuotationToSalesOrderOutput,
 	PrepareQuotationToSalesOrderResult,
 )
+from .sales_order_to_sales_invoice import (
+	ConfirmSalesOrderToSalesInvoiceOutput,
+	ConfirmSalesOrderToSalesInvoiceResult,
+	PrepareSalesOrderToSalesInvoiceOutput,
+	PrepareSalesOrderToSalesInvoiceResult,
+)
 
 __all__ = [
 	"ConfirmQuotationResult",
@@ -30,4 +36,8 @@ __all__ = [
 	"ConfirmQuotationToSalesOrderResult",
 	"PrepareQuotationToSalesOrderOutput",
 	"PrepareQuotationToSalesOrderResult",
+	"ConfirmSalesOrderToSalesInvoiceOutput",
+	"ConfirmSalesOrderToSalesInvoiceResult",
+	"PrepareSalesOrderToSalesInvoiceOutput",
+	"PrepareSalesOrderToSalesInvoiceResult",
 ]

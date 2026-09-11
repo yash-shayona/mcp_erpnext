@@ -35,6 +35,7 @@ def register_sales_tools(mcp: Any) -> None:
     from .selling.quotation import register_quotation_tools
     from .selling.quotation_to_sales_order import register_quotation_to_sales_order_tools
     from .selling.sales_order import register_sales_order_tools
+    from .selling.sales_order_to_sales_invoice import register_sales_order_to_sales_invoice_tools
 
     register_customer_tools(mcp)
     register_item_tools(mcp)
@@ -42,3 +43,4 @@ def register_sales_tools(mcp: Any) -> None:
     register_sales_order_tools(mcp)
     register_quotation_tools(mcp)
     register_quotation_to_sales_order_tools(mcp)
+    register_sales_order_to_sales_invoice_tools(mcp)

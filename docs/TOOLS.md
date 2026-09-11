@@ -26,6 +26,8 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `confirm_quotation` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_quotation_to_sales_order` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_quotation_to_sales_order` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_sales_order_to_sales_invoice` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_order_to_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_update` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_child_add` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
@@ -75,7 +77,6 @@ Resolve one permitted Customer or return a terminal selection state.
 Validate a Customer preview without writing.
 
 - Input: `Legacy public schema` — Required: `customer`
-- Customer creation accepts the existing narrow fields plus explicit `gst_category` when the current Customer metadata exposes it; arbitrary extra fields are not accepted.
 - Output: `Legacy public schema`; legacy response shape pending focused migration.
 - Side effect: `PREPARE`; approval does not perform the final write.
 - Interaction: none declared.
@@ -185,6 +186,24 @@ Create the reviewed Draft Sales Order from a prepared Quotation conversion after
 
 - Input: `QuotationToSalesOrderConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmQuotationToSalesOrderOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_sales_order_to_sales_invoice`
+
+Prepare a Draft Sales Invoice preview from an eligible Submitted Sales Order using ERPNext native mapping.
+
+- Input: `SalesOrderToSalesInvoiceInput` — Required: `sales_order`
+- Output: `PrepareSalesOrderToSalesInvoiceOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_sales_order_to_sales_invoice`
+
+Create the reviewed Draft Sales Invoice from a prepared Sales Order conversion after the configured approval guard succeeds.
+
+- Input: `SalesOrderToSalesInvoiceConfirmInput` — Required: `approval_token`, `confirm`
+- Output: `ConfirmSalesOrderToSalesInvoiceOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 
