@@ -32,8 +32,8 @@ from ...contracts.selling.sales_order_read import (
     SalesOrderItemSortField,
     SalesOrderMetric,
     SalesOrderMetrics,
-    SalesOrderSearchInput,
-    SalesOrderSearchOutput,
+    SalesOrderQueryInput,
+    SalesOrderQueryOutput,
     SalesOrderSortField,
     SortOrder,
 )
@@ -63,7 +63,7 @@ def get_sales_order(
     )
 
 
-def search_sales_orders(
+def query_sales_orders(
     ctx: Context,
     transaction_date_from: date | None = None,
     transaction_date_to: date | None = None,
@@ -89,9 +89,9 @@ def search_sales_orders(
     sort_by: SalesOrderSortField = "transaction_date",
     sort_order: SortOrder = "desc",
     fields: SalesOrderHeaderFields | None = None,
-) -> SalesOrderSearchOutput:
-    """Search permitted Sales Orders using typed filters, projection, sorting, and pagination."""
-    request = SalesOrderSearchInput(
+) -> SalesOrderQueryOutput:
+    """Query permitted Sales Orders using typed filters, projection, sorting, and pagination."""
+    request = SalesOrderQueryInput(
         **{
             key: value
             for key, value in locals().items()
@@ -100,10 +100,10 @@ def search_sales_orders(
     )
     result = execute_tool_with_context(
         ctx,
-        "search_sales_orders",
-        lambda: service.search_sales_orders(request.model_dump()),
+        "query_sales_orders",
+        lambda: service.query_sales_orders(request.model_dump()),
     )
-    return SalesOrderSearchOutput.model_validate(result)
+    return SalesOrderQueryOutput.model_validate(result)
 
 
 def aggregate_sales_orders(
@@ -180,7 +180,7 @@ def query_sales_order_items(
 def register_sales_order_read_tools(mcp: Any) -> None:
     for tool in (
         get_sales_order,
-        search_sales_orders,
+        query_sales_orders,
         aggregate_sales_orders,
         query_sales_order_items,
     ):

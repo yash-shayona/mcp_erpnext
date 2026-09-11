@@ -8,6 +8,12 @@ from typing import Any
 import frappe
 
 from ...observability import new_error_reference
+from ..common.aggregate import (
+    build_aggregate_field,
+    build_aggregate_fields,
+    execute_aggregate,
+    shape_aggregate_rows,
+)
 
 
 _FIELDS = frozenset(
@@ -35,7 +41,7 @@ _SORT_FIELDS = frozenset(
 _GROUP_FIELDS = frozenset(
     {"item_group", "brand", "disabled", "is_sales_item", "is_purchase_item", "is_stock_item"}
 )
-_METRICS = {"count": {"COUNT": "*", "as": "count"}}
+_METRICS = {"count": build_aggregate_field("COUNT", "*", "count")}
 _DIRECT_FILTER_FIELDS = (
     "name",
     "item_code",
@@ -109,9 +115,7 @@ def _aggregate_fields(metrics: list[str], group_by: str | None) -> tuple[list[An
         raise ValueError("Item aggregate contains an unsupported metric.")
     if group_by is not None and group_by not in _GROUP_FIELDS:
         raise ValueError("Item aggregate contains an unsupported grouping field.")
-    fields: list[Any] = [_METRICS[metric] for metric in metrics]
-    if group_by:
-        fields.insert(0, group_by)
+    fields, _ = build_aggregate_fields(metrics, _METRICS, group_by=group_by)
     return fields, group_by
 
 
@@ -150,19 +154,12 @@ def aggregate_items(criteria: dict[str, Any]) -> dict[str, Any]:
     metrics = criteria["metrics"]
     group_by = criteria.get("group_by")
     fields, group_by = _aggregate_fields(metrics, group_by)
-    groups = [group_by] if group_by else []
-    rows = frappe.get_list(
+    rows = execute_aggregate(
+        frappe.get_list,
         "Item",
         filters=_filters(criteria),
         fields=fields,
-        group_by=", ".join(groups) or None,
-        order_by=", ".join(groups) or None,
-        ignore_permissions=False,
+        groups=[group_by] if group_by else [],
     )
-    results = []
-    for row in rows:
-        result = {metric: row.get(metric) for metric in metrics if row.get(metric) is not None}
-        if group_by:
-            result["group_value"] = row.get(group_by)
-        results.append(result)
+    results = shape_aggregate_rows(rows, metrics, group_by=group_by)
     return {"status": "ok", "metrics": metrics, "group_by": group_by, "results": results}

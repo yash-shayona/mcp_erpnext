@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from mcp_erpnext.contracts.selling.sales_order_read import (
 	SalesOrderAggregateInput,
 	SalesOrderItemQueryInput,
-	SalesOrderSearchInput,
+	SalesOrderQueryInput,
 )
 from mcp_erpnext.services.selling import sales_order_read as read
 
@@ -22,6 +22,15 @@ class FakeQuery:
 
 	def run(self, *, as_dict):
 		return self.rows
+
+
+class FakeDistinctCount:
+	def distinct(self):
+		return self
+
+	def as_(self, alias):
+		self.alias = alias
+		return self
 
 
 class FakeSalesOrder:
@@ -59,9 +68,9 @@ class SalesOrderReadServiceTests(unittest.TestCase):
 	def _get_list(self, doctype, **kwargs):
 		self.last_list = (doctype, kwargs)
 		fields = kwargs.get("fields") or []
-		if any("avg(`tabSales Order Item`.rate)" in field for field in fields):
+		if any(isinstance(field, dict) and field.get("as") == "avg_rate" for field in fields):
 			return [{"currency": "INR", "avg_rate": 100.0}]
-		if any("count(" in field or "sum(" in field or "avg(" in field for field in fields):
+		if any(isinstance(field, dict) and field.get("as") == "count" for field in fields):
 			return [{"currency": "INR", "customer": "CUST-001", "count": 2, "sum_grand_total": 300.0}]
 		return self.list_rows
 
@@ -78,9 +87,9 @@ class SalesOrderReadServiceTests(unittest.TestCase):
 		result = read.get_sales_order("SO-0001", ["status"], False, ["item_code"])
 		self.assertEqual(result["code"], "PERMISSION_DENIED")
 
-	def test_search_uses_typed_child_filters_and_frappe_permissions(self):
-		criteria = SalesOrderSearchInput(customer="CUST-001", item_code="ITEM-001", sales_person="Sales A", delivery_status="Not Delivered", fields=["name", "status"]).model_dump()
-		result = read.search_sales_orders(criteria)
+	def test_query_uses_typed_child_filters_and_frappe_permissions(self):
+		criteria = SalesOrderQueryInput(customer="CUST-001", item_code="ITEM-001", sales_person="Sales A", delivery_status="Not Delivered", fields=["name", "status"]).model_dump()
+		result = read.query_sales_orders(criteria)
 		self.assertEqual(result["sales_orders"], [{"name": "SO-0001", "status": "To Deliver"}])
 		self.assertFalse(self.last_list[1]["ignore_permissions"])
 		self.assertTrue(self.last_list[1]["distinct"])
@@ -92,6 +101,8 @@ class SalesOrderReadServiceTests(unittest.TestCase):
 		result = read.aggregate_sales_orders(criteria)
 		self.assertEqual(result["results"], [{"count": 2, "sum_grand_total": 300.0, "group_value": "CUST-001", "currency": "INR"}])
 		self.assertFalse(self.last_list[1]["ignore_permissions"])
+		self.assertIn({"COUNT": "*", "as": "count"}, self.last_list[1]["fields"])
+		self.assertIn({"SUM": "grand_total", "as": "sum_grand_total"}, self.last_list[1]["fields"])
 		self.assertEqual(self.last_list[1]["group_by"], "currency, customer")
 
 	def test_item_history_uses_permission_aware_parent_query_and_optional_metrics(self):
@@ -102,6 +113,18 @@ class SalesOrderReadServiceTests(unittest.TestCase):
 		self.assertFalse(self.last_query[1]["ignore_permissions"])
 		self.assertIn(["Sales Order Item", "item_code", "=", "ITEM-001"], self.last_query[1]["filters"])
 		self.assertEqual(result["aggregates"], [{"currency": "INR", "avg_rate": 100.0}])
+
+	def test_item_aggregate_keeps_typed_distinct_order_expression(self):
+		expression = FakeDistinctCount()
+		self.fake_frappe.qb.DocType = lambda _doctype: SimpleNamespace(name="Sales Order.name")
+		self.list_rows = [{"count_distinct_orders": 2}]
+		with patch.object(read, "Count", return_value=expression):
+			result = read._aggregate_sales_order_items(
+				SalesOrderItemQueryInput(metrics=["count_distinct_orders"]).model_dump()
+			)
+		self.assertEqual(result, [{"count_distinct_orders": 2}])
+		self.assertIs(self.last_list[1]["fields"][0], expression)
+		self.assertFalse(self.last_list[1]["ignore_permissions"])
 
 
 class SalesOrderReadContractTests(unittest.TestCase):
@@ -114,7 +137,7 @@ class SalesOrderReadContractTests(unittest.TestCase):
 		):
 			with self.subTest(payload=payload):
 				with self.assertRaises(ValidationError):
-					SalesOrderSearchInput.model_validate(payload)
+					SalesOrderQueryInput.model_validate(payload)
 
 	def test_item_metric_only_request_suppresses_source_rows(self):
 		request = SalesOrderItemQueryInput(metrics=["sum_qty"])

@@ -139,7 +139,7 @@ class SalesOrderFilters(PublicContractModel):
         return self
 
 
-class SalesOrderSearchInput(SalesOrderFilters):
+class SalesOrderQueryInput(SalesOrderFilters):
     limit: PositiveLimit = 20
     offset: NonNegativeOffset = 0
     sort_by: SalesOrderSortField = "transaction_date"
@@ -263,7 +263,7 @@ class GetSalesOrderOutput(RootModel[GetSalesOrderResult]):
     model_config = {"json_schema_extra": {"type": "object"}}
 
 
-class SalesOrderSearchOk(PublicContractModel):
+class SalesOrderQueryOk(PublicContractModel):
     status: Literal["ok"]
     sales_orders: list[SalesOrderHeader]
     count: int
@@ -271,8 +271,8 @@ class SalesOrderSearchOk(PublicContractModel):
     offset: int
 
 
-class SalesOrderSearchOutput(
-    RootModel[Annotated[SalesOrderSearchOk | ToolError, Field(discriminator="status")]]
+class SalesOrderQueryOutput(
+    RootModel[Annotated[SalesOrderQueryOk | ToolError, Field(discriminator="status")]]
 ):
     model_config = {"json_schema_extra": {"type": "object"}}
 

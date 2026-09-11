@@ -107,7 +107,6 @@ Examples:
 ```text
 search_customers
 search_items
-future: search_sales_orders
 future: search_invoices
 ```
 
@@ -131,7 +130,57 @@ Search remains read-only.
 
 ---
 
-### 3.2 Resolve tools
+### 3.2 Query tools
+
+Examples:
+
+```text
+query_customers
+query_items
+query_sales_orders
+query_quotations
+```
+
+Use `query_*` for deterministic, field-aware multi-record retrieval with explicit
+filters, field projection, sorting, and pagination. Query tools remain read-only
+and are distinct from fuzzy/discovery-oriented `search_*` tools.
+
+---
+
+### 3.3 Aggregate tools
+
+Examples:
+
+```text
+aggregate_customers
+aggregate_items
+aggregate_sales_orders
+aggregate_quotations
+```
+
+Use `aggregate_*` for deterministic server-side analytics such as counts,
+sums, averages, minimums, maximums, and grouping. Aggregate tools must not
+fetch a source page merely for a client or model to calculate the result.
+
+---
+
+### 3.4 Exact read tools
+
+Examples:
+
+```text
+get_customer
+get_item
+get_sales_order
+get_quotation
+```
+
+Use `get_*` when the caller knows the exact document or reference and wants
+selected details. Exact reads remain permission-aware and read-only.
+
+---
+
+### 3.5 Resolve tools
 
 Examples:
 
@@ -161,7 +210,7 @@ The output contract must never silently convert ambiguity into an arbitrary sele
 
 ---
 
-### 3.3 Prepare tools
+### 3.6 Prepare tools
 
 Examples:
 
@@ -191,7 +240,7 @@ A prepare tool must not accept a vague public structure merely because the inter
 
 ---
 
-### 3.4 Confirm tools
+### 3.7 Confirm tools
 
 Examples:
 

@@ -23,24 +23,6 @@ def _search(request: DocumentSearchInput, ctx: Context, doctype: str, profile: s
 	return DocumentSearchOutput.model_validate(result)
 
 
-def register_sales_read_tools(mcp: Any) -> None:
-	@mcp.tool(name="get_quotation", description="Retrieve one permitted Quotation summary by exact document name.", meta=tool_meta("get_quotation"), structured_output=True)
-	def get_quotation(request: DocumentReadInput, ctx: Context) -> DocumentReadOutput:
-		return _get(request, ctx, "sales")
-
-	@mcp.tool(name="search_quotations", description="Search permitted Quotations with bounded business filters.", meta=tool_meta("search_quotations"), structured_output=True)
-	def search_quotations(request: DocumentSearchInput, ctx: Context) -> DocumentSearchOutput:
-		return _search(request, ctx, "Quotation", "sales")
-
-	@mcp.tool(name="get_sales_invoice", description="Retrieve one permitted Sales Invoice summary by exact document name.", meta=tool_meta("get_sales_invoice"), structured_output=True)
-	def get_sales_invoice(request: DocumentReadInput, ctx: Context) -> DocumentReadOutput:
-		return _get(request, ctx, "sales")
-
-	@mcp.tool(name="search_sales_invoices", description="Search permitted Sales Invoices with bounded business filters.", meta=tool_meta("search_sales_invoices"), structured_output=True)
-	def search_sales_invoices(request: DocumentSearchInput, ctx: Context) -> DocumentSearchOutput:
-		return _search(request, ctx, "Sales Invoice", "sales")
-
-
 def register_purchase_read_tools(mcp: Any) -> None:
 	@mcp.tool(name="get_purchase_order", description="Retrieve one permitted Purchase Order summary by exact document name.", meta=tool_meta("get_purchase_order"), structured_output=True)
 	def get_purchase_order(request: DocumentReadInput, ctx: Context) -> DocumentReadOutput:

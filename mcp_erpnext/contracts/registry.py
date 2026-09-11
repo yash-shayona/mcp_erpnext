@@ -54,6 +54,14 @@ from .selling.quotation import (
     QuotationConfirmInput,
     QuotationPrepareInput,
 )
+from .selling.quotation_read import (
+    QuotationAggregateInput,
+    QuotationAggregateOutput,
+    QuotationGetInput,
+    QuotationGetOutput,
+    QuotationQueryInput,
+    QuotationQueryOutput,
+)
 from .selling.quotation_to_sales_order import (
 	ConfirmQuotationToSalesOrderOutput,
 	PrepareQuotationToSalesOrderOutput,
@@ -72,6 +80,14 @@ from .selling.sales_invoice import (
     SalesInvoiceConfirmInput,
     SalesInvoicePrepareInput,
 )
+from .selling.sales_invoice_read import (
+	SalesInvoiceAggregateInput,
+	SalesInvoiceAggregateOutput,
+	SalesInvoiceGetInput,
+	SalesInvoiceGetOutput,
+	SalesInvoiceQueryInput,
+	SalesInvoiceQueryOutput,
+)
 from .selling.sales_order_read import (
     GetSalesOrderInput,
     GetSalesOrderOutput,
@@ -79,8 +95,8 @@ from .selling.sales_order_read import (
     SalesOrderAggregateOutput,
     SalesOrderItemQueryInput,
     SalesOrderItemQueryOutput,
-    SalesOrderSearchInput,
-    SalesOrderSearchOutput,
+    SalesOrderQueryInput,
+    SalesOrderQueryOutput,
 )
 from .read import (
     DocumentReadInput,
@@ -564,44 +580,12 @@ for _name, _domain, _operation, _purpose, _input_model, _output_model in (
         GetSalesOrderOutput,
     ),
     (
-        "search_sales_orders",
+        "query_sales_orders",
         "Selling",
         ToolOperation.SEARCH,
-        "Search permitted Sales Orders using typed filters, projection, sorting, and pagination.",
-        SalesOrderSearchInput,
-        SalesOrderSearchOutput,
-    ),
-    (
-        "get_quotation",
-        "Existing Documents",
-        ToolOperation.RESOLVE,
-        "Retrieve a permitted existing Quotation summary.",
-        DocumentReadInput,
-        DocumentReadOutput,
-    ),
-    (
-        "search_quotations",
-        "Existing Documents",
-        ToolOperation.SEARCH,
-        "Search permitted Quotations with bounded business filters.",
-        DocumentSearchInput,
-        DocumentSearchOutput,
-    ),
-    (
-        "get_sales_invoice",
-        "Existing Documents",
-        ToolOperation.RESOLVE,
-        "Retrieve a permitted existing Sales Invoice summary.",
-        DocumentReadInput,
-        DocumentReadOutput,
-    ),
-    (
-        "search_sales_invoices",
-        "Existing Documents",
-        ToolOperation.SEARCH,
-        "Search permitted Sales Invoices with bounded business filters.",
-        DocumentSearchInput,
-        DocumentSearchOutput,
+        "Query permitted Sales Orders using typed filters, projection, sorting, and pagination.",
+        SalesOrderQueryInput,
+        SalesOrderQueryOutput,
     ),
     (
         "get_purchase_order",
@@ -653,6 +637,68 @@ TOOL_CONTRACTS["query_sales_order_items"] = ToolContract(
     False,
     SalesOrderItemQueryInput,
     SalesOrderItemQueryOutput,
+)
+TOOL_CONTRACTS["get_quotation"] = ToolContract(
+    "get_quotation",
+    "Selling",
+    ToolOperation.RESOLVE,
+    SideEffectClass.READ,
+    "Retrieve selected fields from one permitted Quotation by exact reference.",
+    False,
+    QuotationGetInput,
+    QuotationGetOutput,
+    resolution_states=("ok", "not_found", "error"),
+)
+TOOL_CONTRACTS["query_quotations"] = ToolContract(
+    "query_quotations",
+    "Selling",
+    ToolOperation.SEARCH,
+    SideEffectClass.READ,
+    "Query permitted Quotations using typed filters, projection, sorting, and pagination.",
+    False,
+    QuotationQueryInput,
+    QuotationQueryOutput,
+)
+TOOL_CONTRACTS["aggregate_quotations"] = ToolContract(
+    "aggregate_quotations",
+    "Selling",
+    ToolOperation.SEARCH,
+    SideEffectClass.READ,
+    "Calculate deterministic permission-aware Quotation metrics on the server.",
+    False,
+    QuotationAggregateInput,
+    QuotationAggregateOutput,
+)
+TOOL_CONTRACTS["get_sales_invoice"] = ToolContract(
+	"get_sales_invoice",
+	"Selling",
+	ToolOperation.RESOLVE,
+	SideEffectClass.READ,
+	"Retrieve selected fields from one permitted Sales Invoice by exact reference.",
+	False,
+	SalesInvoiceGetInput,
+	SalesInvoiceGetOutput,
+	resolution_states=("ok", "not_found", "error"),
+)
+TOOL_CONTRACTS["query_sales_invoices"] = ToolContract(
+	"query_sales_invoices",
+	"Selling",
+	ToolOperation.SEARCH,
+	SideEffectClass.READ,
+	"Query permitted Sales Invoices using typed filters, projection, sorting, and pagination.",
+	False,
+	SalesInvoiceQueryInput,
+	SalesInvoiceQueryOutput,
+)
+TOOL_CONTRACTS["aggregate_sales_invoices"] = ToolContract(
+	"aggregate_sales_invoices",
+	"Selling",
+	ToolOperation.SEARCH,
+	SideEffectClass.READ,
+	"Calculate deterministic permission-aware Sales Invoice metrics on the server.",
+	False,
+	SalesInvoiceAggregateInput,
+	SalesInvoiceAggregateOutput,
 )
 TOOL_CONTRACTS["get_customer"] = ToolContract(
     "get_customer",

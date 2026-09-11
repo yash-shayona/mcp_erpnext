@@ -41,7 +41,7 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `prepare_document_delete` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `get_sales_order` | Selling | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `search_sales_orders` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
+| `query_sales_orders` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
 | `aggregate_sales_orders` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
 | `query_sales_order_items` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
 | `get_customer` | Masters | Resolve | READ | None | Not a final write | Explicit typed contract |
@@ -50,10 +50,12 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `get_item` | Masters | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `query_items` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
 | `aggregate_items` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
-| `get_quotation` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `search_quotations` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
-| `get_sales_invoice` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `search_sales_invoices` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
+| `get_quotation` | Selling | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `query_quotations` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
+| `aggregate_quotations` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
+| `get_sales_invoice` | Selling | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `query_sales_invoices` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
+| `aggregate_sales_invoices` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
 | `render_document_pdf` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `prepare_document_email` | Existing Documents | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_email` | Existing Documents | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
@@ -328,12 +330,12 @@ Retrieve selected fields from one permitted Sales Order by exact reference.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 
-### `search_sales_orders`
+### `query_sales_orders`
 
-Search permitted Sales Orders using typed filters, projection, sorting, and pagination.
+Query permitted Sales Orders using typed filters, projection, sorting, and pagination.
 
-- Input: `SalesOrderSearchInput` — Required: none
-- Output: `SalesOrderSearchOutput`; published through MCP `outputSchema`.
+- Input: `SalesOrderQueryInput` — Required: none
+- Output: `SalesOrderQueryOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 
@@ -411,37 +413,55 @@ Calculate deterministic permission-aware Item counts, optionally grouped by an a
 
 ### `get_quotation`
 
-Retrieve a permitted existing Quotation summary.
+Retrieve selected fields from one permitted Quotation by exact reference.
 
-- Input: `DocumentReadInput` — Required: `request`
-- Output: `DocumentReadOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Input: `QuotationGetInput` — Required: `quotation`
+- Output: `QuotationGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 
-### `search_quotations`
+### `query_quotations`
 
-Search permitted Quotations with bounded business filters.
+Query permitted Quotations using typed filters, projection, sorting, and pagination.
 
-- Input: `DocumentSearchInput` — Required: `request`
-- Output: `DocumentSearchOutput`; published through MCP `outputSchema`.
+- Input: `QuotationQueryInput` — Required: none
+- Output: `QuotationQueryOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `aggregate_quotations`
+
+Calculate deterministic permission-aware Quotation metrics on the server.
+
+- Input: `QuotationAggregateInput` — Required: none
+- Output: `QuotationAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 
 ### `get_sales_invoice`
 
-Retrieve a permitted existing Sales Invoice summary.
+Retrieve selected fields from one permitted Sales Invoice by exact reference.
 
-- Input: `DocumentReadInput` — Required: `request`
-- Output: `DocumentReadOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Input: `SalesInvoiceGetInput` — Required: `sales_invoice`
+- Output: `SalesInvoiceGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 
-### `search_sales_invoices`
+### `query_sales_invoices`
 
-Search permitted Sales Invoices with bounded business filters.
+Query permitted Sales Invoices using typed filters, projection, sorting, and pagination.
 
-- Input: `DocumentSearchInput` — Required: `request`
-- Output: `DocumentSearchOutput`; published through MCP `outputSchema`.
+- Input: `SalesInvoiceQueryInput` — Required: none
+- Output: `SalesInvoiceQueryOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `aggregate_sales_invoices`
+
+Calculate deterministic permission-aware Sales Invoice metrics on the server.
+
+- Input: `SalesInvoiceAggregateInput` — Required: none
+- Output: `SalesInvoiceAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 

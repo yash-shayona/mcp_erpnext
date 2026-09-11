@@ -22,9 +22,12 @@ def register_sales_profile(mcp: Any) -> None:
     from ..tools.masters.item_read import register_item_read_tools
 
     register_item_read_tools(mcp)
-    from ..tools.read import register_sales_read_tools
+    from ..tools.selling.quotation_read import register_quotation_read_tools
 
-    register_sales_read_tools(mcp)
+    register_quotation_read_tools(mcp)
+    from ..tools.selling.sales_invoice_read import register_sales_invoice_read_tools
+
+    register_sales_invoice_read_tools(mcp)
     from ..tools.pdf import register_document_pdf_tools
 
     register_document_pdf_tools(mcp, "sales")

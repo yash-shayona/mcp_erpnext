@@ -88,6 +88,17 @@ class ToolContractTests(unittest.TestCase):
 		self.assertNotIn("update_stock", dumps(prepare.inputSchema))
 		self.assertNotIn("sales_order", dumps(prepare.inputSchema))
 
+	def test_sales_invoice_read_schemas_are_typed_and_accounting_aware(self):
+		tools = {tool.name: tool for tool in self.registered_tools()}
+		for name in ("get_sales_invoice", "query_sales_invoices", "aggregate_sales_invoices"):
+			with self.subTest(name=name):
+				self.assertEqual(tools[name].inputSchema["type"], "object")
+				self.assertEqual(tools[name].outputSchema["type"], "object")
+				self.assertEqual(tools[name].meta["mcp_erpnext"]["side_effect"], "READ")
+		self.assertIn("outstanding_amount", dumps(tools["get_sales_invoice"].inputSchema))
+		self.assertIn("sum_outstanding_amount", dumps(tools["aggregate_sales_invoices"].inputSchema))
+		self.assertNotIn("search_sales_invoices", tools)
+
 	def test_public_schemas_do_not_expose_server_approval_policy_internals(self):
 		schemas = dumps(
 			[
@@ -130,6 +141,29 @@ class ToolContractTests(unittest.TestCase):
 				self.assertEqual(tools[name].meta["mcp_erpnext"]["side_effect"], "READ")
 		self.assertIn("item_name", tools["query_items"].inputSchema["properties"])
 		self.assertNotIn("standard_rate", dumps(tools["query_items"].inputSchema))
+
+	def test_sales_order_query_contract_is_typed_and_preserves_allowlists(self):
+		tools = {tool.name: tool for tool in self.registered_tools()}
+		query = tools["query_sales_orders"]
+		self.assertEqual(query.inputSchema["type"], "object")
+		self.assertEqual(query.outputSchema["type"], "object")
+		self.assertEqual(query.meta["mcp_erpnext"]["side_effect"], "READ")
+		for field in ("customer", "item_code", "limit", "offset", "sort_by", "fields"):
+			self.assertIn(field, query.inputSchema["properties"])
+		self.assertNotIn("standard_rate", dumps(query.inputSchema))
+		self.assertNotIn("search_sales_orders", tools)
+
+	def test_quotation_read_contract_is_typed_and_bounded(self):
+		tools = {tool.name: tool for tool in self.registered_tools()}
+		for name in ("get_quotation", "query_quotations", "aggregate_quotations"):
+			with self.subTest(name=name):
+				self.assertEqual(tools[name].inputSchema["type"], "object")
+				self.assertEqual(tools[name].outputSchema["type"], "object")
+				self.assertEqual(tools[name].meta["mcp_erpnext"]["side_effect"], "READ")
+		self.assertIn("party_name", tools["query_quotations"].inputSchema["properties"])
+		self.assertIn("sum_grand_total", dumps(tools["aggregate_quotations"].inputSchema))
+		self.assertNotIn("terms", dumps(tools["query_quotations"].inputSchema))
+		self.assertNotIn("search_quotations", tools)
 
 	def test_quotation_request_rejects_legacy_or_invalid_reference_shapes(self):
 		valid = {

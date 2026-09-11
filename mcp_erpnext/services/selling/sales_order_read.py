@@ -6,8 +6,15 @@ from datetime import date, timedelta
 from typing import Any
 
 import frappe
+from frappe.query_builder.functions import Count
 
 from ...observability import new_error_reference
+from ..common.aggregate import (
+	build_aggregate_field,
+	build_aggregate_fields,
+	execute_aggregate,
+	shape_aggregate_rows,
+)
 
 
 DEFAULT_ITEM_FIELDS = ("sales_order", "item_code", "qty")
@@ -22,21 +29,20 @@ _ITEM_FIELDS = frozenset({
 	"item_name", "qty", "rate", "amount", "discount_percentage", "discount_amount", "delivered_qty", "delivery_date",
 })
 _HEADER_METRICS = {
-	"count": "count(name) as count",
-	"sum_grand_total": "sum(grand_total) as sum_grand_total",
-	"avg_grand_total": "avg(grand_total) as avg_grand_total",
-	"min_grand_total": "min(grand_total) as min_grand_total",
-	"max_grand_total": "max(grand_total) as max_grand_total",
-	"sum_total_qty": "sum(total_qty) as sum_total_qty",
+	"count": build_aggregate_field("COUNT", "*", "count"),
+	"sum_grand_total": build_aggregate_field("SUM", "grand_total", "sum_grand_total"),
+	"avg_grand_total": build_aggregate_field("AVG", "grand_total", "avg_grand_total"),
+	"min_grand_total": build_aggregate_field("MIN", "grand_total", "min_grand_total"),
+	"max_grand_total": build_aggregate_field("MAX", "grand_total", "max_grand_total"),
+	"sum_total_qty": build_aggregate_field("SUM", "total_qty", "sum_total_qty"),
 }
 _ITEM_METRICS = {
-	"count_rows": "count(`tabSales Order Item`.name) as count_rows",
-	"count_distinct_orders": "count(distinct `tabSales Order`.name) as count_distinct_orders",
-	"sum_qty": "sum(`tabSales Order Item`.qty) as sum_qty",
-	"sum_amount": "sum(`tabSales Order Item`.amount) as sum_amount",
-	"min_rate": "min(`tabSales Order Item`.rate) as min_rate",
-	"max_rate": "max(`tabSales Order Item`.rate) as max_rate",
-	"avg_rate": "avg(`tabSales Order Item`.rate) as avg_rate",
+	"count_rows": build_aggregate_field("COUNT", "`tabSales Order Item`.name", "count_rows"),
+	"sum_qty": build_aggregate_field("SUM", "`tabSales Order Item`.qty", "sum_qty"),
+	"sum_amount": build_aggregate_field("SUM", "`tabSales Order Item`.amount", "sum_amount"),
+	"min_rate": build_aggregate_field("MIN", "`tabSales Order Item`.rate", "min_rate"),
+	"max_rate": build_aggregate_field("MAX", "`tabSales Order Item`.rate", "max_rate"),
+	"avg_rate": build_aggregate_field("AVG", "`tabSales Order Item`.rate", "avg_rate"),
 }
 
 
@@ -98,7 +104,7 @@ def get_sales_order(sales_order: str, fields: list[str], include_items: bool, it
 	return result
 
 
-def search_sales_orders(criteria: dict[str, Any]) -> dict[str, Any]:
+def query_sales_orders(criteria: dict[str, Any]) -> dict[str, Any]:
 	fields = criteria["fields"]
 	rows = frappe.get_list(
 		"Sales Order",
@@ -120,30 +126,21 @@ def aggregate_sales_orders(criteria: dict[str, Any]) -> dict[str, Any]:
 	metrics = criteria["metrics"]
 	group_by = criteria.get("group_by")
 	monetary = any(metric.endswith("grand_total") for metric in metrics)
-	fields = [_HEADER_METRICS[metric] for metric in metrics]
-	groups: list[str] = []
-	if group_by:
-		fields.insert(0, group_by)
-		groups.append(group_by)
+	fields, groups = build_aggregate_fields(metrics, _HEADER_METRICS, group_by=group_by)
 	if monetary:
 		fields.insert(0, "currency")
 		groups.insert(0, "currency")
-	rows = frappe.get_list(
+	rows = execute_aggregate(
+		frappe.get_list,
 		"Sales Order",
 		filters=_header_filters(criteria, allow_child_filters=False),
 		fields=fields,
-		group_by=", ".join(groups) or None,
-		order_by=", ".join(groups) or None,
-		ignore_permissions=False,
+		groups=groups,
 	)
-	results = []
-	for row in rows:
-		result = {metric: row.get(metric) for metric in metrics if row.get(metric) is not None}
-		if group_by:
-			result["group_value"] = row.get(group_by)
-		if monetary:
+	results = shape_aggregate_rows(rows, metrics, group_by=group_by)
+	if monetary:
+		for result, row in zip(results, rows):
 			result["currency"] = row.get("currency")
-		results.append(result)
 	return {"status": "ok", "metrics": metrics, "group_by": group_by, "results": results}
 
 
@@ -188,19 +185,31 @@ def _aggregate_sales_order_items(criteria: dict[str, Any]) -> list[dict[str, Any
 		return []
 	group_by = criteria.get("group_by")
 	monetary = any(metric in {"sum_amount", "min_rate", "max_rate", "avg_rate"} for metric in metrics)
-	fields = [_ITEM_METRICS[metric] for metric in metrics]
-	groups: list[str] = []
-	if group_by:
-		mapped_group = "`tabSales Order Item`.item_code" if group_by == "item_code" else group_by
-		fields.insert(0, f"{mapped_group} as group_value")
-		groups.append(mapped_group)
+	metric_fields = {
+		metric: (
+			Count(frappe.qb.DocType("Sales Order").name).distinct().as_("count_distinct_orders")
+			if metric == "count_distinct_orders"
+			else _ITEM_METRICS[metric]
+		)
+		for metric in metrics
+	}
+	mapped_group = "`tabSales Order Item`.item_code" if group_by == "item_code" else group_by
+	fields, groups = build_aggregate_fields(
+		metrics,
+		metric_fields,
+		group_by=group_by,
+		group_field=mapped_group,
+		group_alias="group_value",
+	)
 	if monetary:
 		fields.insert(0, "currency")
 		groups.insert(0, "currency")
-	rows = frappe.get_list(
-		"Sales Order", filters=_item_filters(criteria), fields=fields,
-		group_by=", ".join(groups) or None, order_by=", ".join(groups) or None,
-		ignore_permissions=False,
+	rows = execute_aggregate(
+		frappe.get_list,
+		"Sales Order",
+		filters=_item_filters(criteria),
+		fields=fields,
+		groups=groups,
 	)
 	return [{field: row.get(field) for field in ("group_value", "currency", *metrics) if row.get(field) is not None} for row in rows]
 
