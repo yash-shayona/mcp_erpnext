@@ -9,6 +9,7 @@ import frappe
 from mcp_erpnext.approvals import APPROVAL_TTL_SECONDS, approvals
 from mcp_erpnext.config.masters import customer as customer_config
 from mcp_erpnext.services.masters import customer as customer_service
+from mcp_erpnext.services.integrations import india_compliance_customer
 
 
 class FakeMeta:
@@ -72,7 +73,7 @@ class CustomerServiceTests(unittest.TestCase):
 		self.fake_frappe = SimpleNamespace(
 			session=SimpleNamespace(user="sales@example.com"),
 			local=SimpleNamespace(site="test.localhost"),
-			get_meta=lambda _: FakeMeta({"gstin", "_address_line1"}, self.meta_fields),
+			get_meta=lambda _: FakeMeta({field.fieldname for field in self.meta_fields}, self.meta_fields),
 			new_doc=lambda _: DefaultDocument(self.defaults),
 			has_permission=lambda *_: True,
 			get_list=self._get_list,
@@ -83,6 +84,7 @@ class CustomerServiceTests(unittest.TestCase):
 		)
 		self.patches = [
 			patch.object(customer_service, "frappe", self.fake_frappe),
+			patch.object(india_compliance_customer, "frappe", self.fake_frappe),
 		]
 		for active_patch in self.patches:
 			active_patch.start()
@@ -189,6 +191,72 @@ class CustomerServiceTests(unittest.TestCase):
 		prepared = customer_service.prepare_customer(self.valid_customer())
 		self.assertEqual(prepared["status"], "ready")
 		self.assertEqual(approvals._approvals[prepared["approval_token"]].payload["customer_type"], "Company")
+
+	def test_erpnext_only_address_uses_core_carrier(self):
+		prepared = customer_service.prepare_customer(self.valid_customer())
+		self.assertEqual(prepared["status"], "ready")
+		payload = approvals._approvals[prepared["approval_token"]].payload
+		self.assertEqual(payload["address_line1"], "1 Test Road")
+		self.assertNotIn("_address_line1", payload)
+
+	def test_india_compliance_uses_native_gst_helpers_and_transient_address(self):
+		self.meta_fields.append(
+			SimpleNamespace(
+				fieldname="gst_category",
+				label="GST Category",
+				fieldtype="Select",
+				options="Unregistered\nRegistered Regular\nOverseas",
+				reqd=1,
+			)
+		)
+		capabilities = india_compliance_customer.CustomerCapabilities(
+			installed=True,
+			native_gst_prepare=True,
+			transient_primary_address=True,
+		)
+		with (
+			patch.object(india_compliance_customer, "get_capabilities", return_value=capabilities),
+			patch.object(
+				india_compliance_customer,
+				"prepare_customer_gst",
+				wraps=india_compliance_customer.prepare_customer_gst,
+			) as prepare_gst,
+			patch.object(
+				india_compliance_customer.importlib,
+				"import_module",
+				return_value=SimpleNamespace(
+					validate_gstin=lambda value: value.strip().upper(),
+					guess_gst_category=lambda gstin, country, category: "Registered Regular",
+					validate_gst_category=lambda category, gstin: None,
+				),
+			),
+		):
+			result = customer_service.prepare_customer(
+				self.valid_customer(gst_category="Unregistered")
+			)
+		self.assertEqual(result["status"], "ready")
+		self.assertEqual(result["preview"]["gst_category"], "Registered Regular")
+		payload = approvals._approvals[result["approval_token"]].payload
+		self.assertEqual(payload["gstin"], "27ABCDE1234F1Z5")
+		self.assertEqual(payload["gst_category"], "Registered Regular")
+		self.assertEqual(payload["_address_line1"], "1 Test Road")
+		self.assertNotIn("address_line1", payload)
+		prepare_gst.assert_called_once()
+
+	def test_india_compliance_prepare_does_not_run_customer_validation_hook(self):
+		capabilities = india_compliance_customer.CustomerCapabilities(
+			installed=True,
+			native_gst_prepare=True,
+			transient_primary_address=True,
+		)
+		with patch.object(india_compliance_customer, "get_capabilities", return_value=capabilities), patch.object(
+			india_compliance_customer,
+			"prepare_customer_gst",
+			return_value=capabilities,
+		):
+			result = customer_service.prepare_customer(self.valid_customer())
+		self.assertEqual(result["status"], "ready")
+		self.assertEqual(len(self.docs), 0)
 
 	def test_custom_mandatory_exposed_field_is_reported_from_metadata(self):
 		self.meta_fields.append(

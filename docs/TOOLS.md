@@ -75,6 +75,7 @@ Resolve one permitted Customer or return a terminal selection state.
 Validate a Customer preview without writing.
 
 - Input: `Legacy public schema` — Required: `customer`
+- Customer creation accepts the existing narrow fields plus explicit `gst_category` when the current Customer metadata exposes it; arbitrary extra fields are not accepted.
 - Output: `Legacy public schema`; legacy response shape pending focused migration.
 - Side effect: `PREPARE`; approval does not perform the final write.
 - Interaction: none declared.

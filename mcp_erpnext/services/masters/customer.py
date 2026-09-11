@@ -12,6 +12,7 @@ from ...observability import new_error_reference
 from ..common.creation_contract import missing_input_response, resolve_creation_contract
 from ..common.entity_resolution import find_candidates, resolve_candidate, search_status
 from ..common.field_value_resolver import resolve_contract_values
+from ..integrations import india_compliance_customer
 
 _ACTION = "create_customer"
 
@@ -148,6 +149,20 @@ def _normalise_identifier(fieldname: str, value: str) -> str:
     return value
 
 
+def _project_document_values(
+    data: dict[str, Any], document: Any, fieldnames: tuple[str, ...]
+) -> dict[str, Any]:
+    """Keep only supported effective values from an unsaved validated document."""
+    get_value = getattr(document, "get", None)
+    if not callable(get_value):
+        return data
+    for fieldname in fieldnames:
+        value = get_value(fieldname)
+        if fieldname in data or value is not None:
+            data[fieldname] = value
+    return data
+
+
 def _duplicate_matches(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Find visible exact duplicates before either preview or persistent creation."""
     identifiers = [
@@ -192,6 +207,8 @@ def _duplicate_matches(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _customer_data(
     customer: Any,
+    *,
+    capabilities: india_compliance_customer.CustomerCapabilities | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Validate and map the narrow Customer input contract without writing."""
     if not isinstance(customer, dict):
@@ -228,6 +245,7 @@ def _customer_data(
     if resolved_fields["status"] != "resolved":
         return None, resolved_fields
     data: dict[str, Any] = {"doctype": "Customer", **resolved_fields["values"]}
+    capabilities = capabilities or india_compliance_customer.get_capabilities()
 
     contact = customer.get("contact") or {}
     address = customer.get("address") or {}
@@ -252,6 +270,7 @@ def _customer_data(
             )
         data["gstin"] = _normalise_identifier("gstin", gstin)
 
+    address_data: dict[str, Any] | None = None
     if address:
         required_address_fields = ("address_line1", "city", "country")
         missing = [
@@ -273,15 +292,54 @@ def _customer_data(
         ]
         if gstin:
             address_data["gstin"] = data["gstin"]
-        frappe.get_doc(address_data).run_method("validate")
-        # India Compliance deliberately maps its quick-entry address through this
-        # field; core ERPNext uses address_line1 directly.
-        data[
-            (
-                "_address_line1"
-                if _customer_has_field("_address_line1")
-                else "address_line1"
+
+        if capabilities.installed and not capabilities.native_gst_prepare:
+            return None, _confirmation_error(
+                "INDIA_COMPLIANCE_GST_UNAVAILABLE",
+                "India Compliance GST validation is unavailable for safe Customer preparation on this site.",
+                retryable=False,
             )
+
+        if capabilities.installed:
+            india_compliance_customer.prepare_customer_gst(
+                data,
+                country=address_data.get("country"),
+                capabilities=capabilities,
+            )
+        else:
+            address_doc = frappe.get_doc(address_data)
+            address_doc.run_method("validate")
+            address_data = _project_document_values(
+                address_data,
+                address_doc,
+                ("address_line1", "address_line2", "city", "state", "pincode", "country"),
+            )
+    else:
+        if capabilities.installed and not capabilities.native_gst_prepare:
+            return None, _confirmation_error(
+                "INDIA_COMPLIANCE_GST_UNAVAILABLE",
+                "India Compliance GST validation is unavailable for safe Customer preparation on this site.",
+                retryable=False,
+            )
+        india_compliance_customer.prepare_customer_gst(
+            data,
+            capabilities=capabilities,
+        )
+
+    if address_data:
+        if capabilities.installed and not capabilities.transient_primary_address:
+            return None, _confirmation_error(
+                "INDIA_COMPLIANCE_ADDRESS_BRIDGE_UNAVAILABLE",
+                "India Compliance primary Address handling is unavailable for safe Customer preparation on this site.",
+                retryable=False,
+            )
+        # India Compliance deliberately maps its Quick Entry address through this
+        # transient property; core ERPNext uses address_line1 directly.
+        address_field = (
+            "_address_line1" if capabilities.transient_primary_address else "address_line1"
+        )
+        data[
+            address_field
         ] = address_data["address_line1"]
         for fieldname in ("address_line2", "city", "state", "pincode", "country"):
             if address_data.get(fieldname):
@@ -335,6 +393,7 @@ def _preview(data: dict[str, Any]) -> dict[str, Any]:
             else {}
         ),
         "gstin": data.get("gstin"),
+        "gst_category": data.get("gst_category"),
     }
 
 
@@ -342,7 +401,8 @@ def prepare_customer(customer: dict[str, Any]) -> dict[str, Any]:
     """Validate a proposed Customer and issue a private confirmation token without a write."""
     approvals.prune_expired()
     _current_user()
-    data, failure = _customer_data(customer)
+    capabilities = india_compliance_customer.get_capabilities()
+    data, failure = _customer_data(customer, capabilities=capabilities)
     if failure:
         return failure
     assert data is not None
@@ -351,8 +411,16 @@ def prepare_customer(customer: dict[str, Any]) -> dict[str, Any]:
     if duplicates := _duplicate_matches(data):
         return {"status": "duplicate_suspected", "duplicates": duplicates}
 
-    # Run Customer hooks/validation now; only a later explicit confirmation may insert it.
-    frappe.get_doc(data).run_method("validate")
+    if not capabilities.installed:
+        # Run the existing ERPNext validation path without writing. Project its
+        # effective supported values into the approval-bound payload.
+        customer_doc = frappe.get_doc(data)
+        customer_doc.run_method("validate")
+        _project_document_values(
+            data,
+            customer_doc,
+            tuple(customer_config.CREATION_FIELDS),
+        )
     token = approvals.create(
         action=_ACTION, site=frappe.local.site, user=_current_user(), payload=data
     )

@@ -15,6 +15,7 @@ CREATION_FIELDS = (
     "territory",
     "tax_id",
     "gstin",
+    "gst_category",
 )
 
 # Contact and address data remain intentionally narrow nested input mappings.
