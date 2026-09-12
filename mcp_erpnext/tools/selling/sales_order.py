@@ -2,11 +2,24 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from mcp.server.fastmcp import Context
+from pydantic import TypeAdapter
 
+from ...contracts.common import CustomerReference, NonEmptyString
+from ...contracts.interaction import approval_directive, input_directive
 from ...contracts.registry import tool_meta
+from ...contracts.selling.sales_order import (
+	ConfirmSalesOrderOutput,
+	PrepareSalesOrderOutput,
+	SalesOrderConfirmInput,
+	SalesOrderConfirmResult,
+	SalesOrderItemInput,
+	SalesOrderPrepareInput,
+	SalesOrderPrepareResult,
+)
 from ...runtime import execute_tool_with_context
 from ...services.selling.sales_order import (
 	confirm_sales_order as _confirm_sales_order,
@@ -14,28 +27,66 @@ from ...services.selling.sales_order import (
 )
 
 
+_prepare_adapter = TypeAdapter(SalesOrderPrepareResult)
+_confirm_adapter = TypeAdapter(SalesOrderConfirmResult)
+
+
+def _with_interaction(result: dict[str, Any]) -> dict[str, Any]:
+	"""Attach shared continuation guidance to preparation states only."""
+	if result.get("status") == "ready":
+		return {**result, "interaction": approval_directive().model_dump(mode="json")}
+	if result.get("status") == "needs_input":
+		return {**result, "interaction": input_directive().model_dump(mode="json")}
+	return result
+
+
+def prepare_sales_order(
+	customer: CustomerReference,
+	items: list[SalesOrderItemInput],
+	ctx: Context,
+	company: NonEmptyString | None = None,
+	delivery_date: date | None = None,
+	selling_price_list: NonEmptyString | None = None,
+) -> PrepareSalesOrderOutput:
+	"""Resolve inputs and return a Sales Order preview without writing anything."""
+	request = SalesOrderPrepareInput(
+		customer=customer,
+		items=items,
+		company=company,
+		delivery_date=delivery_date,
+		selling_price_list=selling_price_list,
+	)
+	result = execute_tool_with_context(
+		ctx,
+		"prepare_sales_order",
+		lambda: _prepare_sales_order(
+			request.customer.name,
+			[item.to_service_payload() for item in request.items],
+			request.company,
+			request.delivery_date.isoformat() if request.delivery_date else None,
+			request.selling_price_list,
+		),
+	)
+	return PrepareSalesOrderOutput(
+		root=_prepare_adapter.validate_python(_with_interaction(result))
+	)
+
+
+def confirm_sales_order(
+	approval_token: NonEmptyString, confirm: bool, ctx: Context
+) -> ConfirmSalesOrderOutput:
+	"""Create the prepared Draft Sales Order after explicit confirmation."""
+	request = SalesOrderConfirmInput(approval_token=approval_token, confirm=confirm)
+	result = execute_tool_with_context(
+		ctx,
+		"confirm_sales_order",
+		lambda: _confirm_sales_order(request.approval_token, request.confirm),
+	)
+	return ConfirmSalesOrderOutput(root=_confirm_adapter.validate_python(result))
+
+
 def register_sales_order_tools(mcp: Any) -> None:
 	"""Register the two public Selling capability tools."""
 
-	@mcp.tool(meta=tool_meta("prepare_sales_order"))
-	def prepare_sales_order(
-		customer: str,
-		items: list[dict[str, Any]],
-		ctx: Context,
-		company: str | None = None,
-		delivery_date: str | None = None,
-		selling_price_list: str | None = None,
-	) -> dict[str, Any]:
-		"""Resolve inputs and return a Sales Order preview without writing anything."""
-		return execute_tool_with_context(
-			ctx,
-			"prepare_sales_order",
-			lambda: _prepare_sales_order(customer, items, company, delivery_date, selling_price_list),
-		)
-
-	@mcp.tool(meta=tool_meta("confirm_sales_order"))
-	def confirm_sales_order(approval_token: str, confirm: bool, ctx: Context) -> dict[str, Any]:
-		"""Create the prepared Draft Sales Order after explicit confirmation."""
-		return execute_tool_with_context(
-			ctx, "confirm_sales_order", lambda: _confirm_sales_order(approval_token, confirm)
-		)
+	mcp.tool(meta=tool_meta("prepare_sales_order"), structured_output=True)(prepare_sales_order)
+	mcp.tool(meta=tool_meta("confirm_sales_order"), structured_output=True)(confirm_sales_order)

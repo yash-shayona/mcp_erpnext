@@ -27,6 +27,8 @@ class FakeQuotation:
 		self.items = [FakeRow(**row) if isinstance(row, dict) else row for row in (getattr(self, "items", None) or [])]
 		self.taxes = [FakeRow(**row) if isinstance(row, dict) else row for row in (getattr(self, "taxes", None) or [])]
 		self.insert_calls: list[dict] = []
+		self.validate_calls = 0
+		self.native_validation_error = None
 
 	def __getattr__(self, name):
 		return None
@@ -64,8 +66,10 @@ class FakeQuotation:
 		self.total_taxes_and_charges = sum(row.tax_amount for row in self.taxes)
 		self.grand_total = self.net_total + self.total_taxes_and_charges - (self.discount_amount or 0)
 
-	def run_method(self, method):
-		return self
+	def validate(self):
+		self.validate_calls += 1
+		if self.native_validation_error:
+			raise self.native_validation_error
 
 	def as_dict(self):
 		result = dict(self.__dict__)
@@ -85,6 +89,7 @@ class QuotationServiceTests(unittest.TestCase):
 		self.docs: list[FakeQuotation] = []
 		self.commit_count = 0
 		self.rollback_count = 0
+		self.native_validation_error = None
 		self.available_customers = {"CUST-001"}
 		self.available_items = {"ITEM-001", "ITEM-002"}
 		self.fake_frappe = SimpleNamespace(
@@ -97,6 +102,7 @@ class QuotationServiceTests(unittest.TestCase):
 			defaults=SimpleNamespace(get_user_default=lambda _: "Test Company"),
 			db=SimpleNamespace(commit=self._commit, rollback=self._rollback),
 			PermissionError=frappe.PermissionError,
+			ValidationError=frappe.ValidationError,
 		)
 		self.patches = [
 			patch.object(quotation_service, "frappe", self.fake_frappe),
@@ -129,6 +135,7 @@ class QuotationServiceTests(unittest.TestCase):
 	def _new_doc(self, doctype):
 		self.assertEqual(doctype, "Quotation")
 		doc = FakeQuotation()
+		doc.native_validation_error = self.native_validation_error
 		self.docs.append(doc)
 		return doc
 
@@ -166,6 +173,7 @@ class QuotationServiceTests(unittest.TestCase):
 		self.assertEqual(self.commit_count, 0)
 		self.assertTrue(all(not doc.insert_calls for doc in self.docs))
 		self.assertEqual(result["preview"]["customer"]["name"], "CUST-001")
+		self.assertEqual(self.docs[0].validate_calls, 1)
 
 	def test_multiple_item_lines_are_in_erpnext_preview(self):
 		result = self.prepare(items=[self.item("ITEM-001"), self.item("ITEM-002", qty=3)])
@@ -176,6 +184,34 @@ class QuotationServiceTests(unittest.TestCase):
 		result = self.prepare(valid_till=None)
 		self.assertEqual(result["status"], "needs_input")
 		self.assertEqual(result["missing"], ["valid_till"])
+
+	def test_native_validation_rejects_valid_till_before_transaction_date(self):
+		self.native_validation_error = frappe.ValidationError(
+			"Valid till date cannot be before transaction date"
+		)
+
+		result = self.prepare(valid_till="2026-08-24")
+
+		self.assertEqual(result["status"], "error")
+		self.assertEqual(result["code"], "NATIVE_VALIDATION_FAILED")
+		self.assertNotIn("Valid till date", result["message"])
+		self.assertEqual(approvals._approvals, {})
+		self.assertEqual(self.docs[0].validate_calls, 1)
+
+	def test_date_order_is_not_checked_outside_native_validation(self):
+		result = self.prepare(
+			valid_till="2026-08-24", transaction_date="2026-08-25"
+		)
+
+		self.assertEqual(result["status"], "ready")
+		self.assertEqual(self.docs[0].validate_calls, 1)
+
+	def test_same_transaction_and_validity_date_is_accepted_by_native_path(self):
+		result = self.prepare(
+			valid_till="2026-08-25", transaction_date="2026-08-25"
+		)
+
+		self.assertEqual(result["status"], "ready")
 
 	def test_invalid_quantity_and_rate_are_rejected(self):
 		for row in (self.item(qty=0), self.item(rate=-1)):

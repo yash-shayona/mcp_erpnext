@@ -42,6 +42,7 @@ _INTERACTION_IMPLEMENTATION_PATHS = (
     Path(__file__).parents[1] / "tools" / "masters" / "customer.py",
     Path(__file__).parents[1] / "tools" / "masters" / "item.py",
     Path(__file__).parents[1] / "tools" / "selling" / "quotation.py",
+    Path(__file__).parents[1] / "tools" / "selling" / "sales_order.py",
     Path(__file__).parents[1] / "tools" / "buying" / "purchase_order.py",
 )
 

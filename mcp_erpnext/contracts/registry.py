@@ -42,6 +42,18 @@ from .masters.item_read import (
     ItemQueryInput,
     ItemQueryOutput,
 )
+from .masters.customer import (
+    ConfirmCustomerOutput,
+    CustomerConfirmInput,
+    CustomerPrepareInput,
+    PrepareCustomerOutput,
+)
+from .masters.item import (
+    ConfirmItemOutput,
+    ItemConfirmInput,
+    ItemPrepareInput,
+    PrepareItemOutput,
+)
 from .buying.purchase_order import (
     ConfirmPurchaseOrderOutput,
     PreparePurchaseOrderOutput,
@@ -97,6 +109,12 @@ from .selling.sales_order_read import (
     SalesOrderItemQueryOutput,
     SalesOrderQueryInput,
     SalesOrderQueryOutput,
+)
+from .selling.sales_order import (
+    ConfirmSalesOrderOutput,
+    PrepareSalesOrderOutput,
+    SalesOrderConfirmInput,
+    SalesOrderPrepareInput,
 )
 from .read import (
     DocumentReadInput,
@@ -191,37 +209,7 @@ class ToolContract:
 
 # This set is the complete pre-07A legacy inventory. Future migrations may
 # remove names from it; adding names requires a new architecture decision.
-FROZEN_LEGACY_TOOL_NAMES = frozenset(
-    {
-        "prepare_customer",
-        "confirm_customer",
-        "prepare_item",
-        "confirm_item",
-        "prepare_sales_order",
-        "confirm_sales_order",
-    }
-)
-
-
-def _legacy(
-    name: str,
-    domain: str,
-    operation: ToolOperation,
-    side_effect: SideEffectClass,
-    purpose: str,
-    approval_required: bool,
-    approval_guard: str | None = None,
-) -> ToolContract:
-    return ToolContract(
-        name,
-        domain,
-        operation,
-        side_effect,
-        purpose,
-        approval_required,
-        legacy=True,
-        approval_guard=approval_guard,
-    )
+FROZEN_LEGACY_TOOL_NAMES = frozenset()
 
 
 TOOL_CONTRACTS = {
@@ -249,22 +237,28 @@ TOOL_CONTRACTS = {
         resolution_states=("resolved", "ambiguous", "not_found", "error"),
         interaction_kinds=(InteractionKind.SELECTION,),
     ),
-    "prepare_customer": _legacy(
+    "prepare_customer": ToolContract(
         "prepare_customer",
         "Masters",
         ToolOperation.PREPARE,
         SideEffectClass.PREPARE,
         "Validate a Customer preview without writing.",
         False,
+        CustomerPrepareInput,
+        PrepareCustomerOutput,
+        interaction_kinds=(InteractionKind.INPUT, InteractionKind.SELECTION, InteractionKind.APPROVAL),
+        approval_confirm_tool="confirm_customer",
     ),
-    "confirm_customer": _legacy(
+    "confirm_customer": ToolContract(
         "confirm_customer",
         "Masters",
         ToolOperation.CONFIRM,
         SideEffectClass.CONFIRM_WRITE,
         "Create a prepared Customer.",
         True,
-        TRUSTED_PENDING_OPERATION_GUARD,
+        CustomerConfirmInput,
+        ConfirmCustomerOutput,
+        approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "search_items": ToolContract(
         "search_items",
@@ -314,39 +308,51 @@ TOOL_CONTRACTS = {
         resolution_states=("resolved", "ambiguous", "not_found", "error"),
         interaction_kinds=(InteractionKind.SELECTION,),
     ),
-    "prepare_item": _legacy(
+    "prepare_item": ToolContract(
         "prepare_item",
         "Masters",
         ToolOperation.PREPARE,
         SideEffectClass.PREPARE,
         "Validate an Item preview without writing.",
         False,
+        ItemPrepareInput,
+        PrepareItemOutput,
+        interaction_kinds=(InteractionKind.INPUT, InteractionKind.SELECTION, InteractionKind.APPROVAL),
+        approval_confirm_tool="confirm_item",
     ),
-    "confirm_item": _legacy(
+    "confirm_item": ToolContract(
         "confirm_item",
         "Masters",
         ToolOperation.CONFIRM,
         SideEffectClass.CONFIRM_WRITE,
         "Create a prepared Item.",
         True,
-        TRUSTED_PENDING_OPERATION_GUARD,
+        ItemConfirmInput,
+        ConfirmItemOutput,
+        approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
-    "prepare_sales_order": _legacy(
+    "prepare_sales_order": ToolContract(
         "prepare_sales_order",
         "Selling",
         ToolOperation.PREPARE,
         SideEffectClass.PREPARE,
         "Prepare a Sales Order preview without writing.",
         False,
+        SalesOrderPrepareInput,
+        PrepareSalesOrderOutput,
+        interaction_kinds=(InteractionKind.INPUT, InteractionKind.APPROVAL),
+        approval_confirm_tool="confirm_sales_order",
     ),
-    "confirm_sales_order": _legacy(
+    "confirm_sales_order": ToolContract(
         "confirm_sales_order",
         "Selling",
         ToolOperation.CONFIRM,
         SideEffectClass.CONFIRM_WRITE,
         "Create a prepared Sales Order.",
         True,
-        TRUSTED_PENDING_OPERATION_GUARD,
+        SalesOrderConfirmInput,
+        ConfirmSalesOrderOutput,
+        approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "prepare_quotation": ToolContract(
         "prepare_quotation",

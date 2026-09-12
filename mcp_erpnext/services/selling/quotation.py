@@ -286,11 +286,6 @@ def prepare_quotation(
         transaction, failure = _date(transaction_date, field="transaction_date")
         if failure:
             return failure
-    if validity < transaction:
-        return _error(
-            "INVALID_QUOTATION_DETAILS",
-            "Valid till date cannot be before transaction date.",
-        )
     resolved_company = _resolve_company(company)
     if not resolved_company:
         return _needs_input(["company"], "No permitted Company is available.")
@@ -362,7 +357,15 @@ def prepare_quotation(
             "ERPNext could not determine all commercial defaults for this Quotation.",
         )
     doc.calculate_taxes_and_totals()
-    doc.run_method("validate")
+    try:
+        # Use the native controller seam without dispatching document-event
+        # webhooks/server scripts during non-persisting preparation.
+        doc.validate()
+    except frappe.ValidationError:
+        return _error(
+            "NATIVE_VALIDATION_FAILED",
+            "ERPNext rejected the Quotation during preparation.",
+        )
     token = approvals.create(
         action=_ACTION, site=frappe.local.site, user=user, payload=_safe_doc_data(doc)
     )

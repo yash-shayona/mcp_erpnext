@@ -227,26 +227,6 @@ def _resolve_optional_links(request: dict[str, Any]) -> tuple[dict[str, str], di
     return resolved, None
 
 
-def _direct_invoice_policy(customer: str) -> tuple[dict[str, Any], list[str]]:
-    """Mirror the installed ``SalesInvoice.so_dn_required`` decision read-only."""
-    so_required = frappe.get_single_value("Selling Settings", "so_required")
-    dn_required = frappe.get_single_value("Selling Settings", "dn_required")
-    so_exception = frappe.get_value("Customer", customer, "so_required")
-    dn_exception = frappe.get_value("Customer", customer, "dn_required")
-    policy = {
-        "so_required": so_required,
-        "dn_required": dn_required,
-        "customer_so_required": bool(so_exception),
-        "customer_dn_required": bool(dn_exception),
-    }
-    prerequisites = []
-    if so_required == "Yes" and not so_exception:
-        prerequisites.append("Sales Order")
-    if dn_required == "Yes" and not dn_exception:
-        prerequisites.append("Delivery Note")
-    return policy, prerequisites
-
-
 def _blocked(prerequisites: list[str]) -> dict[str, Any]:
     if len(prerequisites) == 1:
         prerequisite_text = prerequisites[0]
@@ -352,9 +332,9 @@ def _preview(doc: Any) -> dict[str, Any]:
     }
 
 
-def _fingerprint(request: dict[str, Any], policy: dict[str, Any], preview: dict[str, Any]) -> str:
+def _fingerprint(request: dict[str, Any], preview: dict[str, Any]) -> str:
     encoded = json.dumps(
-        {"request": request, "policy": policy, "preview": preview},
+        {"request": request, "preview": preview},
         sort_keys=True,
         separators=(",", ":"),
         default=str,
@@ -364,29 +344,26 @@ def _fingerprint(request: dict[str, Any], policy: dict[str, Any], preview: dict[
 
 def _build(
     request: dict[str, Any],
-) -> tuple[Any | None, dict[str, Any] | None, dict[str, Any] | None, dict[str, Any] | None]:
+) -> tuple[Any | None, dict[str, Any] | None, dict[str, Any] | None]:
     customer = _revalidate_customer(request["customer"])
     if not customer:
-        return None, None, None, _error(
+        return None, None, _error(
             "INVALID_CUSTOMER", "Customer is not available to the authenticated user."
         )
 
     for index, row in enumerate(request["items"], start=1):
         item = _revalidate_item(row["item"])
         if not item:
-            return None, None, None, _error(
+            return None, None, _error(
                 "INVALID_ITEM",
                 f"Item row {index} is not available to the authenticated user.",
             )
     resolved_company, failure = _resolve_company(request)
     if failure:
-        return None, None, None, failure
+        return None, None, failure
     resolved_links, failure = _resolve_optional_links(request)
     if failure:
-        return None, None, None, failure
-    policy, prerequisites = _direct_invoice_policy(request["customer"])
-    if prerequisites:
-        return None, None, policy, _blocked(prerequisites)
+        return None, None, failure
 
     doc = frappe.new_doc("Sales Invoice")
     doc.customer = request["customer"]
@@ -399,12 +376,12 @@ def _build(
         try:
             doc.posting_date = getdate(request["posting_date"])
         except Exception:
-            return None, None, None, _error(
+            return None, None, _error(
                 "INVALID_SALES_INVOICE_DETAILS", "posting_date must be a valid date."
             )
     if request.get("selling_price_list"):
         if not _permitted_link("Price List", request["selling_price_list"]):
-            return None, None, None, _error(
+            return None, None, _error(
                 "INVALID_SALES_INVOICE_DETAILS",
                 "Selling price list is not available to the authenticated user.",
             )
@@ -421,16 +398,31 @@ def _build(
     # Full Sales Invoice validation is intentionally deferred to final insert.
     doc.set_missing_values()
     doc.calculate_taxes_and_totals()
+    try:
+        # ERPNext owns the SO/DN prerequisite rule. Calling this narrow native
+        # seam avoids the broader validation hooks during non-persisting prepare.
+        doc.so_dn_required()
+    except frappe.ValidationError as error:
+        # Keep the public response stable without exposing native traceback/text.
+        native_message = str(error)
+        if "Sales Order" in native_message:
+            return None, None, _blocked(["Sales Order"])
+        if "Delivery Note" in native_message:
+            return None, None, _blocked(["Delivery Note"])
+        return None, None, _error(
+            "NATIVE_VALIDATION_FAILED",
+            "ERPNext rejected the Sales Invoice during preparation.",
+        )
     preview = _preview(doc)
     missing_defaults = [
         fieldname for fieldname in _REQUIRED_DEFAULTS if not preview.get(fieldname)
     ]
     if missing_defaults:
-        return None, None, policy, _needs_input(
+        return None, None, _needs_input(
             missing_defaults,
             "ERPNext could not determine all required Sales Invoice defaults.",
         )
-    return doc, preview, policy, None
+    return doc, preview, None
 
 
 def prepare_sales_invoice(
@@ -461,10 +453,10 @@ def prepare_sales_invoice(
     if failure:
         return failure
     assert request is not None
-    doc, preview, policy, failure = _build(request)
+    doc, preview, failure = _build(request)
     if failure:
         return failure
-    assert doc is not None and preview is not None and policy is not None
+    assert doc is not None and preview is not None
     token = approvals.create(
         action=_ACTION,
         site=getattr(frappe.local, "site", ""),
@@ -472,9 +464,8 @@ def prepare_sales_invoice(
         payload={
             "doctype": "Sales Invoice",
             "request": request,
-            "policy": policy,
             "preview": preview,
-            "fingerprint": _fingerprint(request, policy, preview),
+            "fingerprint": _fingerprint(request, preview),
         },
     )
     return {
@@ -515,13 +506,11 @@ def confirm_sales_invoice(approval_token: str, confirm: bool) -> dict[str, Any]:
 
     payload = approval.payload
     request = payload.get("request")
-    approved_policy = payload.get("policy")
     approved_preview = payload.get("preview")
     approved_fingerprint = payload.get("fingerprint")
     if (
         payload.get("doctype") != "Sales Invoice"
         or not isinstance(request, dict)
-        or not isinstance(approved_policy, dict)
         or not isinstance(approved_preview, dict)
         or not isinstance(approved_fingerprint, str)
     ):
@@ -530,13 +519,13 @@ def confirm_sales_invoice(approval_token: str, confirm: bool) -> dict[str, Any]:
             "This Sales Invoice confirmation is not available in the current session.",
         )
 
-    doc, preview, policy, failure = _build(request)
+    doc, preview, failure = _build(request)
     if failure:
         if failure.get("status") == "blocked":
             return failure
         return _stale()
-    assert doc is not None and preview is not None and policy is not None
-    if _fingerprint(request, policy, preview) != approved_fingerprint:
+    assert doc is not None and preview is not None
+    if _fingerprint(request, preview) != approved_fingerprint:
         return _stale()
 
     try:

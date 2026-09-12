@@ -13,15 +13,15 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | --- | --- | --- | --- | --- | --- | --- |
 | `search_customers` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
 | `resolve_customer` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
-| `prepare_customer` | Masters | Prepare | PREPARE | None | Not a final write | Legacy migration inventory |
-| `confirm_customer` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Legacy migration inventory |
+| `prepare_customer` | Masters | Prepare | PREPARE | INPUT, SELECTION, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_customer` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `search_items` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
 | `resolve_item` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
-| `prepare_item` | Masters | Prepare | PREPARE | None | Not a final write | Legacy migration inventory |
-| `confirm_item` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Legacy migration inventory |
+| `prepare_item` | Masters | Prepare | PREPARE | INPUT, SELECTION, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_item` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `select_resolved_candidate` | Masters | Resolve | RESOLVE | None | Not a final write | Explicit typed contract |
-| `prepare_sales_order` | Selling | Prepare | PREPARE | None | Not a final write | Legacy migration inventory |
-| `confirm_sales_order` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Legacy migration inventory |
+| `prepare_sales_order` | Selling | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_order` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_quotation` | Selling | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_quotation` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_quotation_to_sales_order` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
@@ -82,17 +82,17 @@ Resolve one permitted Customer or return a terminal selection state.
 
 Validate a Customer preview without writing.
 
-- Input: `Legacy public schema` — Required: `customer`
-- Output: `Legacy public schema`; legacy response shape pending focused migration.
+- Input: `CustomerPrepareInput` — Required: `customer`
+- Output: `PrepareCustomerOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
-- Interaction: none declared.
+- Interaction: `INPUT`, `SELECTION`, `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_customer`
 
 Create a prepared Customer.
 
-- Input: `Legacy public schema` — Required: `approval_token`, `confirm`
-- Output: `Legacy public schema`; legacy response shape pending focused migration.
+- Input: `CustomerConfirmInput` — Required: `approval_token`, `confirm`
+- Output: `ConfirmCustomerOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 
@@ -118,17 +118,17 @@ Resolve one permitted profile-enabled Item or return a terminal selection state.
 
 Validate an Item preview without writing.
 
-- Input: `Legacy public schema` — Required: `item`
-- Output: `Legacy public schema`; legacy response shape pending focused migration.
+- Input: `ItemPrepareInput` — Required: `item`
+- Output: `PrepareItemOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
-- Interaction: none declared.
+- Interaction: `INPUT`, `SELECTION`, `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_item`
 
 Create a prepared Item.
 
-- Input: `Legacy public schema` — Required: `approval_token`, `confirm`
-- Output: `Legacy public schema`; legacy response shape pending focused migration.
+- Input: `ItemConfirmInput` — Required: `approval_token`, `confirm`
+- Output: `ConfirmItemOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 
@@ -145,17 +145,17 @@ Revalidate a user-selected Customer or Item reference without writing.
 
 Prepare a Sales Order preview without writing.
 
-- Input: `Legacy public schema` — Required: `customer`, `items`
-- Output: `Legacy public schema`; legacy response shape pending focused migration.
+- Input: `SalesOrderPrepareInput` — Required: `customer`, `items`
+- Output: `PrepareSalesOrderOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
-- Interaction: none declared.
+- Interaction: `INPUT`, `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_sales_order`
 
 Create a prepared Sales Order.
 
-- Input: `Legacy public schema` — Required: `approval_token`, `confirm`
-- Output: `Legacy public schema`; legacy response shape pending focused migration.
+- Input: `SalesOrderConfirmInput` — Required: `approval_token`, `confirm`
+- Output: `ConfirmSalesOrderOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 

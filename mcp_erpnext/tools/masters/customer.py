@@ -8,7 +8,15 @@ from mcp.server.fastmcp import Context
 from pydantic import TypeAdapter
 
 from ...contracts.common import NonEmptyString
-from ...contracts.interaction import selection_directive
+from ...contracts.interaction import approval_directive, input_directive, selection_directive
+from ...contracts.masters.customer import (
+	CustomerConfirmInput,
+	CustomerConfirmResult,
+	CustomerPrepareInput,
+	CustomerPrepareResult,
+	ConfirmCustomerOutput,
+	PrepareCustomerOutput,
+)
 from ...contracts.masters.resolution import (
 	CustomerResolutionOutput,
 	CustomerResolutionResult,
@@ -27,6 +35,7 @@ from ...services.masters.customer import (
 
 _resolution_adapter = TypeAdapter(CustomerResolutionResult)
 _search_adapter = TypeAdapter(CustomerSearchResultContract)
+_prepare_adapter = TypeAdapter(CustomerPrepareResult)
 
 
 def _with_selection_interaction(result: dict[str, Any]) -> dict[str, Any]:
@@ -34,6 +43,17 @@ def _with_selection_interaction(result: dict[str, Any]) -> dict[str, Any]:
 	if result.get("status") != "ambiguous":
 		return result
 	return {**result, "interaction": selection_directive().model_dump(mode="json")}
+
+
+def _with_creation_interaction(result: dict[str, Any]) -> dict[str, Any]:
+	"""Attach shared continuation guidance to creation states only."""
+	if result.get("status") == "ready":
+		return {**result, "interaction": approval_directive().model_dump(mode="json")}
+	if result.get("status") == "needs_input":
+		return {**result, "interaction": input_directive().model_dump(mode="json")}
+	if result.get("status") == "needs_selection":
+		return {**result, "interaction": selection_directive().model_dump(mode="json")}
+	return result
 
 
 def search_customers(query: NonEmptyString, ctx: Context) -> CustomerSearchOutput:
@@ -50,6 +70,32 @@ def resolve_customer(query: NonEmptyString, ctx: Context) -> CustomerResolutionO
 	return CustomerResolutionOutput(root=_resolution_adapter.validate_python(_with_selection_interaction(result)))
 
 
+def prepare_customer(customer: CustomerPrepareInput, ctx: Context) -> PrepareCustomerOutput:
+	"""Validate a new Customer and return a private confirmation token without writing."""
+	request = CustomerPrepareInput.model_validate(customer)
+	result = execute_tool_with_context(
+		ctx,
+		"prepare_customer",
+		lambda: _prepare_customer(request.to_service_payload()),
+	)
+	return PrepareCustomerOutput(
+		root=_prepare_adapter.validate_python(_with_creation_interaction(result))
+	)
+
+
+def confirm_customer(
+	approval_token: NonEmptyString, confirm: bool, ctx: Context
+) -> ConfirmCustomerOutput:
+	"""Create a prepared Customer only after explicit confirmation."""
+	request = CustomerConfirmInput(approval_token=approval_token, confirm=confirm)
+	result = execute_tool_with_context(
+		ctx,
+		"confirm_customer",
+		lambda: _confirm_customer(request.approval_token, request.confirm),
+	)
+	return ConfirmCustomerOutput(root=TypeAdapter(CustomerConfirmResult).validate_python(result))
+
+
 def register_customer_tools(mcp: Any) -> None:
 	"""Register narrow Customer resolution and two-phase creation tools."""
 
@@ -57,14 +103,5 @@ def register_customer_tools(mcp: Any) -> None:
 
 	mcp.tool(meta=tool_meta("resolve_customer"), structured_output=True)(resolve_customer)
 
-	@mcp.tool(meta=tool_meta("prepare_customer"))
-	def prepare_customer(customer: dict[str, Any], ctx: Context) -> dict[str, Any]:
-		"""Validate a new Customer and return a private confirmation token without writing."""
-		return execute_tool_with_context(ctx, "prepare_customer", lambda: _prepare_customer(customer))
-
-	@mcp.tool(meta=tool_meta("confirm_customer"))
-	def confirm_customer(approval_token: str, confirm: bool, ctx: Context) -> dict[str, Any]:
-		"""Create a prepared Customer only after explicit confirmation."""
-		return execute_tool_with_context(
-			ctx, "confirm_customer", lambda: _confirm_customer(approval_token, confirm)
-		)
+	mcp.tool(meta=tool_meta("prepare_customer"), structured_output=True)(prepare_customer)
+	mcp.tool(meta=tool_meta("confirm_customer"), structured_output=True)(confirm_customer)
