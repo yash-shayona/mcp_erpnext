@@ -20,6 +20,11 @@ from .contracts.accounts.sales_invoice_payment import (
     SalesInvoicePaymentConfirmInput,
     SalesInvoicePaymentPrepareInput,
 )
+from .contracts.accounts.payment_entry_read import (
+	PaymentEntryAggregateInput,
+	PaymentEntryGetInput,
+	PaymentEntryQueryInput,
+)
 from .contracts.lifecycle import (
     LifecycleConfirmInput,
     PrepareActionInput,
@@ -89,6 +94,7 @@ from .contracts.selling.delivery_note_read import (
 )
 from .services.buying import purchase_order
 from .services.accounts import sales_invoice_payment
+from .services.accounts import payment_entry_read
 from .services.common import email, lifecycle, pdf, read
 from .services.masters import (
     customer,
@@ -540,6 +546,24 @@ _ACCOUNTS_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
             request.approval_token, request.confirm
         ),
     ),
+	"get_payment_entry": (
+		PaymentEntryGetInput,
+		lambda request, _profile: payment_entry_read.get_payment_entry(
+			**request.model_dump()
+		),
+	),
+	"query_payment_entries": (
+		PaymentEntryQueryInput,
+		lambda request, _profile: payment_entry_read.query_payment_entries(
+			request.model_dump()
+		),
+	),
+	"aggregate_payment_entries": (
+		PaymentEntryAggregateInput,
+		lambda request, _profile: payment_entry_read.aggregate_payment_entries(
+			request.model_dump()
+		),
+	),
 }
 
 

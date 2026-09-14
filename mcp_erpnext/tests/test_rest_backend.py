@@ -94,6 +94,26 @@ class RemoteOperationRegistryTests(unittest.TestCase):
         with self.assertRaises(remote_operations.RemoteOperationError):
             remote_operations.execute_remote_operation("search_customers", "purchase", {"query": "Acme"})
 
+    @patch("mcp_erpnext.remote_operations.payment_entry_read.query_payment_entries")
+    def test_accounts_payment_entry_read_uses_fixed_typed_handler(self, query):
+        query.return_value = {
+            "status": "ok",
+            "payment_entries": [],
+            "count": 0,
+            "limit": 20,
+            "offset": 0,
+        }
+        result = remote_operations.execute_remote_operation(
+            "query_payment_entries", "accounts", {"party_type": "Customer"}
+        )
+        self.assertEqual(result["status"], "ok")
+        query.assert_called_once()
+        self.assertNotIn("ignore_permissions", query.call_args.args[0])
+
+    def test_payment_entry_read_is_not_available_in_sales_profile(self):
+        with self.assertRaises(remote_operations.RemoteOperationError):
+            remote_operations.execute_remote_operation("get_payment_entry", "sales", {"name": "PE-1"})
+
 
 class RemoteErrorTests(unittest.TestCase):
     @patch("mcp_erpnext.remote_api.logged_public_error")

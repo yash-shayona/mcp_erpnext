@@ -783,6 +783,9 @@ Queue one exact prepared document email through Frappe's native Email Queue.
 | --- | --- | --- | --- | --- | --- | --- |
 | `prepare_sales_invoice_payment` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_sales_invoice_payment` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `get_payment_entry` | Accounts | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `query_payment_entries` | Accounts | Search | READ | None | Not a final write | Explicit typed contract |
+| `aggregate_payment_entries` | Accounts | Search | READ | None | Not a final write | Explicit typed contract |
 | `prepare_document_submit` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
@@ -806,6 +809,33 @@ Create the reviewed native Draft customer Payment Entry.
 - Input: `SalesInvoicePaymentConfirmInput` — Required: `request`
 - Output: `ConfirmSalesInvoicePaymentOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `get_payment_entry`
+
+Retrieve selected fields and bounded native references from one permitted Payment Entry.
+
+- Input: `PaymentEntryGetInput` — Required: `name`
+- Output: `PaymentEntryGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `query_payment_entries`
+
+Query permitted Payment Entries using typed filters, bounded projection, sorting, and pagination.
+
+- Input: `PaymentEntryQueryInput` — Required: none
+- Output: `PaymentEntryQueryOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `aggregate_payment_entries`
+
+Calculate currency-safe permission-aware Payment Entry metrics on the server.
+
+- Input: `PaymentEntryAggregateInput` — Required: none
+- Output: `PaymentEntryAggregateOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 
 ### `prepare_document_submit`

@@ -155,6 +155,14 @@ from .accounts.sales_invoice_payment import (
     SalesInvoicePaymentConfirmInput,
     SalesInvoicePaymentPrepareInput,
 )
+from .accounts.payment_entry_read import (
+	PaymentEntryAggregateInput,
+	PaymentEntryAggregateOutput,
+	PaymentEntryGetInput,
+	PaymentEntryGetOutput,
+	PaymentEntryQueryInput,
+	PaymentEntryQueryOutput,
+)
 
 
 class ToolOperation(StrEnum):
@@ -930,6 +938,37 @@ TOOL_CONTRACTS["confirm_sales_invoice_payment"] = ToolContract(
     "Create the reviewed native Draft customer Payment Entry.",
     True, SalesInvoicePaymentConfirmInput, ConfirmSalesInvoicePaymentOutput,
     approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+)
+TOOL_CONTRACTS["get_payment_entry"] = ToolContract(
+	"get_payment_entry",
+	"Accounts",
+	ToolOperation.RESOLVE,
+	SideEffectClass.READ,
+	"Retrieve selected fields and bounded native references from one permitted Payment Entry.",
+	False,
+	PaymentEntryGetInput,
+	PaymentEntryGetOutput,
+	resolution_states=("ok", "not_found", "error"),
+)
+TOOL_CONTRACTS["query_payment_entries"] = ToolContract(
+	"query_payment_entries",
+	"Accounts",
+	ToolOperation.SEARCH,
+	SideEffectClass.READ,
+	"Query permitted Payment Entries using typed filters, bounded projection, sorting, and pagination.",
+	False,
+	PaymentEntryQueryInput,
+	PaymentEntryQueryOutput,
+)
+TOOL_CONTRACTS["aggregate_payment_entries"] = ToolContract(
+	"aggregate_payment_entries",
+	"Accounts",
+	ToolOperation.SEARCH,
+	SideEffectClass.READ,
+	"Calculate currency-safe permission-aware Payment Entry metrics on the server.",
+	False,
+	PaymentEntryAggregateInput,
+	PaymentEntryAggregateOutput,
 )
 
 

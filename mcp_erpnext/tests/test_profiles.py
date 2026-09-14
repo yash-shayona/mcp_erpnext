@@ -128,6 +128,9 @@ class ProfileRegistrationTests(unittest.TestCase):
                 [
                     "prepare_sales_invoice_payment",
                     "confirm_sales_invoice_payment",
+                    "get_payment_entry",
+                    "query_payment_entries",
+                    "aggregate_payment_entries",
                     "prepare_document_submit",
                     "confirm_document_submit",
                     "prepare_document_cancel",

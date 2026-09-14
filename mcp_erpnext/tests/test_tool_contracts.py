@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 from datetime import date
+from dataclasses import replace
 from json import dumps
 from typing import Any
 from unittest.mock import patch
@@ -20,6 +21,7 @@ from mcp_erpnext.contracts.registry import (
 )
 from mcp_erpnext.contracts.selling.quotation import QuotationPrepareInput
 from mcp_erpnext.mcp_server import create_mcp
+from mcp_erpnext.settings import MCPProfile, MCPSettings
 from mcp_erpnext.tools.selling import quotation as quotation_tools
 
 
@@ -110,6 +112,20 @@ class ToolContractTests(unittest.TestCase):
 		self.assertIn("outstanding_amount", dumps(tools["get_sales_invoice"].inputSchema))
 		self.assertIn("sum_outstanding_amount", dumps(tools["aggregate_sales_invoices"].inputSchema))
 		self.assertNotIn("search_sales_invoices", tools)
+
+	def test_payment_entry_read_schemas_are_typed_and_bounded(self):
+		settings = replace(MCPSettings.from_environment(), profile=MCPProfile.ACCOUNTS)
+		tools = {tool.name: tool for tool in asyncio.run(create_mcp(settings).list_tools())}
+		for name in ("get_payment_entry", "query_payment_entries", "aggregate_payment_entries"):
+			with self.subTest(name=name):
+				self.assertEqual(tools[name].inputSchema["type"], "object")
+				self.assertEqual(tools[name].outputSchema["type"], "object")
+				self.assertEqual(tools[name].meta["mcp_erpnext"]["side_effect"], "READ")
+		self.assertEqual(tools["get_payment_entry"].inputSchema["required"], ["name"])
+		self.assertIn("reference_doctype", tools["query_payment_entries"].inputSchema["properties"])
+		self.assertIn("sum_received_amount", dumps(tools["aggregate_payment_entries"].inputSchema))
+		self.assertNotIn("filters", dumps(tools["query_payment_entries"].inputSchema))
+		self.assertNotIn("bank_account_no", dumps(tools["get_payment_entry"].inputSchema))
 
 	def test_public_schemas_do_not_expose_server_approval_policy_internals(self):
 		schemas = dumps(
