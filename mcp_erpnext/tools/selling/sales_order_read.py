@@ -56,7 +56,7 @@ def get_sales_order(
         item_fields=item_fields or ["item_code", "item_name", "qty", "rate", "amount"],
     )
     result = execute_tool_with_context(
-        ctx, "get_sales_order", lambda: service.get_sales_order(**request.model_dump())
+        ctx, "get_sales_order", lambda: service.get_sales_order(**request.model_dump()), rest_arguments=request.model_dump(mode="json")
     )
     return GetSalesOrderOutput(
         root=TypeAdapter(GetSalesOrderResult).validate_python(result)
@@ -100,8 +100,9 @@ def query_sales_orders(
     )
     result = execute_tool_with_context(
         ctx,
-        "query_sales_orders",
-        lambda: service.query_sales_orders(request.model_dump()),
+		"query_sales_orders",
+		lambda: service.query_sales_orders(request.model_dump()),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return SalesOrderQueryOutput.model_validate(result)
 
@@ -138,8 +139,9 @@ def aggregate_sales_orders(
     )
     result = execute_tool_with_context(
         ctx,
-        "aggregate_sales_orders",
-        lambda: service.aggregate_sales_orders(request.model_dump()),
+		"aggregate_sales_orders",
+		lambda: service.aggregate_sales_orders(request.model_dump()),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return SalesOrderAggregateOutput.model_validate(result)
 
@@ -171,8 +173,9 @@ def query_sales_order_items(
     request = SalesOrderItemQueryInput(**values)
     result = execute_tool_with_context(
         ctx,
-        "query_sales_order_items",
-        lambda: service.query_sales_order_items(request.model_dump()),
+		"query_sales_order_items",
+		lambda: service.query_sales_order_items(request.model_dump()),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return SalesOrderItemQueryOutput.model_validate(result)
 

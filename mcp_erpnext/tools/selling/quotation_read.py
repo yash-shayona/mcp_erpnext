@@ -53,7 +53,7 @@ def get_quotation(
         ],
     )
     result = execute_tool_with_context(
-        ctx, "get_quotation", lambda: service.get_quotation(**request.model_dump())
+        ctx, "get_quotation", lambda: service.get_quotation(**request.model_dump()), rest_arguments=request.model_dump(mode="json")
     )
     return QuotationGetOutput.model_validate(result)
 
@@ -104,8 +104,9 @@ def query_quotations(
     request = QuotationQueryInput(**values)
     result = execute_tool_with_context(
         ctx,
-        "query_quotations",
-        lambda: service.query_quotations(request.model_dump()),
+		"query_quotations",
+		lambda: service.query_quotations(request.model_dump()),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return QuotationQueryOutput.model_validate(result)
 
@@ -153,8 +154,9 @@ def aggregate_quotations(
     request = QuotationAggregateInput(**values)
     result = execute_tool_with_context(
         ctx,
-        "aggregate_quotations",
-        lambda: service.aggregate_quotations(request.model_dump()),
+		"aggregate_quotations",
+		lambda: service.aggregate_quotations(request.model_dump()),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return QuotationAggregateOutput.model_validate(result)
 

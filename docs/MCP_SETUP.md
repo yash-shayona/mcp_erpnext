@@ -29,11 +29,12 @@ export MCP_PROFILE=sales
 `MCP_PROFILE` is also server configuration. It defaults to `sales`; set it to
 `purchase` for a separate Purchase MCP registration. See
 [`MCP_PROFILES.md`](MCP_PROFILES.md) for both profile configurations.
-`trusted_human` is the default and requires an independently verified,
-internally recorded human decision. `agent_delegated` is suitable for a trusted
-chat Agent/client that calls `confirm_*` only after the user explicitly
-approves the prepared preview; the server still validates the token, user,
-site, action, payload, expiry, replay protection, and Frappe permissions.
+`agent_delegated` is the default and is suitable for a trusted chat Agent/client
+that calls `confirm_*` only after the user explicitly approves the prepared
+preview. Set `MCP_APPROVAL_MODE=trusted_human` explicitly to require an
+independently verified, internally recorded human decision; the server still
+validates the token, user, site, action, payload, expiry, replay protection,
+and Frappe permissions in both modes.
 
 Do not put an API secret, password, or real credential in this repository. A
 private `.env` file may be used by a local wrapper, but Codex does not
@@ -60,8 +61,14 @@ configured Streamable HTTP bridge for LibreChat; see
 [`LIBRECHAT_MCP_HTTP_SETUP.md`](LIBRECHAT_MCP_HTTP_SETUP.md). The HTTP bridge
 uses request-scoped generic identity and is not configured through a Codex
 tool argument. Its current controlled capabilities span Customer and Item
-masters plus Quotation and Sales Order workflows. The planned REST backend
-variables are documented in `.env.example` and are not active yet.
+masters plus Quotation and Sales Order workflows. `MCP_BACKEND=rest` instead
+calls the fixed authenticated bridge on a compatible remote site, using that
+remote API key's Frappe user and native services. REST currently supports only
+local stdio MCP transport; it does not forward request-scoped HTTP identities.
+For local-only REST testing, set `MCP_REST_ALLOW_INSECURE_HTTP=1` and use a
+loopback origin such as `http://yob.localhost:8000`. The setting cannot permit
+HTTP for a LAN, staging, or live hostname; use trusted HTTPS there. Supply only
+the origin—the client appends the fixed bridge method path.
 
 Errors are written through Frappe's logger to the bench `logs/mcp_erpnext.log`
 and the selected site's `sites/<site>/logs/mcp_erpnext.log`. Do not set

@@ -77,6 +77,11 @@ _DOCUMENTS = {
         ),
         "child_table": "items",
     },
+    "Delivery Note": {
+        "party_field": "customer", "primary_field": "posting_date", "secondary_field": "posting_time",
+        "fields": ("name", "customer", "customer_name", "posting_date", "posting_time", "docstatus", "status", "company", "currency", "grand_total"),
+        "child_table": "items",
+    },
 }
 
 _ITEM_FIELDS = ("item_code", "item_name", "qty", "rate", "amount")
@@ -208,7 +213,7 @@ def search_documents(
 
 def _profile_doctypes(profile: str) -> frozenset[str]:
     return {
-        "sales": frozenset({"Quotation", "Sales Order", "Sales Invoice"}),
+        "sales": frozenset({"Quotation", "Sales Order", "Sales Invoice", "Delivery Note"}),
         "purchase": frozenset({"Purchase Order"}),
     }.get(profile, frozenset())
 

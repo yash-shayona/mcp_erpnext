@@ -12,6 +12,11 @@ from mcp_erpnext.services.common.effective_requirements import EffectiveRequirem
 from mcp_erpnext.services.integrations.india_compliance_item import india_compliance_item_preflight
 from mcp_erpnext.services.masters import item as item_service
 from mcp_erpnext.services.selling import sales_order
+from mcp_erpnext.tests.approval_test_backend import (
+	install_fake_backend,
+	mutate_record,
+	read_record,
+)
 
 
 class FakeMeta:
@@ -43,7 +48,7 @@ class FakeDoc:
 
 class ItemServiceTests(unittest.TestCase):
 	def setUp(self):
-		approvals._approvals.clear()
+		self.approval_backend = install_fake_backend(approvals)
 		self.docs: list[FakeDoc] = []
 		self.list_rows: dict[str, list[dict]] = {}
 		self.commit_count = 0
@@ -218,7 +223,7 @@ class ItemServiceTests(unittest.TestCase):
 		self.defaults["stock_uom"] = "Nos"
 		prepared = item_service.prepare_item(self.valid_item(stock_uom=""))
 		self.assertEqual(prepared["status"], "ready")
-		self.assertEqual(approvals._approvals[prepared["approval_token"]].payload["stock_uom"], "Nos")
+		self.assertEqual(read_record(approvals, prepared["approval_token"]).payload["stock_uom"], "Nos")
 
 	def _enable_hsn_requirement(self):
 		self.installed_apps = ["india_compliance"]
@@ -237,7 +242,7 @@ class ItemServiceTests(unittest.TestCase):
 	def test_erpnext_only_item_creation_does_not_require_or_carry_hsn(self):
 		result = item_service.prepare_item(self.valid_item(gst_hsn_code="123456", unknown_field="ignored"))
 		self.assertEqual(result["status"], "ready")
-		payload = approvals._approvals[result["approval_token"]].payload
+		payload = read_record(approvals, result["approval_token"]).payload
 		self.assertNotIn("gst_hsn_code", payload)
 		self.assertNotIn("unknown_field", payload)
 
@@ -253,7 +258,7 @@ class ItemServiceTests(unittest.TestCase):
 		self.assertEqual(result["status"], "needs_input")
 		self.assertEqual(result["missing"], ["item.gst_hsn_code"])
 		self.assertIn("HSN/SAC", result["message"])
-		self.assertEqual(approvals._approvals, {})
+		self.assertTrue(self.approval_backend.is_empty())
 
 	def test_supplied_hsn_continuation_is_resolved_and_bound_to_approval(self):
 		self._enable_hsn_requirement()
@@ -263,7 +268,7 @@ class ItemServiceTests(unittest.TestCase):
 		second = item_service.prepare_item(self.valid_item(gst_hsn_code="123456"))
 		self.assertEqual(second["status"], "ready")
 		self.assertEqual(
-			approvals._approvals[second["approval_token"]].payload["gst_hsn_code"],
+			read_record(approvals, second["approval_token"]).payload["gst_hsn_code"],
 			"123456",
 		)
 
@@ -280,7 +285,7 @@ class ItemServiceTests(unittest.TestCase):
 		result = item_service.prepare_item(self.valid_item(gst_hsn_code="1234"))
 		self.assertEqual(result["status"], "needs_input")
 		self.assertIn("6, 8", result["message"])
-		self.assertEqual(approvals._approvals, {})
+		self.assertTrue(self.approval_backend.is_empty())
 
 	def test_item_group_hsn_is_safely_inherited(self):
 		self._enable_hsn_requirement()
@@ -295,7 +300,7 @@ class ItemServiceTests(unittest.TestCase):
 		result = item_service.prepare_item(self.valid_item())
 		self.assertEqual(result["status"], "ready")
 		self.assertEqual(
-			approvals._approvals[result["approval_token"]].payload["gst_hsn_code"],
+			read_record(approvals, result["approval_token"]).payload["gst_hsn_code"],
 			"123456",
 		)
 
@@ -305,7 +310,7 @@ class ItemServiceTests(unittest.TestCase):
 		result = item_service.prepare_item(self.valid_item())
 		self.assertEqual(result["status"], "error")
 		self.assertEqual(result["code"], "ITEM_RUNTIME_REQUIREMENT_UNAVAILABLE")
-		self.assertEqual(approvals._approvals, {})
+		self.assertTrue(self.approval_backend.is_empty())
 
 	def test_hsn_settings_failure_does_not_silently_disable_requirement(self):
 		self._enable_hsn_requirement()
@@ -314,7 +319,7 @@ class ItemServiceTests(unittest.TestCase):
 		self.assertEqual(result["status"], "error")
 		self.assertEqual(result["code"], "ITEM_RUNTIME_REQUIREMENT_UNAVAILABLE")
 		self.assertNotIn("gst_settings", result["message"])
-		self.assertEqual(approvals._approvals, {})
+		self.assertTrue(self.approval_backend.is_empty())
 
 	def test_provider_does_not_apply_to_non_sales_item(self):
 		self._enable_hsn_requirement()
@@ -338,7 +343,7 @@ class ItemServiceTests(unittest.TestCase):
 		self.gst_settings = (1, "6")
 		result = item_service.prepare_item(self.valid_item(gst_hsn_code="123456"))
 		self.assertEqual(result["status"], "ready")
-		payload = approvals._approvals[result["approval_token"]].payload
+		payload = read_record(approvals, result["approval_token"]).payload
 		self.assertNotIn("gst_hsn_code", payload)
 
 	def test_metadata_driven_custom_required_item_field_is_reported(self):
@@ -353,10 +358,20 @@ class ItemServiceTests(unittest.TestCase):
 		self.assertEqual(result["missing"], ["item.custom_material_grade"])
 		self.assertEqual(result["missing_fields"][0]["label"], "Material Grade")
 
+	def test_custom_slug_is_bound_to_item_payload_and_preview(self):
+		self.meta_fields.append(SimpleNamespace(fieldname="custom_slug", label="Slug", fieldtype="Data", reqd=1))
+		result = item_service.prepare_item(self.valid_item(custom_slug="keyboard"))
+		self.assertEqual(result["status"], "ready")
+		self.assertEqual(result["preview"]["custom_slug"], "keyboard")
+		self.assertEqual(
+			read_record(approvals, result["approval_token"]).payload["custom_slug"],
+			"keyboard",
+		)
+
 	def test_sales_item_is_explicit_mcp_policy(self):
 		prepared = item_service.prepare_item(self.valid_item())
 		self.assertEqual(prepared["status"], "ready")
-		self.assertEqual(approvals._approvals[prepared["approval_token"]].payload["is_sales_item"], 1)
+		self.assertEqual(read_record(approvals, prepared["approval_token"]).payload["is_sales_item"], 1)
 
 	def test_user_without_item_create_permission_is_rejected(self):
 		with patch.object(self.fake_frappe, "has_permission", side_effect=lambda doctype, *_: doctype != "Item"):
@@ -387,7 +402,7 @@ class ItemServiceTests(unittest.TestCase):
 		wrong = item_service.confirm_item("not-issued", True)
 		self.assertEqual(wrong["code"], "CONFIRMATION_EXPIRED")
 		prepared = item_service.prepare_item(self.valid_item())
-		approvals._approvals[prepared["approval_token"]].created_at -= APPROVAL_TTL_SECONDS + 1
+		mutate_record(approvals, self.approval_backend, prepared["approval_token"], lambda approval: setattr(approval, "created_at", approval.created_at - APPROVAL_TTL_SECONDS - 1), ttl_seconds=0)
 		expired = item_service.confirm_item(prepared["approval_token"], True)
 		self.assertEqual(expired["code"], "CONFIRMATION_EXPIRED")
 

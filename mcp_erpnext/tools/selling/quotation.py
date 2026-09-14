@@ -83,6 +83,7 @@ def prepare_quotation(
 			request.discount_amount,
 			request.tc_name,
 		),
+		rest_arguments=request.model_dump(mode="json"),
 	)
 	return PrepareQuotationOutput(root=_prepare_result_adapter.validate_python(_with_interaction(result)))
 
@@ -91,7 +92,7 @@ def confirm_quotation(approval_token: str, confirm: bool, ctx: Context) -> Confi
 	"""Create the prepared Draft Quotation after explicit confirmation."""
 	request = QuotationConfirmInput(approval_token=approval_token, confirm=confirm)
 	result = execute_tool_with_context(
-		ctx, "confirm_quotation", lambda: _confirm_quotation(request.approval_token, request.confirm)
+		ctx, "confirm_quotation", lambda: _confirm_quotation(request.approval_token, request.confirm), rest_arguments=request.model_dump(mode="json")
 	)
 	return ConfirmQuotationOutput(root=_confirm_result_adapter.validate_python(result))
 

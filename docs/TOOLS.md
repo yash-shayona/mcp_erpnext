@@ -30,6 +30,8 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `confirm_sales_order_to_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_sales_invoice` | Selling | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_sales_order_to_delivery_note` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_order_to_delivery_note` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_update` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_child_add` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
@@ -56,6 +58,9 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `get_sales_invoice` | Selling | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `query_sales_invoices` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
 | `aggregate_sales_invoices` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
+| `get_delivery_note` | Selling | Resolve | READ | None | Not a final write | Explicit typed contract |
+| `query_delivery_notes` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
+| `aggregate_delivery_notes` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
 | `render_document_pdf` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `prepare_document_email` | Existing Documents | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_email` | Existing Documents | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
@@ -228,6 +233,24 @@ Create a prepared standalone Draft Sales Invoice after explicit approval.
 
 - Input: `SalesInvoiceConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmSalesInvoiceOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_sales_order_to_delivery_note`
+
+Prepare a native Draft Delivery Note preview from a Submitted Sales Order.
+
+- Input: `SalesOrderToDeliveryNoteInput` — Required: `sales_order`
+- Output: `PrepareDeliveryNoteOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_sales_order_to_delivery_note`
+
+Create the approved native Draft Delivery Note from a Sales Order.
+
+- Input: `SalesOrderToDeliveryNoteConfirmInput` — Required: `approval_token`, `confirm`
+- Output: `ConfirmDeliveryNoteOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 
@@ -462,6 +485,33 @@ Calculate deterministic permission-aware Sales Invoice metrics on the server.
 
 - Input: `SalesInvoiceAggregateInput` — Required: none
 - Output: `SalesInvoiceAggregateOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `get_delivery_note`
+
+Retrieve selected fields from one permitted Delivery Note.
+
+- Input: `DeliveryNoteGetInput` — Required: `delivery_note`
+- Output: `DeliveryNoteGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `query_delivery_notes`
+
+Query permitted Delivery Notes using typed filters and projections.
+
+- Input: `DeliveryNoteQueryInput` — Required: `request`
+- Output: `DeliveryNoteQueryOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: none declared.
+
+### `aggregate_delivery_notes`
+
+Calculate deterministic permission-aware Delivery Note metrics.
+
+- Input: `DeliveryNoteAggregateInput` — Required: `request`
+- Output: `DeliveryNoteAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
 - Interaction: none declared.
 

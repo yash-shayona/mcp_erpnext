@@ -35,13 +35,13 @@ def _with_selection_interaction(result: dict[str, Any]) -> dict[str, Any]:
 
 def search_items(query: NonEmptyString, ctx: Context) -> ItemSearchOutput:
     """Find permitted purchase-enabled Items with explicit candidate references."""
-    result = execute_tool_with_context(ctx, "search_items", lambda: _search_purchase_items(query))
+    result = execute_tool_with_context(ctx, "search_items", lambda: _search_purchase_items(query), rest_arguments={"query": query})
     return ItemSearchOutput(root=_search_adapter.validate_python(_with_selection_interaction(result)))
 
 
 def resolve_item(query: NonEmptyString, ctx: Context) -> ItemResolutionOutput:
     """Resolve one permitted purchase-enabled Item or require selection."""
-    result = execute_tool_with_context(ctx, "resolve_item", lambda: _resolve_purchase_item(query))
+    result = execute_tool_with_context(ctx, "resolve_item", lambda: _resolve_purchase_item(query), rest_arguments={"query": query})
     return ItemResolutionOutput(root=_resolution_adapter.validate_python(_with_selection_interaction(result)))
 
 

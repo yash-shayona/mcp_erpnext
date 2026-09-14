@@ -368,17 +368,19 @@ Every such request is WRITE / TEST SITE ONLY. The public confirmation input
 contains an opaque approval_token and confirm: true. confirm: true is a request
 to execute the confirmation step; it is not proof that a human approved anything.
 
-The default MCP_APPROVAL_MODE=trusted_human requires an independently
-authenticated adapter to record approval for the exact pending operation. No
-such approval adapter is exposed as an MCP tool or Postman argument. Therefore
-raw Postman confirmation normally fails safely with TRUSTED_APPROVAL_UNAVAILABLE.
+MCP_APPROVAL_MODE defaults to agent_delegated. Set it explicitly to
+trusted_human when an independently authenticated adapter must record approval
+for the exact pending operation. No such approval adapter is exposed as an MCP
+tool or Postman argument, so raw Postman confirmation in trusted_human mode
+fails safely with TRUSTED_APPROVAL_UNAVAILABLE.
 
-In local development only, MCP_APPROVAL_MODE=agent_delegated permits the
-authenticated Agent/client to perform the final call after the user approved the
-exact preview. It still enforces the same process-local token, action, site,
-authenticated user, payload digest, 15-minute TTL, single-use claim, and final
-Frappe permission check. Prepare and confirm must use the same MCP process;
-restart or a second worker loses or cannot see the pending operation.
+In the default agent_delegated mode, the authenticated Agent/client may perform
+the final call only after the user approved the exact preview. It still enforces
+the same token, action, site, authenticated
+user, payload digest, 15-minute TTL, single-use claim, and final Frappe
+permission check. The token is shared through Frappe's configured Redis cache,
+so another worker may confirm it when using the same site/cache. Redis expiry or
+loss requires a fresh prepare.
 
 The supplied collection marks its confirm request disabled. Do not enable it in
 a collection runner. Any authorized manual test must use a development/test
@@ -445,7 +447,7 @@ override record-level permissions.
 | Tool contract | Invalid parameters or schema validation | JSON does not match tools/list inputSchema | Live tools/list, contracts, tool name |
 | Frappe permission | ERP_PERMISSION_DENIED or PERMISSION_DENIED | Authenticated user lacks required DocType/record permission | Roles/User Permissions and server logs |
 | Domain validation | INVALID_CUSTOMER, INVALID_ITEM, INVALID_QUOTATION_DETAILS, INVALID_PURCHASE_ORDER_DETAILS, or similar | ERPNext/MCP business validation failed | Relevant service and returned reference |
-| Approval | TRUSTED_APPROVAL_UNAVAILABLE, CONFIRMATION_EXPIRED, or CONFIRMATION_UNAVAILABLE | Final write guard blocked request | Approval mode, same process, token/action/site/user/payload |
+| Approval | TRUSTED_APPROVAL_UNAVAILABLE, CONFIRMATION_EXPIRED, or CONFIRMATION_UNAVAILABLE | Final write guard blocked request | Approval mode, token/action/site/user/payload, shared cache availability |
 
 Safe error envelopes contain status error, stable code, safe message, an
 MCP-ERR-... reference, and retryable. Search server logs with the reference;
@@ -491,4 +493,3 @@ after the installed SDK/runtime handshake is healthy.
 - [TOOLS.md](../TOOLS.md): generated static inventory and contract summary.
 - [MCP_EXPLICIT_USER_APPROVAL_SAFETY.md](../architecture/MCP_EXPLICIT_USER_APPROVAL_SAFETY.md): write guard details.
 - [MCP_CONVERSATIONAL_INTERACTION_CONTRACT.md](../architecture/MCP_CONVERSATIONAL_INTERACTION_CONTRACT.md): client/server interaction boundary.
-

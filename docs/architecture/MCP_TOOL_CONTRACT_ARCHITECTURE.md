@@ -659,7 +659,6 @@ These remain dedicated tasks:
 ```text
 Ambiguous candidate selection enforcement
 Explicit user approval / confirm-tool safety
-Process-local approval storage scaling
 Coordinator/sub-agent orchestration
 Tool exposure by agent/domain
 Sales Invoice / Payment Entry workflows

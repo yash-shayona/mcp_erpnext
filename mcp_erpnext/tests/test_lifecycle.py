@@ -8,6 +8,7 @@ from unittest.mock import patch
 from mcp_erpnext.approvals import ApprovalStore
 from mcp_erpnext.services.common import lifecycle
 from mcp_erpnext.settings import ApprovalMode
+from mcp_erpnext.tests.approval_test_backend import FakeSharedApprovalBackend
 
 
 class FakeDocStatus(int):
@@ -98,7 +99,8 @@ class FakeChildDocument(FakeDocument):
 class LifecycleServiceTests(unittest.TestCase):
 	def setUp(self):
 		self.doc = FakeDocument()
-		self.store = ApprovalStore(ApprovalMode.AGENT_DELEGATED)
+		self.approval_backend = FakeSharedApprovalBackend()
+		self.store = ApprovalStore(ApprovalMode.AGENT_DELEGATED, backend=self.approval_backend)
 		self.frappe_patches = [
 			patch.object(lifecycle.frappe, "get_doc", return_value=self.doc),
 			patch.object(lifecycle.frappe, "get_meta", return_value=FakeMeta(FakeField("item_code"), FakeField("qty"))),
@@ -162,7 +164,7 @@ class LifecycleServiceTests(unittest.TestCase):
 		)
 		self.assertEqual(update["code"], "DOCTYPE_NOT_ALLOWED")
 		self.assertEqual(child_add["code"], "DOCTYPE_NOT_ALLOWED")
-		self.assertEqual(self.store._approvals, {})
+		self.assertTrue(self.approval_backend.is_empty())
 
 	def test_lifecycle_approval_cannot_be_reused_for_another_action(self):
 		prepared = lifecycle.prepare_submit(

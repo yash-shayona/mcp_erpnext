@@ -62,7 +62,7 @@ def prepare_purchase_order(
     result = execute_tool_with_context(
         ctx,
         "prepare_purchase_order",
-        lambda: _prepare_purchase_order(
+		lambda: _prepare_purchase_order(
             request.supplier.model_dump(),
             [item.to_service_payload() for item in request.items],
             request.company,
@@ -70,7 +70,8 @@ def prepare_purchase_order(
             request.schedule_date.isoformat() if request.schedule_date else None,
             request.buying_price_list,
             request.taxes_and_charges,
-        ),
+		),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return PreparePurchaseOrderOutput(root=_prepare_adapter.validate_python(_with_interaction(result)))
 
@@ -82,8 +83,9 @@ def confirm_purchase_order(
     request = PurchaseOrderConfirmInput(approval_token=approval_token, confirm=confirm)
     result = execute_tool_with_context(
         ctx,
-        "confirm_purchase_order",
-        lambda: _confirm_purchase_order(request.approval_token, request.confirm),
+		"confirm_purchase_order",
+		lambda: _confirm_purchase_order(request.approval_token, request.confirm),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return ConfirmPurchaseOrderOutput(root=_confirm_adapter.validate_python(result))
 

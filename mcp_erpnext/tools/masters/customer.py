@@ -58,14 +58,14 @@ def _with_creation_interaction(result: dict[str, Any]) -> dict[str, Any]:
 
 def search_customers(query: NonEmptyString, ctx: Context) -> CustomerSearchOutput:
 	"""Find permitted active Customers with explicit candidate references."""
-	result = execute_tool_with_context(ctx, "search_customers", lambda: _search_customers(query))
+	result = execute_tool_with_context(ctx, "search_customers", lambda: _search_customers(query), rest_arguments={"query": query})
 	return CustomerSearchOutput(root=_search_adapter.validate_python(_with_selection_interaction(result)))
 
 
 def resolve_customer(query: NonEmptyString, ctx: Context) -> CustomerResolutionOutput:
 	"""Resolve one permitted Customer or return a terminal selection state."""
 	result = execute_tool_with_context(
-		ctx, "resolve_customer", lambda: _resolve_customer_for_workflow(query)
+		ctx, "resolve_customer", lambda: _resolve_customer_for_workflow(query), rest_arguments={"query": query}
 	)
 	return CustomerResolutionOutput(root=_resolution_adapter.validate_python(_with_selection_interaction(result)))
 
@@ -77,6 +77,7 @@ def prepare_customer(customer: CustomerPrepareInput, ctx: Context) -> PrepareCus
 		ctx,
 		"prepare_customer",
 		lambda: _prepare_customer(request.to_service_payload()),
+		rest_arguments=request.model_dump(mode="json"),
 	)
 	return PrepareCustomerOutput(
 		root=_prepare_adapter.validate_python(_with_creation_interaction(result))
@@ -92,6 +93,7 @@ def confirm_customer(
 		ctx,
 		"confirm_customer",
 		lambda: _confirm_customer(request.approval_token, request.confirm),
+		rest_arguments=request.model_dump(mode="json"),
 	)
 	return ConfirmCustomerOutput(root=TypeAdapter(CustomerConfirmResult).validate_python(result))
 

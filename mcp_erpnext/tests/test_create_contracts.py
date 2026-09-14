@@ -78,7 +78,7 @@ class CreateContractTests(unittest.TestCase):
 		with patch.object(
 			customer_tools,
 			"execute_tool_with_context",
-			side_effect=lambda _ctx, _name, operation: operation(),
+			side_effect=lambda _ctx, _name, operation, **_kwargs: operation(),
 		), patch.object(customer_tools, "_prepare_customer", return_value=service_result) as service:
 			result = customer_tools.prepare_customer(
 				{
@@ -104,7 +104,7 @@ class CreateContractTests(unittest.TestCase):
 		with patch.object(
 			item_tools,
 			"execute_tool_with_context",
-			side_effect=lambda _ctx, _name, operation: operation(),
+			side_effect=lambda _ctx, _name, operation, **_kwargs: operation(),
 		), patch.object(item_tools, "_prepare_item", return_value=service_result) as service:
 			result = item_tools.prepare_item(
 				{"item_code": "NEW-ITEM", "gst_hsn_code": "123456"}, object()
@@ -114,12 +114,26 @@ class CreateContractTests(unittest.TestCase):
 		self.assertEqual(service.call_args.args[0]["gst_hsn_code"], "123456")
 		self.assertNotIn("is_sales_item", service.call_args.args[0])
 
+	def test_item_wrapper_accepts_custom_slug(self):
+		service_result = {"status": "needs_input", "missing": ["item.custom_slug"], "message": "Provide Slug."}
+		with patch.object(
+			item_tools,
+			"execute_tool_with_context",
+			side_effect=lambda _ctx, _name, operation, **_kwargs: operation(),
+		), patch.object(item_tools, "_prepare_item", return_value=service_result) as service:
+			result = item_tools.prepare_item(
+				{"item_code": "NEW-ITEM", "custom_slug": "new-item"}, object()
+			).root
+
+		self.assertEqual(result.interaction.kind, "INPUT")
+		self.assertEqual(service.call_args.args[0]["custom_slug"], "new-item")
+
 	def test_sales_order_wrapper_passes_resolved_names_and_adds_approval_or_input(self):
 		service_result = {"status": "needs_input", "missing": ["company"], "message": "Choose a Company."}
 		with patch.object(
 			sales_order_tools,
 			"execute_tool_with_context",
-			side_effect=lambda _ctx, _name, operation: operation(),
+			side_effect=lambda _ctx, _name, operation, **_kwargs: operation(),
 		), patch.object(sales_order_tools, "_prepare_sales_order", return_value=service_result) as service:
 			result = sales_order_tools.prepare_sales_order(
 				CustomerReference(doctype="Customer", name="CUST-001"),

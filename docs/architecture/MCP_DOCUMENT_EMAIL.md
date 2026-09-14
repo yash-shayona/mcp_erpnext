@@ -45,7 +45,7 @@ number, or address is accepted or returned.
 
 ## Approval binding
 
-The prepare operation stores a process-local approval through the existing
+The prepare operation stores a shared Frappe-cache approval through the existing
 `ApprovalStore`. Its payload binds the profile, exact document, document
 `modified` and `docstatus` markers, recipient, subject, message, PDF render
 inputs and resolved format, attachment filename/MIME type, and SHA-256 digest.

@@ -79,6 +79,8 @@ def _party_reference(doc: Any) -> tuple[str | None, str | None]:
         return "Customer", doc.get("customer")
     if doc.doctype == "Sales Invoice":
         return "Customer", doc.get("customer")
+    if doc.doctype == "Delivery Note":
+        return "Customer", doc.get("customer")
     if doc.doctype == "Purchase Order":
         return "Supplier", doc.get("supplier")
     return None, None

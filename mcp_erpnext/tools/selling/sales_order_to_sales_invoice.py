@@ -41,8 +41,9 @@ def prepare_sales_order_to_sales_invoice(
     request = SalesOrderToSalesInvoiceInput(sales_order=sales_order)
     result = execute_tool_with_context(
         ctx,
-        "prepare_sales_order_to_sales_invoice",
-        lambda: _prepare_sales_order_to_sales_invoice(request.sales_order),
+		"prepare_sales_order_to_sales_invoice",
+		lambda: _prepare_sales_order_to_sales_invoice(request.sales_order),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return PrepareSalesOrderToSalesInvoiceOutput(
         root=_prepare_adapter.validate_python(_with_interaction(result))
@@ -60,9 +61,10 @@ def confirm_sales_order_to_sales_invoice(
     result = execute_tool_with_context(
         ctx,
         "confirm_sales_order_to_sales_invoice",
-        lambda: _confirm_sales_order_to_sales_invoice(
-            request.approval_token, request.confirm
-        ),
+		lambda: _confirm_sales_order_to_sales_invoice(
+			request.approval_token, request.confirm
+		),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return ConfirmSalesOrderToSalesInvoiceOutput(root=_confirm_adapter.validate_python(result))
 

@@ -22,7 +22,7 @@ def select_resolved_candidate(
 ) -> SelectResolvedCandidateOutput:
 	"""Revalidate a user-selected Customer or Item reference without writing."""
 	result = execute_tool_with_context(
-		ctx, "select_resolved_candidate", lambda: _select_resolved_candidate(doctype, name)
+		ctx, "select_resolved_candidate", lambda: _select_resolved_candidate(doctype, name), rest_arguments={"doctype": doctype, "name": name}
 	)
 	return SelectResolvedCandidateOutput(root=_selection_adapter.validate_python(result))
 

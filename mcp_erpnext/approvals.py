@@ -1,23 +1,106 @@
-"""Server-side, process-local approval storage for controlled MCP writes."""
+"""Shared Frappe-cache approval storage for controlled MCP writes."""
 
 from __future__ import annotations
 
+import pickle
 import secrets
 import time
-from threading import RLock
-from hashlib import sha256
-from hmac import compare_digest, new as hmac_new
-from json import dumps
 from dataclasses import dataclass
-from typing import Any, Literal
+from hashlib import sha256
+from hmac import compare_digest
+from json import dumps
+from typing import TYPE_CHECKING, Any, Literal, Protocol
+
+import frappe
+from redis.exceptions import WatchError
 
 from .settings import ApprovalMode
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 APPROVAL_TTL_SECONDS = 15 * 60
 ApprovalLookup = Literal["available", "expired", "unavailable", "consumed"]
 ApprovalClaim = Literal[
     "available", "expired", "unavailable", "consumed", "not_trusted"
 ]
+
+
+class ApprovalBackendError(RuntimeError):
+    """The shared authorization backend could not provide a certain result."""
+
+
+class ApprovalBackend(Protocol):
+    """Private raw-record operations; production has no in-memory fallback."""
+
+    def create(self, token: str, value: bytes, ttl_seconds: int) -> bool: ...
+
+    def read(self, token: str) -> tuple[bytes | None, int | None]: ...
+
+    def compare_and_set(
+        self, token: str, expected: bytes, value: bytes, ttl_milliseconds: int
+    ) -> bool: ...
+
+
+class FrappeApprovalBackend:
+    """Use the initialized Frappe RedisWrapper without local-cache helpers."""
+
+    _KEY_PREFIX = "mcp_erpnext:approval:"
+
+    @classmethod
+    def key_name(cls, token: str) -> str:
+        # Redis key inspection must not reveal the bearer-like public token.
+        return f"{cls._KEY_PREFIX}{sha256(token.encode('utf-8')).hexdigest()}"
+
+    def _key(self, token: str):
+        # ``make_key`` keeps Frappe's configured database/site namespace.
+        if not getattr(frappe.local, "site", None):
+            raise ApprovalBackendError("Approval storage is unavailable.")
+        try:
+            return frappe.cache.make_key(self.key_name(token), shared=False)
+        except Exception as error:
+            raise ApprovalBackendError("Approval storage is unavailable.") from error
+
+    def create(self, token: str, value: bytes, ttl_seconds: int) -> bool:
+        try:
+            return bool(
+                frappe.cache.set(self._key(token), value, ex=ttl_seconds, nx=True)
+            )
+        except Exception as error:
+            raise ApprovalBackendError("Approval storage is unavailable.") from error
+
+    def read(self, token: str) -> tuple[bytes | None, int | None]:
+        try:
+            key = self._key(token)
+            value = frappe.cache.get(key)
+            if value is None:
+                return None, None
+            remaining = frappe.cache.pttl(key)
+            if remaining <= 0:
+                return None, None
+            return value, remaining
+        except Exception as error:
+            raise ApprovalBackendError("Approval storage is unavailable.") from error
+
+    def compare_and_set(
+        self, token: str, expected: bytes, value: bytes, ttl_milliseconds: int
+    ) -> bool:
+        key = self._key(token)
+        try:
+            with frappe.cache.pipeline() as pipeline:
+                pipeline.watch(key)
+                if pipeline.get(key) != expected:
+                    pipeline.unwatch()
+                    return False
+                # Preserve the original key lifetime rather than refreshing it.
+                pipeline.multi()
+                pipeline.set(key, value, px=ttl_milliseconds)
+                pipeline.execute()
+                return True
+        except WatchError:
+            return False
+        except Exception as error:
+            raise ApprovalBackendError("Approval storage is unavailable.") from error
 
 
 @dataclass
@@ -34,150 +117,200 @@ class PendingApproval:
     consumed_at: float | None = None
     cancelled_at: float | None = None
 
-    @property
-    def expired(self) -> bool:
-        return time.monotonic() - self.created_at > APPROVAL_TTL_SECONDS
-
 
 class ApprovalStore:
-    """Keep short-lived prepared operations private to one local MCP process.
+    """Authorize one-shot writes through Frappe's shared Redis cache.
 
     The store deliberately has no MCP-callable method that grants trust. A
     transport-specific adapter may call :meth:`record_trusted_user_approval` only
-    after it has independently verified a human-originated approval event. The
-    adapter remains required when the server is configured for
-    ``trusted_human`` approval mode.
+    after it has independently verified a human-originated approval event.
     """
 
     def __init__(
-        self, approval_mode: ApprovalMode = ApprovalMode.TRUSTED_HUMAN
+        self,
+        approval_mode: ApprovalMode = ApprovalMode.AGENT_DELEGATED,
+        *,
+        backend: ApprovalBackend | None = None,
     ) -> None:
-        self._approvals: dict[str, PendingApproval] = {}
-        self._signing_key = secrets.token_bytes(32)
-        self._lock = RLock()
         self._approval_mode = ApprovalMode(approval_mode)
+        self._backend: ApprovalBackend = backend or FrappeApprovalBackend()
 
     def configure_approval_mode(self, approval_mode: ApprovalMode) -> None:
         """Set the process policy during MCP server startup, not from a tool call."""
-        with self._lock:
-            self._approval_mode = ApprovalMode(approval_mode)
+        self._approval_mode = ApprovalMode(approval_mode)
 
-    def _payload_digest(self, payload: dict[str, Any]) -> str:
+    @staticmethod
+    def _payload_digest(payload: dict[str, Any]) -> str:
+        """Return a process-stable digest for trusted internal Redis records.
+
+        This detects payload corruption and preserves cross-worker binding. It is
+        intentionally not a MAC: Frappe Redis is the trusted server-side cache
+        boundary for this ephemeral authorization state.
+        """
         serialized = dumps(
             payload, sort_keys=True, separators=(",", ":"), default=str
         ).encode("utf-8")
-        return hmac_new(self._signing_key, serialized, sha256).hexdigest()
+        return sha256(serialized).hexdigest()
+
+    @staticmethod
+    def _serialize(approval: PendingApproval) -> bytes:
+        return pickle.dumps(approval, protocol=5)
+
+    @staticmethod
+    def _deserialize(value: bytes) -> PendingApproval:
+        try:
+            approval = pickle.loads(value)
+        except Exception as error:
+            raise ApprovalBackendError("Approval storage is unavailable.") from error
+        if not isinstance(approval, PendingApproval):
+            raise ApprovalBackendError("Approval storage is unavailable.")
+        return approval
 
     def create(
         self, *, action: str, site: str, user: str, payload: dict[str, Any]
     ) -> str:
-        with self._lock:
-            self._prune_expired_locked()
+        """Persist a new approval before returning its opaque public token."""
+        for _attempt in range(3):
             token = secrets.token_urlsafe(32)
-            self._approvals[token] = PendingApproval(
+            approval = PendingApproval(
                 action=action,
                 site=site,
                 user=user,
-                created_at=time.monotonic(),
+                created_at=time.time(),
                 payload=payload,
                 payload_digest=self._payload_digest(payload),
             )
-            return token
+            if self._backend.create(
+                token, self._serialize(approval), APPROVAL_TTL_SECONDS
+            ):
+                return token
+        raise ApprovalBackendError("Approval storage is unavailable.")
 
     def lookup(
         self, token: str, *, action: str, site: str, user: str
     ) -> tuple[PendingApproval | None, ApprovalLookup]:
-        """Validate a pending operation without granting or consuming it."""
-        with self._lock:
-            approval, state = self._lookup_locked(
-                token, action=action, site=site, user=user
-            )
-            if state != "available" or approval is None:
-                return approval, state
-            if approval.consumed_at is not None or approval.cancelled_at is not None:
-                return None, "consumed"
-            return approval, "available"
+        """Validate shared state without granting or consuming it."""
+        approval, _raw, state = self._read_and_validate(
+            token, action=action, site=site, user=user
+        )
+        if state != "available" or approval is None:
+            return None, state
+        if approval.consumed_at is not None or approval.cancelled_at is not None:
+            return None, "consumed"
+        return approval, "available"
 
     def record_trusted_user_approval(
         self, token: str, *, action: str, site: str, user: str
     ) -> tuple[PendingApproval | None, ApprovalLookup]:
-        """Record an externally verified human approval for one pending operation.
-
-        This is intentionally internal server-side plumbing, not a tool argument or
-        MCP tool. Calling code must be an authenticated transport/client adapter
-        which has verified the human decision and its request binding.
-        """
-        with self._lock:
-            approval, state = self._lookup_locked(
-                token, action=action, site=site, user=user
-            )
-            if state != "available" or approval is None:
-                return approval, state
-            if approval.consumed_at is not None or approval.cancelled_at is not None:
-                return None, "consumed"
-            approval.trusted_at = time.monotonic()
-            return approval, "available"
+        """Atomically record a separately verified human decision."""
+        return self._transition(
+            token,
+            action=action,
+            site=site,
+            user=user,
+            transition=lambda approval: setattr(approval, "trusted_at", time.time()),
+            require_trusted=False,
+        )
 
     def claim_for_confirm_write(
         self, token: str, *, action: str, site: str, user: str
     ) -> tuple[PendingApproval | None, ApprovalClaim]:
-        """Atomically claim a policy-compliant pending operation before a final write."""
-        with self._lock:
-            approval, state = self._lookup_locked(
-                token, action=action, site=site, user=user
-            )
-            if state != "available" or approval is None:
-                return approval, state
-            if approval.consumed_at is not None or approval.cancelled_at is not None:
-                return None, "consumed"
-            if (
-                self._approval_mode == ApprovalMode.TRUSTED_HUMAN
-                and approval.trusted_at is None
-            ):
-                return None, "not_trusted"
-            # Consume before persistence so concurrent confirms cannot both write.
-            approval.consumed_at = time.monotonic()
-            return approval, "available"
+        """Atomically claim a policy-compliant shared operation before a write."""
+        return self._transition(
+            token,
+            action=action,
+            site=site,
+            user=user,
+            transition=lambda approval: setattr(approval, "consumed_at", time.time()),
+            require_trusted=True,
+        )
 
     def cancel(self, token: str, *, action: str, site: str, user: str) -> None:
-        """Consume a matching pending operation after an explicit declined confirm."""
-        with self._lock:
-            approval, state = self._lookup_locked(
-                token, action=action, site=site, user=user
-            )
-            if (
-                state == "available"
-                and approval is not None
-                and approval.consumed_at is None
-            ):
-                approval.cancelled_at = time.monotonic()
+        """Atomically mark a matching pending operation as declined."""
+        self._transition(
+            token,
+            action=action,
+            site=site,
+            user=user,
+            transition=lambda approval: setattr(approval, "cancelled_at", time.time()),
+            require_trusted=False,
+        )
 
-    def _lookup_locked(
-        self, token: str, *, action: str, site: str, user: str
-    ) -> tuple[PendingApproval | None, Literal["available", "expired", "unavailable"]]:
-        approval = self._approvals.get(token)
-        if approval is None:
-            return None, "expired"
-        if approval.expired:
-            self._approvals.pop(token, None)
-            return None, "expired"
-        if approval.action != action or approval.site != site or approval.user != user:
-            return None, "unavailable"
-        if not compare_digest(
-            approval.payload_digest, self._payload_digest(approval.payload)
+    def _transition(
+        self,
+        token: str,
+        *,
+        action: str,
+        site: str,
+        user: str,
+        transition: Callable[[PendingApproval], None],
+        require_trusted: bool,
+    ) -> tuple[PendingApproval | None, ApprovalClaim]:
+        approval, raw, state = self._read_and_validate(
+            token, action=action, site=site, user=user
+        )
+        if state != "available" or approval is None or raw is None:
+            return None, state
+        if approval.consumed_at is not None or approval.cancelled_at is not None:
+            return None, "consumed"
+        if (
+            require_trusted
+            and self._approval_mode == ApprovalMode.TRUSTED_HUMAN
+            and approval.trusted_at is None
         ):
-            self._approvals.pop(token, None)
+            return None, "not_trusted"
+        try:
+            _value, remaining_ms = self._backend.read(token)
+        except ApprovalBackendError:
+            return None, "unavailable"
+        if remaining_ms is None or remaining_ms <= 0:
+            return None, "expired"
+        transition(approval)
+        try:
+            if not self._backend.compare_and_set(
+                token, raw, self._serialize(approval), remaining_ms
+            ):
+                # A concurrent success is observed as consumed on a safe reread;
+                # other conflicts fail closed without consuming the original.
+                current, _current_raw, current_state = self._read_and_validate(
+                    token, action=action, site=site, user=user
+                )
+                if (
+                    current_state == "available"
+                    and current is not None
+                    and (
+                        current.consumed_at is not None
+                        or current.cancelled_at is not None
+                    )
+                ):
+                    return None, "consumed"
+                if current_state == "available":
+                    return None, "unavailable"
+                return None, current_state
+        except ApprovalBackendError:
             return None, "unavailable"
         return approval, "available"
 
-    def prune_expired(self) -> None:
-        with self._lock:
-            self._prune_expired_locked()
+    def _read_and_validate(
+        self, token: str, *, action: str, site: str, user: str
+    ) -> tuple[PendingApproval | None, bytes | None, ApprovalLookup]:
+        try:
+            raw, remaining_ms = self._backend.read(token)
+            if raw is None or remaining_ms is None or remaining_ms <= 0:
+                return None, None, "expired"
+            approval = self._deserialize(raw)
+        except ApprovalBackendError:
+            return None, None, "unavailable"
+        if approval.action != action or approval.site != site or approval.user != user:
+            return None, raw, "unavailable"
+        if not compare_digest(
+            approval.payload_digest, self._payload_digest(approval.payload)
+        ):
+            return None, raw, "unavailable"
+        return approval, raw, "available"
 
-    def _prune_expired_locked(self) -> None:
-        for token, approval in list(self._approvals.items()):
-            if approval.expired:
-                self._approvals.pop(token, None)
+    def prune_expired(self) -> None:
+        """Compatibility no-op: Redis key expiry owns shared approval cleanup."""
 
 
 approvals = ApprovalStore()

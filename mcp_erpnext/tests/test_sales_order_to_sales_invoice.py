@@ -8,6 +8,7 @@ import frappe
 from pydantic import TypeAdapter, ValidationError
 
 from mcp_erpnext.approvals import approvals
+from mcp_erpnext.tests.approval_test_backend import install_fake_backend
 from mcp_erpnext.contracts.selling.sales_order_to_sales_invoice import (
     PrepareSalesOrderToSalesInvoiceResult,
     SalesOrderToSalesInvoiceInput,
@@ -165,7 +166,7 @@ def mapped_invoice(*, qty=3, rate=100, items=True, name="ACC-SINV-0001"):
 
 class SalesOrderToSalesInvoiceServiceTests(unittest.TestCase):
 	def setUp(self):
-		approvals._approvals.clear()
+		self.approval_backend = install_fake_backend(approvals)
 		self.source = source_document()
 		self.mapped = mapped_invoice()
 		self.map_results = [self.mapped]
@@ -202,7 +203,7 @@ class SalesOrderToSalesInvoiceServiceTests(unittest.TestCase):
 	def tearDown(self):
 		for active_patch in reversed(self.patches):
 			active_patch.stop()
-		approvals._approvals.clear()
+		self.approval_backend.clear()
 
 	def native_mapper(self, source_name, *, target_doc=None, args=None, ignore_permissions=False):
 		self.assertEqual(source_name, self.source.name)
@@ -269,7 +270,7 @@ class SalesOrderToSalesInvoiceServiceTests(unittest.TestCase):
 		self.map_results = [mapped_invoice(items=False)]
 		result = self.prepare()
 		self.assertEqual(result["code"], "NO_MAPPABLE_ITEMS")
-		self.assertEqual(approvals._approvals, {})
+		self.assertTrue(self.approval_backend.is_empty())
 
 	def test_confirm_claims_approval_remaps_and_inserts_only_fresh_draft(self):
 		prepared = self.prepare()

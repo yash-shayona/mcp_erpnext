@@ -11,6 +11,10 @@ from pydantic import TypeAdapter
 from mcp_erpnext.approvals import APPROVAL_TTL_SECONDS, approvals
 from mcp_erpnext.contracts.selling.quotation import PrepareQuotationResult
 from mcp_erpnext.services.selling import quotation as quotation_service
+from mcp_erpnext.tests.approval_test_backend import (
+	install_fake_backend,
+	mutate_record,
+)
 
 
 class FakeRow(SimpleNamespace):
@@ -85,7 +89,7 @@ class FakeQuotation:
 
 class QuotationServiceTests(unittest.TestCase):
 	def setUp(self):
-		approvals._approvals.clear()
+		self.approval_backend = install_fake_backend(approvals)
 		self.docs: list[FakeQuotation] = []
 		self.commit_count = 0
 		self.rollback_count = 0
@@ -195,7 +199,7 @@ class QuotationServiceTests(unittest.TestCase):
 		self.assertEqual(result["status"], "error")
 		self.assertEqual(result["code"], "NATIVE_VALIDATION_FAILED")
 		self.assertNotIn("Valid till date", result["message"])
-		self.assertEqual(approvals._approvals, {})
+		self.assertTrue(self.approval_backend.is_empty())
 		self.assertEqual(self.docs[0].validate_calls, 1)
 
 	def test_date_order_is_not_checked_outside_native_validation(self):
@@ -275,7 +279,7 @@ class QuotationServiceTests(unittest.TestCase):
 
 	def test_expired_wrong_user_and_wrong_action_are_rejected(self):
 		prepared = self.prepare()
-		approvals._approvals[prepared["approval_token"]].created_at -= APPROVAL_TTL_SECONDS + 1
+		mutate_record(approvals, self.approval_backend, prepared["approval_token"], lambda approval: setattr(approval, "created_at", approval.created_at - APPROVAL_TTL_SECONDS - 1), ttl_seconds=0)
 		self.assertEqual(quotation_service.confirm_quotation(prepared["approval_token"], True)["code"], "CONFIRMATION_EXPIRED")
 
 		prepared = self.prepare()
@@ -288,7 +292,7 @@ class QuotationServiceTests(unittest.TestCase):
 
 	def test_tampered_server_payload_is_rejected(self):
 		prepared = self.prepare()
-		approvals._approvals[prepared["approval_token"]].payload["party_name"] = "MISSING"
+		mutate_record(approvals, self.approval_backend, prepared["approval_token"], lambda approval: approval.payload.update({"party_name": "MISSING"}))
 		result = quotation_service.confirm_quotation(prepared["approval_token"], True)
 		self.assertEqual(result["code"], "CONFIRMATION_UNAVAILABLE")
 		self.assertEqual(self.commit_count, 0)

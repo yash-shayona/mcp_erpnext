@@ -35,6 +35,8 @@ _PUBLIC_MESSAGES = {
     ),
     "ORDER_PREVIEW_UNAVAILABLE": "I couldn't prepare the Sales Order preview right now. Please try again later.",
     "ERP_REQUEST_FAILED": "I couldn't complete that ERPNext request right now. Please try again later.",
+    "MCP_REMOTE_REQUEST_INVALID": "The remote ERPNext request is invalid.",
+    "MCP_REMOTE_RESPONSE_INVALID": "The remote ERPNext response is invalid.",
 }
 
 ERROR_REFERENCE_PREFIX = "MCP-ERR"
@@ -94,6 +96,34 @@ def public_error(
         "reference": reference or new_error_reference(),
         "retryable": retryable,
     }
+
+
+def logged_public_error(
+    tool_name: str,
+    code: str,
+    *,
+    message: str | None = None,
+    retryable: bool = False,
+    level: str = "warning",
+) -> dict[str, object]:
+    """Return and log one safe error with a caller-visible correlation reference."""
+    reference = new_error_reference()
+    site = getattr(frappe.local, "site", None)
+    user = getattr(getattr(frappe.local, "session", None), "user", None)
+    _log_tool_failure(
+        level,
+        reference=reference,
+        code=code,
+        tool_name=tool_name,
+        site=site,
+        user=user,
+    )
+    return public_error(
+        code,
+        message=message,
+        reference=reference,
+        retryable=retryable,
+    )
 
 
 def _error_code_for_tool(tool_name: str) -> str:

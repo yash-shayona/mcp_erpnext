@@ -201,7 +201,7 @@ class ToolContractTests(unittest.TestCase):
 			"missing": ["company"],
 			"message": "No permitted Company is available.",
 		}
-		with patch.object(quotation_tools, "execute_tool_with_context", side_effect=lambda _ctx, _name, operation: operation()), patch.object(
+		with patch.object(quotation_tools, "execute_tool_with_context", side_effect=lambda _ctx, _name, operation, **_kwargs: operation()), patch.object(
 			quotation_tools, "_prepare_quotation", return_value=service_result
 		) as service:
 			result = quotation_tools.prepare_quotation(

@@ -36,7 +36,7 @@ def get_item(
     """Read selected fields from one permitted Item by exact reference."""
     request = ItemGetInput(item=item, fields=fields or ["name"])
     result = execute_tool_with_context(
-        ctx, "get_item", lambda: service.get_item(**request.model_dump())
+        ctx, "get_item", lambda: service.get_item(**request.model_dump()), rest_arguments=request.model_dump(mode="json")
     )
     return ItemGetOutput.model_validate(result)
 
@@ -72,7 +72,7 @@ def query_items(
     }
     request = ItemQueryInput(**values)
     result = execute_tool_with_context(
-        ctx, "query_items", lambda: service.query_items(request.model_dump())
+        ctx, "query_items", lambda: service.query_items(request.model_dump()), rest_arguments=request.model_dump(mode="json")
     )
     return ItemQueryOutput.model_validate(result)
 
@@ -105,7 +105,7 @@ def aggregate_items(
     }
     request = ItemAggregateInput(**values)
     result = execute_tool_with_context(
-        ctx, "aggregate_items", lambda: service.aggregate_items(request.model_dump())
+        ctx, "aggregate_items", lambda: service.aggregate_items(request.model_dump()), rest_arguments=request.model_dump(mode="json")
     )
     return ItemAggregateOutput.model_validate(result)
 

@@ -25,9 +25,9 @@ LIFECYCLE_ACTION_DOCTYPES = {
     "sales": {
         "update": PROFILE_DOCTYPES["sales"],
         "child_add": PROFILE_DOCTYPES["sales"],
-        "submit": PROFILE_DOCTYPES["sales"] | frozenset({"Sales Invoice"}),
-        "cancel": PROFILE_DOCTYPES["sales"] | frozenset({"Sales Invoice"}),
-        "delete": PROFILE_DOCTYPES["sales"] | frozenset({"Sales Invoice"}),
+        "submit": PROFILE_DOCTYPES["sales"] | frozenset({"Sales Invoice", "Delivery Note"}),
+        "cancel": PROFILE_DOCTYPES["sales"] | frozenset({"Sales Invoice", "Delivery Note"}),
+        "delete": PROFILE_DOCTYPES["sales"] | frozenset({"Sales Invoice", "Delivery Note"}),
     },
     "purchase": {
         "update": PROFILE_DOCTYPES["purchase"],

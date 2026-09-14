@@ -35,13 +35,13 @@ def _with_selection_interaction(result: dict[str, Any]) -> dict[str, Any]:
 
 def search_suppliers(query: NonEmptyString, ctx: Context) -> SupplierSearchOutput:
     """Find permitted active Suppliers with explicit candidate references."""
-    result = execute_tool_with_context(ctx, "search_suppliers", lambda: _search_suppliers(query))
+    result = execute_tool_with_context(ctx, "search_suppliers", lambda: _search_suppliers(query), rest_arguments={"query": query})
     return SupplierSearchOutput(root=_search_adapter.validate_python(_with_selection_interaction(result)))
 
 
 def resolve_supplier(query: NonEmptyString, ctx: Context) -> SupplierResolutionOutput:
     """Resolve one permitted Supplier or return a terminal selection state."""
-    result = execute_tool_with_context(ctx, "resolve_supplier", lambda: _resolve_supplier(query))
+    result = execute_tool_with_context(ctx, "resolve_supplier", lambda: _resolve_supplier(query), rest_arguments={"query": query})
     return SupplierResolutionOutput(root=_resolution_adapter.validate_python(_with_selection_interaction(result)))
 
 

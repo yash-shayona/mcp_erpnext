@@ -213,8 +213,9 @@ permission checks for reads and writes.
   transport security validates the Host header before MCP processing.
 - HTTP reads the generic email afresh from the authenticated request context.
   It never falls back to `MCP_FRAPPE_USER` or a tool argument.
-- Each HTTP tool call initializes and destroys a separate Frappe context. Run
-  exactly one MCP process/worker because approval storage remains process-local.
+- Each HTTP tool call initializes and destroys a separate Frappe context.
+  Approval state is shared through the Frappe-configured Redis cache, so a
+  valid confirmation may be handled by another worker using the same site/cache.
 - `MCP_BACKEND=direct` is required; the REST backend is not implemented.
 - `MCP_FRAPPE_SITE` configures the Frappe context. The resolved Frappe User's
   roles and User Permissions remain authoritative.
@@ -222,8 +223,8 @@ permission checks for reads and writes.
   boundary.
 - Services use Frappe ORM and document APIs with normal permission checks;
   they do not provide an arbitrary SQL MCP tool.
-- Approval state is process-local, short-lived, and unsuitable by itself for
-  remote or multi-worker deployment.
+- Approval state is short-lived Redis coordination state, not durable audit
+  history; a lost or expired key requires a fresh prepare.
 
 The original Sales Order-only V1 scope is historical documentation. See
 [`MCP_SALES_ORDER_V1_FROZEN.md`](MCP_SALES_ORDER_V1_FROZEN.md) for that frozen

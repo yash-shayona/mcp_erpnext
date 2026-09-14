@@ -10,6 +10,11 @@ from mcp_erpnext.approvals import APPROVAL_TTL_SECONDS, approvals
 from mcp_erpnext.config.masters import customer as customer_config
 from mcp_erpnext.services.masters import customer as customer_service
 from mcp_erpnext.services.integrations import india_compliance_customer
+from mcp_erpnext.tests.approval_test_backend import (
+	install_fake_backend,
+	mutate_record,
+	read_record,
+)
 
 
 class FakeMeta:
@@ -51,7 +56,7 @@ class FakeDoc:
 
 class CustomerServiceTests(unittest.TestCase):
 	def setUp(self):
-		approvals._approvals.clear()
+		self.approval_backend = install_fake_backend(approvals)
 		self.docs: list[FakeDoc] = []
 		self.list_rows: dict[str, list[dict]] = {}
 		self.commit_count = 0
@@ -177,7 +182,7 @@ class CustomerServiceTests(unittest.TestCase):
 	def test_supplied_optional_customer_link_uses_generic_resolution(self):
 		prepared = customer_service.prepare_customer(self.valid_customer(customer_group="commercial"))
 		self.assertEqual(prepared["status"], "ready")
-		self.assertEqual(approvals._approvals[prepared["approval_token"]].payload["customer_group"], "Commercial")
+		self.assertEqual(read_record(approvals, prepared["approval_token"]).payload["customer_group"], "Commercial")
 
 	def test_supplied_optional_customer_link_never_guesses_or_leaks(self):
 		ambiguous = customer_service.prepare_customer(self.valid_customer(customer_group="com"))
@@ -190,12 +195,12 @@ class CustomerServiceTests(unittest.TestCase):
 	def test_runtime_default_satisfies_required_customer_type(self):
 		prepared = customer_service.prepare_customer(self.valid_customer())
 		self.assertEqual(prepared["status"], "ready")
-		self.assertEqual(approvals._approvals[prepared["approval_token"]].payload["customer_type"], "Company")
+		self.assertEqual(read_record(approvals, prepared["approval_token"]).payload["customer_type"], "Company")
 
 	def test_erpnext_only_address_uses_core_carrier(self):
 		prepared = customer_service.prepare_customer(self.valid_customer())
 		self.assertEqual(prepared["status"], "ready")
-		payload = approvals._approvals[prepared["approval_token"]].payload
+		payload = read_record(approvals, prepared["approval_token"]).payload
 		self.assertEqual(payload["address_line1"], "1 Test Road")
 		self.assertNotIn("_address_line1", payload)
 
@@ -236,7 +241,7 @@ class CustomerServiceTests(unittest.TestCase):
 			)
 		self.assertEqual(result["status"], "ready")
 		self.assertEqual(result["preview"]["gst_category"], "Registered Regular")
-		payload = approvals._approvals[result["approval_token"]].payload
+		payload = read_record(approvals, result["approval_token"]).payload
 		self.assertEqual(payload["gstin"], "27ABCDE1234F1Z5")
 		self.assertEqual(payload["gst_category"], "Registered Regular")
 		self.assertEqual(payload["_address_line1"], "1 Test Road")
@@ -297,7 +302,7 @@ class CustomerServiceTests(unittest.TestCase):
 
 	def test_expired_confirmation_is_rejected(self):
 		prepared = customer_service.prepare_customer(self.valid_customer())
-		approvals._approvals[prepared["approval_token"]].created_at -= APPROVAL_TTL_SECONDS + 1
+		mutate_record(approvals, self.approval_backend, prepared["approval_token"], lambda approval: setattr(approval, "created_at", approval.created_at - APPROVAL_TTL_SECONDS - 1), ttl_seconds=0)
 		result = customer_service.confirm_customer(prepared["approval_token"], True)
 		self.assertEqual(result["code"], "CONFIRMATION_EXPIRED")
 

@@ -82,5 +82,6 @@ def register_document_pdf_tools(mcp: Any, profile: str) -> None:
 				request.letterhead,
 				request.language,
 			),
+			rest_arguments=request.model_dump(mode="json"),
 		)
 		return _call_tool_result(result)

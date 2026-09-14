@@ -10,6 +10,7 @@ import frappe
 from mcp_erpnext.approvals import ApprovalStore
 from mcp_erpnext.services.common import email
 from mcp_erpnext.settings import ApprovalMode
+from mcp_erpnext.tests.approval_test_backend import FakeSharedApprovalBackend, read_record
 
 
 class FakeDocument:
@@ -39,7 +40,7 @@ class FakeDocument:
 class EmailServiceTests(unittest.TestCase):
 	def setUp(self):
 		self.doc = FakeDocument()
-		self.store = ApprovalStore(ApprovalMode.AGENT_DELEGATED)
+		self.store = ApprovalStore(ApprovalMode.AGENT_DELEGATED, backend=FakeSharedApprovalBackend())
 		self.get_doc = patch.object(email.frappe, "get_doc", return_value=self.doc)
 		self.get_doc.start()
 		self.runtime = [
@@ -79,7 +80,7 @@ class EmailServiceTests(unittest.TestCase):
 		self.assertEqual(result["preview"]["message"], "Please find attached Sales Order SO-001.")
 		self.assertEqual(result["preview"]["attachment_filename"], "SO-001.pdf")
 		sendmail.assert_not_called()
-		approval = self.store._approvals[result["approval_token"]]
+		approval = read_record(self.store, result["approval_token"])
 		self.assertEqual(approval.payload["attachment_sha256"], sha256(b"approved-pdf").hexdigest())
 
 	def test_confirm_queues_exact_attachment_and_replay_does_not_resend(self):
@@ -113,7 +114,7 @@ class EmailServiceTests(unittest.TestCase):
 		commit.assert_called_once()
 
 	def test_confirm_requires_trusted_approval_in_default_policy(self):
-		store = ApprovalStore()
+		store = ApprovalStore(backend=FakeSharedApprovalBackend())
 		with patch.object(email, "approvals", store):
 			token = store.create(action=email.EMAIL_ACTION, site="test.localhost", user="user@example.com", payload={})
 			result = email.confirm_document_email(token, "sales")

@@ -66,6 +66,7 @@ def prepare_sales_order(
 			request.delivery_date.isoformat() if request.delivery_date else None,
 			request.selling_price_list,
 		),
+		rest_arguments=request.model_dump(mode="json"),
 	)
 	return PrepareSalesOrderOutput(
 		root=_prepare_adapter.validate_python(_with_interaction(result))
@@ -81,6 +82,7 @@ def confirm_sales_order(
 		ctx,
 		"confirm_sales_order",
 		lambda: _confirm_sales_order(request.approval_token, request.confirm),
+		rest_arguments=request.model_dump(mode="json"),
 	)
 	return ConfirmSalesOrderOutput(root=_confirm_adapter.validate_python(result))
 

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+from ipaddress import ip_address
 from dataclasses import dataclass
 from enum import StrEnum
+from urllib.parse import urlsplit, urlunsplit
 
 from mcp_identity.identity import (
     get_http_shared_secret_from_environment,
@@ -36,12 +38,13 @@ class MCPSettings:
     erpnext_base_url: str | None
     erpnext_api_key: str | None
     erpnext_api_secret: str | None
+    rest_allow_insecure_http: bool = False
     transport: str = "stdio"
     http_host: str = "127.0.0.1"
     http_port: str = "8765"
     http_path: str = "/mcp"
     http_allowed_hosts: tuple[str, ...] = ("127.0.0.1:8765", "localhost:8765")
-    approval_mode: ApprovalMode = ApprovalMode.TRUSTED_HUMAN
+    approval_mode: ApprovalMode = ApprovalMode.AGENT_DELEGATED
     profile: MCPProfile = MCPProfile.SALES
 
     @classmethod
@@ -53,6 +56,10 @@ class MCPSettings:
             erpnext_base_url=os.environ.get("ERPNEXT_BASE_URL"),
             erpnext_api_key=os.environ.get("ERPNEXT_API_KEY"),
             erpnext_api_secret=os.environ.get("ERPNEXT_API_SECRET"),
+            rest_allow_insecure_http=(
+                os.environ.get("MCP_REST_ALLOW_INSECURE_HTTP", "").strip().lower()
+                in {"1", "true", "yes"}
+            ),
             transport=os.environ.get("MCP_TRANSPORT", "stdio").strip().lower(),
             http_host=os.environ.get("MCP_HTTP_HOST", "127.0.0.1").strip(),
             http_port=os.environ.get("MCP_HTTP_PORT", "8765").strip(),
@@ -71,7 +78,7 @@ class MCPSettings:
     @staticmethod
     def _approval_mode_from_environment() -> ApprovalMode:
         value = (
-            os.environ.get("MCP_APPROVAL_MODE", ApprovalMode.TRUSTED_HUMAN)
+            os.environ.get("MCP_APPROVAL_MODE", ApprovalMode.AGENT_DELEGATED)
             .strip()
             .lower()
         )
@@ -102,9 +109,53 @@ class MCPSettings:
             raise RuntimeError(
                 "ERPNEXT_BASE_URL, ERPNEXT_API_KEY, and ERPNEXT_API_SECRET are required for the REST backend."
             )
+        if self.backend == "rest":
+            self.rest_endpoint_url()
+            if self.transport == "streamable-http":
+                raise RuntimeError(
+                    "MCP_BACKEND=rest currently supports only MCP_TRANSPORT=stdio because remote execution is bound to the configured ERPNext API user."
+                )
         self.validate_transport()
         self.validate_approval_mode()
         self.validate_profile()
+
+    def rest_endpoint_url(self) -> str:
+        """Return the single approved remote bridge URL without exposing secrets."""
+        if not self.erpnext_base_url:
+            raise RuntimeError("ERPNEXT_BASE_URL is required for the REST backend.")
+        parsed = urlsplit(self.erpnext_base_url)
+        if (
+            parsed.scheme not in {"https", "http"}
+            or not parsed.netloc
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or parsed.path not in {"", "/"}
+        ):
+            raise RuntimeError(
+                "ERPNEXT_BASE_URL must be an absolute HTTP(S) origin without a path, credentials, query, or fragment."
+            )
+        if parsed.scheme == "http" and not self._allows_insecure_local_rest(parsed.hostname):
+            raise RuntimeError(
+                "ERPNEXT_BASE_URL must use HTTPS, except when MCP_REST_ALLOW_INSECURE_HTTP is enabled for a loopback-only local origin."
+            )
+        return urlunsplit(
+            (parsed.scheme, parsed.netloc, "/api/method/mcp_erpnext.remote_api.execute_mcp_operation", "", "")
+        )
+
+    def _allows_insecure_local_rest(self, hostname: str) -> bool:
+        """Allow explicit cleartext REST only for a local development origin."""
+        if not self.rest_allow_insecure_http:
+            return False
+        normalized = hostname.rstrip(".").lower()
+        if normalized == "localhost" or normalized.endswith(".localhost"):
+            return True
+        try:
+            return ip_address(normalized).is_loopback
+        except ValueError:
+            return False
 
     def validate_approval_mode(self) -> None:
         """Reject an unsafe or unknown final-write approval policy."""

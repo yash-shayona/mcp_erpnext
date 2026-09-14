@@ -271,20 +271,21 @@ resolve -> validate -> prepare -> preview -> explicit approval -> confirm -> ERP
 
 confirm: true sirf confirm step ki request hai. Isko human approval mat samjho.
 
-Default MCP_APPROVAL_MODE=trusted_human mein server ko independently
-authenticated human approval record chahiye jo exact token, action, site, user,
-payload digest aur pending operation se bound ho. Current internal
-record_trusted_user_approval() MCP tool ya public argument nahi hai. Isliye raw
-Postman/Gemini/model-generated confirmation fail closed hoti hai, aam taur par
-TRUSTED_APPROVAL_UNAVAILABLE ke saath.
-
-Local development ka existing agent_delegated mode Agent/client ke explicit
-user approval ke baad confirm call allow karta hai. Is mode mein bhi token,
+Default MCP_APPROVAL_MODE=agent_delegated hai: trusted Agent/client explicit
+user approval ke baad hi confirm call kar sakta hai. Is mode mein bhi token,
 action, site, authenticated user, payload digest, 15-minute expiry, cancellation,
 single-use atomic claim, aur final Frappe permission check enforce hote hain.
 
-Approval store process-local hai. Server restart ya multiple worker se pending
-token share nahi hota. Prepare aur confirm same process/profile par hone chahiye.
+Sirf explicitly MCP_APPROVAL_MODE=trusted_human set karne par server ko
+independently authenticated human approval record chahiye jo exact token,
+action, site, user, payload digest aur pending operation se bound ho. Current
+internal record_trusted_user_approval() MCP tool ya public argument nahi hai.
+Isliye raw Postman/Gemini/model-generated confirmation trusted_human mode mein
+fail closed hoti hai, aam taur par TRUSTED_APPROVAL_UNAVAILABLE ke saath.
+
+Approval store Frappe ke configured shared Redis cache mein hai. Same site/cache
+use karne wale alag worker ya restarted process pending token ko use kar sakte
+hain; Redis expiry ya loss par fresh prepare chahiye.
 Final writes ko sirf authorized development/test site par manually verify karo.
 
 ## Permissions kaise kaam karti hain
@@ -346,7 +347,7 @@ Yeh explanation in actual implementation areas par based hai:
 - mcp_erpnext/runtime.py — Frappe context and per-request identity.
 - mcp_erpnext/tools/ and mcp_erpnext/contracts/ — public wrappers and typed contracts.
 - mcp_erpnext/services/ — business validation, resolution and persistence.
-- mcp_erpnext/approvals.py — process-local pending-operation guard.
+- mcp_erpnext/approvals.py — shared Frappe-cache pending-operation guard.
 - [TOOLS.md](../TOOLS.md) — generated profile inventory.
 - [MCP_CONVERSATIONAL_INTERACTION_CONTRACT.md](../architecture/MCP_CONVERSATIONAL_INTERACTION_CONTRACT.md) — interaction responsibility split.
 - [MCP_EXPLICIT_USER_APPROVAL_SAFETY.md](../architecture/MCP_EXPLICIT_USER_APPROVAL_SAFETY.md) — approval safety boundary.
@@ -364,4 +365,3 @@ incomplete definition and did not finish initialize within 30 seconds.
 Therefore live HTTP/ERPNext behavior should be rechecked in the target bench;
 this guide does not claim that a database write or live Postman workflow was
 verified.
-

@@ -86,6 +86,14 @@ from .selling.sales_order_to_sales_invoice import (
 	SalesOrderToSalesInvoiceInput,
 	SalesOrderToSalesInvoiceConfirmInput,
 )
+from .selling.delivery_note import (
+    ConfirmDeliveryNoteOutput, SalesOrderToDeliveryNoteConfirmInput,
+    PrepareDeliveryNoteOutput, SalesOrderToDeliveryNoteInput,
+)
+from .selling.delivery_note_read import (
+    DeliveryNoteAggregateInput, DeliveryNoteAggregateOutput, DeliveryNoteGetInput,
+    DeliveryNoteGetOutput, DeliveryNoteQueryInput, DeliveryNoteQueryOutput,
+)
 from .selling.sales_invoice import (
     ConfirmSalesInvoiceOutput,
     PrepareSalesInvoiceOutput,
@@ -446,6 +454,8 @@ TOOL_CONTRACTS = {
         ConfirmSalesInvoiceOutput,
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
+    "prepare_sales_order_to_delivery_note": ToolContract("prepare_sales_order_to_delivery_note", "Selling", ToolOperation.PREPARE, SideEffectClass.PREPARE, "Prepare a native Draft Delivery Note preview from a Submitted Sales Order.", False, SalesOrderToDeliveryNoteInput, PrepareDeliveryNoteOutput, interaction_kinds=(InteractionKind.APPROVAL,), approval_confirm_tool="confirm_sales_order_to_delivery_note"),
+    "confirm_sales_order_to_delivery_note": ToolContract("confirm_sales_order_to_delivery_note", "Selling", ToolOperation.CONFIRM, SideEffectClass.CONFIRM_WRITE, "Create the approved native Draft Delivery Note from a Sales Order.", True, SalesOrderToDeliveryNoteConfirmInput, ConfirmDeliveryNoteOutput, approval_guard=TRUSTED_PENDING_OPERATION_GUARD),
     "prepare_purchase_order": ToolContract(
         "prepare_purchase_order",
         "Buying",
@@ -706,6 +716,9 @@ TOOL_CONTRACTS["aggregate_sales_invoices"] = ToolContract(
 	SalesInvoiceAggregateInput,
 	SalesInvoiceAggregateOutput,
 )
+TOOL_CONTRACTS["get_delivery_note"] = ToolContract("get_delivery_note", "Selling", ToolOperation.RESOLVE, SideEffectClass.READ, "Retrieve selected fields from one permitted Delivery Note.", False, DeliveryNoteGetInput, DeliveryNoteGetOutput, resolution_states=("ok", "not_found", "error"))
+TOOL_CONTRACTS["query_delivery_notes"] = ToolContract("query_delivery_notes", "Selling", ToolOperation.SEARCH, SideEffectClass.READ, "Query permitted Delivery Notes using typed filters and projections.", False, DeliveryNoteQueryInput, DeliveryNoteQueryOutput)
+TOOL_CONTRACTS["aggregate_delivery_notes"] = ToolContract("aggregate_delivery_notes", "Selling", ToolOperation.SEARCH, SideEffectClass.READ, "Calculate deterministic permission-aware Delivery Note metrics.", False, DeliveryNoteAggregateInput, DeliveryNoteAggregateOutput)
 TOOL_CONTRACTS["get_customer"] = ToolContract(
     "get_customer",
     "Masters",

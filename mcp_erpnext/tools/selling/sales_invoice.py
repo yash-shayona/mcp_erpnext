@@ -63,7 +63,7 @@ def prepare_sales_invoice(
     result = execute_tool_with_context(
         ctx,
         "prepare_sales_invoice",
-        lambda: _prepare_sales_invoice(
+		lambda: _prepare_sales_invoice(
             request.customer.model_dump(),
             [item.model_dump() for item in request.items],
             request.company,
@@ -72,7 +72,8 @@ def prepare_sales_invoice(
             request.customer_address,
             request.shipping_address_name,
             request.contact_person,
-        ),
+		),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return PrepareSalesInvoiceOutput(
         root=_prepare_adapter.validate_python(_with_interaction(result))
@@ -88,8 +89,9 @@ def confirm_sales_invoice(
     )
     result = execute_tool_with_context(
         ctx,
-        "confirm_sales_invoice",
-        lambda: _confirm_sales_invoice(request.approval_token, request.confirm),
+		"confirm_sales_invoice",
+		lambda: _confirm_sales_invoice(request.approval_token, request.confirm),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return ConfirmSalesInvoiceOutput(
         root=_confirm_adapter.validate_python(result)

@@ -5,14 +5,16 @@
 `MCP_APPROVAL_MODE` is a validated server setting and is never exposed as an
 MCP tool argument. It has two modes:
 
-- `trusted_human` is the default and the stronger provenance policy. An
-  independently verified human decision must be recorded through the internal
-  approval seam before `confirm_*`; otherwise the server returns
-  `TRUSTED_APPROVAL_UNAVAILABLE`.
-- `agent_delegated` trusts the authenticated MCP Agent/client as the user's
-  delegated conversational orchestrator. The Agent/client must call
+- `agent_delegated` is the default. It trusts the authenticated MCP
+  Agent/client as the user's delegated conversational orchestrator. The
+  Agent/client must call
   `confirm_*` only after the user explicitly approves the exact prepared
   preview. The MCP server does not parse natural-language approval.
+- `trusted_human` is the stronger provenance policy and applies only when
+  `MCP_APPROVAL_MODE=trusted_human` is configured explicitly. An independently
+  verified human decision must be recorded through the internal approval seam
+  before `confirm_*`; otherwise the server returns
+  `TRUSTED_APPROVAL_UNAVAILABLE`.
 
 The modes are not equally strong: `trusted_human` independently verifies human
 origin, while `agent_delegated` relies on the authenticated Agent/client to
@@ -23,7 +25,7 @@ source change is required for a compatible client to use delegated mode.
 
 `mcp_erpnext.approvals.ApprovalStore` creates a short-lived pending operation
 at prepare time. The opaque handle is bound to the server-side action, Frappe
-site, authenticated Frappe user, and HMAC digest of the prepared payload. The
+site, authenticated Frappe user, and SHA-256 digest of the prepared payload. The
 raw prepared document is never accepted from a confirm tool.
 
 `claim_for_confirm_write()` centrally revalidates each binding and atomically
@@ -42,12 +44,13 @@ operation. It remains mandatory in `trusted_human` mode and is optional in
 
 ## Deployment boundary
 
-The approval store is process-local and protected with a process-local lock.
-Restart loses pending operations and multiple workers do not share them. This
-task intentionally does not migrate it to Redis or Frappe DB; durable shared
-storage remains a future deployment/scaling concern.
+The approval store uses Frappe's configured Redis cache and its site/database
+namespace. Restarted or separate MCP workers can use the same still-valid
+approval, while the explicit stored site, user, action, payload, trust, and
+single-use checks remain the authorization boundary. Redis is ephemeral:
+expiry, eviction, flush, or Redis restart requires a fresh prepare.
 
-For a stricter deployment, retain `trusted_human` and provide a transport
-adapter that independently verifies a payload-bound human decision. For the
-current local chat-development flow, set `MCP_APPROVAL_MODE=agent_delegated` and
-keep explicit approval interpretation in the Agent/client, outside MCP.
+For a stricter deployment, set `MCP_APPROVAL_MODE=trusted_human` explicitly and
+provide a transport adapter that independently verifies a payload-bound human
+decision. The default `agent_delegated` mode keeps explicit approval
+interpretation in the Agent/client, outside MCP.

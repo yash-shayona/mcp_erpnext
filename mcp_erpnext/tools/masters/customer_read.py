@@ -36,7 +36,7 @@ def get_customer(
     """Retrieve selected fields from one permitted Customer by exact reference."""
     request = CustomerGetInput(customer=customer, fields=fields or ["name"])
     result = execute_tool_with_context(
-        ctx, "get_customer", lambda: service.get_customer(**request.model_dump())
+        ctx, "get_customer", lambda: service.get_customer(**request.model_dump()), rest_arguments=request.model_dump(mode="json")
     )
     return CustomerGetOutput.model_validate(result)
 
@@ -73,7 +73,7 @@ def query_customers(
     }
     request = CustomerQueryInput(**values)
     result = execute_tool_with_context(
-        ctx, "query_customers", lambda: service.query_customers(request.model_dump())
+        ctx, "query_customers", lambda: service.query_customers(request.model_dump()), rest_arguments=request.model_dump(mode="json")
     )
     return CustomerQueryOutput.model_validate(result)
 
@@ -107,7 +107,7 @@ def aggregate_customers(
     }
     request = CustomerAggregateInput(**values)
     result = execute_tool_with_context(
-        ctx, "aggregate_customers", lambda: service.aggregate_customers(request.model_dump())
+        ctx, "aggregate_customers", lambda: service.aggregate_customers(request.model_dump()), rest_arguments=request.model_dump(mode="json")
     )
     return CustomerAggregateOutput.model_validate(result)
 

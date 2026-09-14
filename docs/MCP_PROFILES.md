@@ -73,9 +73,11 @@ mcpServers:
     timeout: 120000
 ```
 
-`agent_delegated` is shown only for the existing trusted-client development
-mode. The default `trusted_human` remains fail-closed until an authenticated
-human-approval adapter records approval for the exact pending operation.
+`agent_delegated` is the default trusted-client mode. Set
+`MCP_APPROVAL_MODE=trusted_human` explicitly when an authenticated
+human-approval adapter must record approval for the exact pending operation;
+without that record, confirmation fails closed.
 
-Each confirmation token is process-local. Keep prepare and confirm calls on the
-same profile process; do not run multiple workers for one endpoint.
+Each confirmation token is stored in the Frappe-configured shared Redis cache.
+Prepare and confirm may use separate workers when they share that initialized
+site/cache; expiry or Redis loss still requires a fresh prepare.

@@ -131,12 +131,13 @@ deterministically. This remains capability-scoped; the server does not expose
 arbitrary DocType resolution.
 
 `MCP_APPROVAL_MODE` selects the server-side trust policy for every
-`CONFIRM_WRITE` tool; it is never a tool argument. Its secure default,
-`trusted_human`, requires an independently verified human approval recorded by
-an internal transport adapter and otherwise fails closed with
-`TRUSTED_APPROVAL_UNAVAILABLE`. `agent_delegated` instead trusts the
-authenticated MCP Agent/client to call `confirm_*` only after the user has
-explicitly approved the prepared preview. It still enforces the pending token's
+`CONFIRM_WRITE` tool; it is never a tool argument. It defaults to
+`agent_delegated`, which trusts the authenticated MCP Agent/client to call
+`confirm_*` only after the user has explicitly approved the prepared preview.
+Set `MCP_APPROVAL_MODE=trusted_human` explicitly to require an independently
+verified human approval recorded by an internal transport adapter; otherwise
+the server fails closed with `TRUSTED_APPROVAL_UNAVAILABLE`. Both modes enforce
+the pending token's
 action, Frappe site, authenticated user, prepared-payload digest, 15-minute
 expiry, cancellation, single-use consumption, and final Frappe permission
 check. See [explicit user approval safety](docs/architecture/MCP_EXPLICIT_USER_APPROVAL_SAFETY.md).
@@ -163,9 +164,19 @@ request. `mcp_identity` resolves that email only after authentication. HTTP
 never uses `MCP_FRAPPE_USER` as a fallback and clears Frappe context after each
 tool call.
 
-The REST backend settings remain a future boundary and are not implemented by
-this server. Do not put credentials in this repository or expose them as tool
-arguments.
+`MCP_BACKEND=rest` calls the fixed authenticated
+`mcp_erpnext.remote_api.execute_mcp_operation` bridge on a compatible remote
+ERPNext site. It preserves the existing native service workflow there; it does
+not use generic DocType CRUD. REST runs as the remote Frappe user that owns the
+configured API key/secret and currently supports only local MCP `stdio`, not
+request-scoped Streamable HTTP identity. Do not put credentials in this
+repository or expose them as tool arguments.
+
+For local development only, an explicit
+`MCP_REST_ALLOW_INSECURE_HTTP=1` permits a loopback REST origin such as
+`http://yob.localhost:8000`. It cannot enable HTTP for a LAN, staging, or live
+host; those origins always require HTTPS. The client still appends the fixed
+`/api/method/mcp_erpnext.remote_api.execute_mcp_operation` path itself.
 
 Start the local server from the bench `sites` directory after configuring the
 required environment:

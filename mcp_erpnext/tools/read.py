@@ -14,12 +14,12 @@ from ..services.common import read
 
 
 def _get(request: DocumentReadInput, ctx: Context, profile: str) -> DocumentReadOutput:
-	result = execute_tool_with_context(ctx, f"get_{request.target.doctype.lower().replace(' ', '_')}", lambda: read.get_document(request.target.model_dump(), profile))
+	result = execute_tool_with_context(ctx, f"get_{request.target.doctype.lower().replace(' ', '_')}", lambda: read.get_document(request.target.model_dump(), profile), rest_arguments=request.model_dump(mode="json"))
 	return DocumentReadOutput(root=TypeAdapter(DocumentReadResult).validate_python(result))
 
 
 def _search(request: DocumentSearchInput, ctx: Context, doctype: str, profile: str) -> DocumentSearchOutput:
-	result = execute_tool_with_context(ctx, f"search_{doctype.lower().replace(' ', '_')}s", lambda: read.search_documents(doctype, request.model_dump(), profile))
+	result = execute_tool_with_context(ctx, f"search_{doctype.lower().replace(' ', '_')}s", lambda: read.search_documents(doctype, request.model_dump(), profile), rest_arguments=request.model_dump(mode="json"))
 	return DocumentSearchOutput.model_validate(result)
 
 

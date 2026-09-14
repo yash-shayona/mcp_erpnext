@@ -32,7 +32,7 @@ def register_document_email_tools(mcp: Any, profile: str) -> None:
 		result = execute_tool_with_context(
 			ctx,
 			"prepare_document_email",
-			lambda: email_service.prepare_document_email(
+		lambda: email_service.prepare_document_email(
 				request.doctype,
 				request.name,
 				profile,
@@ -42,7 +42,8 @@ def register_document_email_tools(mcp: Any, profile: str) -> None:
 				request.print_format,
 				request.letterhead,
 				request.language,
-			),
+		),
+		rest_arguments=request.model_dump(mode="json"),
 		)
 		return prepare_adapter.validate_python(result)
 
@@ -55,7 +56,8 @@ def register_document_email_tools(mcp: Any, profile: str) -> None:
 	def confirm_document_email(request: DocumentEmailConfirmInput, ctx: Context) -> DocumentEmailConfirmOutput:
 		result = execute_tool_with_context(
 			ctx,
-			"confirm_document_email",
-			lambda: email_service.confirm_document_email(request.approval_token, profile),
+		"confirm_document_email",
+		lambda: email_service.confirm_document_email(request.approval_token, profile),
+		rest_arguments=request.model_dump(mode="json"),
 		)
 		return confirm_adapter.validate_python(result)

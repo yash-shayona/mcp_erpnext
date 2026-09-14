@@ -56,7 +56,7 @@ def get_sales_invoice(
 		],
 	)
 	result = execute_tool_with_context(
-		ctx, "get_sales_invoice", lambda: service.get_sales_invoice(**request.model_dump())
+		ctx, "get_sales_invoice", lambda: service.get_sales_invoice(**request.model_dump()), rest_arguments=request.model_dump(mode="json")
 	)
 	return SalesInvoiceGetOutput.model_validate(result)
 
@@ -123,6 +123,7 @@ def query_sales_invoices(
 		ctx,
 		"query_sales_invoices",
 		lambda: service.query_sales_invoices(request.model_dump()),
+		rest_arguments=request.model_dump(mode="json"),
 	)
 	return SalesInvoiceQueryOutput.model_validate(result)
 
@@ -179,6 +180,7 @@ def aggregate_sales_invoices(
 		ctx,
 		"aggregate_sales_invoices",
 		lambda: service.aggregate_sales_invoices(validated.model_dump()),
+		rest_arguments=validated.model_dump(mode="json"),
 	)
 	return SalesInvoiceAggregateOutput.model_validate(result)
 

@@ -19,6 +19,7 @@ from mcp_identity.identity import (
 )
 
 from .settings import MCPSettings
+from .rest_client import ERPNextRestClient
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import Context
@@ -39,12 +40,32 @@ def ensure_context(site: str | None = None, user: str | None = None) -> dict[str
 
 
 def execute_tool_with_context(
-    context: Context, tool_name: str, operation: Callable[[], ResultT]
+    context: Context,
+    tool_name: str,
+    operation: Callable[[], ResultT],
+    *,
+    rest_arguments: dict[str, object] | None = None,
 ) -> ResultT | dict[str, object]:
     """Execute one MCP tool with either persistent STDIO or scoped HTTP runtime state."""
     from .observability import execute_tool
 
     settings = MCPSettings.from_environment()
+    if settings.backend == "rest":
+        if rest_arguments is None:
+            return execute_tool(
+                tool_name,
+                lambda: (_ for _ in ()).throw(
+                    RuntimeError("The REST operation payload is unavailable.")
+                ),
+            )
+        return execute_tool(
+            tool_name,
+            lambda: ERPNextRestClient(settings).execute(
+                operation=tool_name,
+                profile=settings.profile.value,
+                arguments=rest_arguments,
+            ),
+        )
     runtime_identity = _get_http_runtime_identity(context)
     if runtime_identity is None:
         return execute_tool(tool_name, lambda: _run_stdio_tool(settings, operation))

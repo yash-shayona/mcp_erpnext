@@ -7,6 +7,7 @@ from unittest.mock import patch
 import frappe
 
 from mcp_erpnext.approvals import approvals
+from mcp_erpnext.tests.approval_test_backend import install_fake_backend
 from mcp_erpnext.services.selling import sales_invoice as service
 
 
@@ -123,7 +124,7 @@ class FakeDocument:
 
 class StandaloneSalesInvoiceServiceTests(unittest.TestCase):
     def setUp(self):
-        approvals._approvals.clear()
+        self.approval_backend = install_fake_backend(approvals)
         self.documents = []
         self.native_prerequisite_error = None
 
@@ -182,7 +183,7 @@ class StandaloneSalesInvoiceServiceTests(unittest.TestCase):
         self.resolver_patch.stop()
         for active_patch in reversed(self.patches):
             active_patch.stop()
-        approvals._approvals.clear()
+        self.approval_backend.clear()
 
     def request(self, rate=None):
         row = {"item": {"doctype": "Item", "name": "ITEM-001"}, "qty": 2}
@@ -294,7 +295,7 @@ class StandaloneSalesInvoiceServiceTests(unittest.TestCase):
                 self.assertEqual(result["code"], code)
                 self.assertEqual(result["prerequisites"], [prerequisite])
                 self.assertNotIn("ITEM-001", result["message"])
-                approvals._approvals.clear()
+                self.approval_backend.clear()
 
     def test_native_delivery_note_prerequisite_is_mapped_without_leaking_text(self):
         self.native_prerequisite_error = frappe.ValidationError(
@@ -308,7 +309,7 @@ class StandaloneSalesInvoiceServiceTests(unittest.TestCase):
         self.assertEqual(result["code"], "DELIVERY_NOTE_REQUIRED")
         self.assertEqual(result["prerequisites"], ["Delivery Note"])
         self.assertNotIn("ITEM-001", result["message"])
-        self.assertEqual(approvals._approvals, {})
+        self.assertTrue(self.approval_backend.is_empty())
 
     def test_unknown_native_prerequisite_failure_is_bounded(self):
         self.native_prerequisite_error = frappe.ValidationError("native details")
@@ -329,7 +330,7 @@ class StandaloneSalesInvoiceServiceTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["code"], "INVALID_SALES_INVOICE_DETAILS")
-        self.assertEqual(approvals._approvals, {})
+        self.assertTrue(self.approval_backend.is_empty())
 
 
 if __name__ == "__main__":

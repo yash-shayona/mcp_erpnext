@@ -41,8 +41,9 @@ def prepare_quotation_to_sales_order(
     request = QuotationToSalesOrderInput(quotation=quotation)
     result = execute_tool_with_context(
         ctx,
-        "prepare_quotation_to_sales_order",
-        lambda: _prepare_quotation_to_sales_order(request.quotation),
+		"prepare_quotation_to_sales_order",
+		lambda: _prepare_quotation_to_sales_order(request.quotation),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return PrepareQuotationToSalesOrderOutput(
         root=_prepare_adapter.validate_python(_with_interaction(result))
@@ -59,8 +60,9 @@ def confirm_quotation_to_sales_order(
     )
     result = execute_tool_with_context(
         ctx,
-        "confirm_quotation_to_sales_order",
-        lambda: _confirm_quotation_to_sales_order(request.approval_token, request.confirm),
+		"confirm_quotation_to_sales_order",
+		lambda: _confirm_quotation_to_sales_order(request.approval_token, request.confirm),
+		rest_arguments=request.model_dump(mode="json"),
     )
     return ConfirmQuotationToSalesOrderOutput(
         root=_confirm_adapter.validate_python(result)
@@ -76,4 +78,3 @@ def register_quotation_to_sales_order_tools(mcp: Any) -> None:
     mcp.tool(
         meta=tool_meta("confirm_quotation_to_sales_order"), structured_output=True
     )(confirm_quotation_to_sales_order)
-

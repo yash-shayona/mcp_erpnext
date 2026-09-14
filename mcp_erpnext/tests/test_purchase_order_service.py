@@ -8,6 +8,7 @@ from unittest.mock import patch
 import frappe
 
 from mcp_erpnext.approvals import approvals
+from mcp_erpnext.tests.approval_test_backend import install_fake_backend
 from mcp_erpnext.services.buying import purchase_order as purchase_order_service
 
 
@@ -71,7 +72,7 @@ class FakePurchaseOrder:
 
 class PurchaseOrderServiceTests(unittest.TestCase):
     def setUp(self):
-        approvals._approvals.clear()
+        self.approval_backend = install_fake_backend(approvals)
         self.docs: list[FakePurchaseOrder] = []
         self.commit_count = 0
         self.fake_frappe = SimpleNamespace(

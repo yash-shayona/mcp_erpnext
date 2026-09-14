@@ -18,6 +18,7 @@ class ItemPrepareInput(PublicContractModel):
 
 	item_code: NonEmptyString | None = None
 	item_name: NonEmptyString | None = None
+	custom_slug: NonEmptyString | None = None
 	item_group: NonEmptyString | None = None
 	stock_uom: NonEmptyString | None = None
 	is_stock_item: bool | None = None
@@ -37,6 +38,7 @@ class ItemPrepareInput(PublicContractModel):
 class ItemPreview(PublicContractModel):
 	item_code: NonEmptyString
 	item_name: NonEmptyString
+	custom_slug: NonEmptyString | None = None
 	item_group: NonEmptyString
 	stock_uom: NonEmptyString
 	is_stock_item: bool | int | None = None

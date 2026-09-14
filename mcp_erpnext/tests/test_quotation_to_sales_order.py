@@ -8,6 +8,7 @@ import frappe
 from pydantic import TypeAdapter, ValidationError
 
 from mcp_erpnext.approvals import approvals
+from mcp_erpnext.tests.approval_test_backend import install_fake_backend
 from mcp_erpnext.contracts.selling.quotation_to_sales_order import (
     PrepareQuotationToSalesOrderResult,
     QuotationToSalesOrderInput,
@@ -109,7 +110,7 @@ def mapped_order(*, rate=500, items=True):
 
 class QuotationToSalesOrderServiceTests(unittest.TestCase):
 	def setUp(self):
-		approvals._approvals.clear()
+		self.approval_backend = install_fake_backend(approvals)
 		self.source = FakeDocument(
 			"Quotation",
 			"SAL-QTN-0001",
@@ -142,7 +143,7 @@ class QuotationToSalesOrderServiceTests(unittest.TestCase):
 	def tearDown(self):
 		for active_patch in reversed(self.patches):
 			active_patch.stop()
-		approvals._approvals.clear()
+		self.approval_backend.clear()
 
 	def prepare(self):
 		return service.prepare_quotation_to_sales_order("SAL-QTN-0001")
@@ -187,14 +188,14 @@ class QuotationToSalesOrderServiceTests(unittest.TestCase):
 		with patch.object(service, "_native_make_sales_order") as native:
 			result = self.prepare()
 		self.assertEqual(result["code"], "UNSUPPORTED_QUOTATION_PARTY")
-		self.assertEqual(approvals._approvals, {})
+		self.assertTrue(self.approval_backend.is_empty())
 		native.assert_not_called()
 
 	def test_no_mappable_items_do_not_create_an_approval(self):
 		self.native = mapped_order(items=False)
 		result = self.prepare()
 		self.assertEqual(result["code"], "NO_MAPPABLE_ITEMS")
-		self.assertEqual(approvals._approvals, {})
+		self.assertTrue(self.approval_backend.is_empty())
 
 	def test_confirm_revalidates_native_mapping_and_creates_one_draft(self):
 		prepared = self.prepare()

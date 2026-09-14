@@ -59,13 +59,13 @@ def _with_creation_interaction(result: dict[str, Any]) -> dict[str, Any]:
 
 def search_items(query: NonEmptyString, ctx: Context) -> ItemSearchOutput:
 	"""Find permitted sales Items with explicit candidate references."""
-	result = execute_tool_with_context(ctx, "search_items", lambda: _search_items(query))
+	result = execute_tool_with_context(ctx, "search_items", lambda: _search_items(query), rest_arguments={"query": query})
 	return ItemSearchOutput(root=_search_adapter.validate_python(_with_selection_interaction(result)))
 
 
 def resolve_item(query: NonEmptyString, ctx: Context) -> ItemResolutionOutput:
 	"""Resolve one permitted sales Item or return a terminal selection state."""
-	result = execute_tool_with_context(ctx, "resolve_item", lambda: _resolve_item_for_workflow(query))
+	result = execute_tool_with_context(ctx, "resolve_item", lambda: _resolve_item_for_workflow(query), rest_arguments={"query": query})
 	return ItemResolutionOutput(root=_resolution_adapter.validate_python(_with_selection_interaction(result)))
 
 
@@ -73,7 +73,7 @@ def prepare_item(item: ItemPrepareInput, ctx: Context) -> PrepareItemOutput:
 	"""Validate a new sales Item and return a private confirmation token without writing."""
 	request = ItemPrepareInput.model_validate(item)
 	result = execute_tool_with_context(
-		ctx, "prepare_item", lambda: _prepare_item(request.to_service_payload())
+		ctx, "prepare_item", lambda: _prepare_item(request.to_service_payload()), rest_arguments=request.model_dump(mode="json")
 	)
 	return PrepareItemOutput(
 		root=_prepare_adapter.validate_python(_with_creation_interaction(result))
@@ -89,6 +89,7 @@ def confirm_item(
 		ctx,
 		"confirm_item",
 		lambda: _confirm_item(request.approval_token, request.confirm),
+		rest_arguments=request.model_dump(mode="json"),
 	)
 	return ConfirmItemOutput(root=_confirm_adapter.validate_python(result))
 
