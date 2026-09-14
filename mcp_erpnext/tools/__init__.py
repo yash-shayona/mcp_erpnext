@@ -50,6 +50,9 @@ def register_sales_tools(mcp: Any) -> None:
     from .selling.delivery_note_to_sales_invoice import (
         register_delivery_note_to_sales_invoice_tools,
     )
+    from .selling.sales_invoice_to_delivery_note import (
+        register_sales_invoice_to_delivery_note_tools,
+    )
 
     register_customer_tools(mcp)
     register_item_tools(mcp)
@@ -60,4 +63,5 @@ def register_sales_tools(mcp: Any) -> None:
     register_sales_order_to_sales_invoice_tools(mcp)
     register_sales_invoice_tools(mcp)
     register_delivery_note_tools(mcp)
+    register_sales_invoice_to_delivery_note_tools(mcp)
     register_delivery_note_to_sales_invoice_tools(mcp)

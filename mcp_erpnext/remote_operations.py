@@ -91,6 +91,10 @@ from .contracts.selling.delivery_note_to_sales_invoice import (
     DeliveryNoteToSalesInvoiceInput,
     DeliveryNoteToSalesInvoiceConfirmInput,
 )
+from .contracts.selling.sales_invoice_to_delivery_note import (
+    SalesInvoiceToDeliveryNoteInput,
+    SalesInvoiceToDeliveryNoteConfirmInput,
+)
 from .contracts.selling.delivery_note_read import (
     DeliveryNoteGetInput,
     DeliveryNoteQueryInput,
@@ -123,6 +127,7 @@ from .services.selling import (
     sales_order_to_delivery_note,
     delivery_note_read,
     delivery_note_to_sales_invoice,
+    sales_invoice_to_delivery_note,
 )
 
 RemoteHandler = Callable[[Any, str], dict[str, Any]]
@@ -401,6 +406,18 @@ _SALES_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
     "confirm_delivery_note_to_sales_invoice": (
         DeliveryNoteToSalesInvoiceConfirmInput,
         lambda request, _profile: delivery_note_to_sales_invoice.confirm_delivery_note_to_sales_invoice(
+            request.approval_token, request.confirm
+        ),
+    ),
+    "prepare_sales_invoice_to_delivery_note": (
+        SalesInvoiceToDeliveryNoteInput,
+        lambda request, _profile: sales_invoice_to_delivery_note.prepare_sales_invoice_to_delivery_note(
+            request.sales_invoice
+        ),
+    ),
+    "confirm_sales_invoice_to_delivery_note": (
+        SalesInvoiceToDeliveryNoteConfirmInput,
+        lambda request, _profile: sales_invoice_to_delivery_note.confirm_sales_invoice_to_delivery_note(
             request.approval_token, request.confirm
         ),
     ),

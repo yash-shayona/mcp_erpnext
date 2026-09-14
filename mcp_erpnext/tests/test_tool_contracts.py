@@ -102,6 +102,26 @@ class ToolContractTests(unittest.TestCase):
 		self.assertNotIn("update_stock", dumps(prepare.inputSchema))
 		self.assertNotIn("args", dumps(prepare.inputSchema))
 
+	def test_sales_invoice_to_delivery_note_contract_is_typed_and_bounded(self):
+		tools = {tool.name: tool for tool in self.registered_tools()}
+		prepare = tools["prepare_sales_invoice_to_delivery_note"]
+		confirm = tools["confirm_sales_invoice_to_delivery_note"]
+		self.assertEqual(prepare.inputSchema["required"], ["sales_invoice"])
+		self.assertEqual(confirm.inputSchema["required"], ["approval_token", "confirm"])
+		self.assertEqual(prepare.meta["mcp_erpnext"]["side_effect"], "PREPARE")
+		self.assertEqual(confirm.meta["mcp_erpnext"]["side_effect"], "CONFIRM_WRITE")
+		self.assertEqual(
+			get_tool_contract("prepare_sales_invoice_to_delivery_note").approval_confirm_tool,
+			"confirm_sales_invoice_to_delivery_note",
+		)
+		for internal in (
+			"items", "qty", "warehouse", "update_stock", "target_doc", "kwargs",
+			"ignore_permissions", "against_sales_invoice", "si_detail",
+		):
+			self.assertNotIn(internal, dumps(prepare.inputSchema))
+		for mutable in ("sales_invoice", "items", "qty", "warehouse", "customer", "company"):
+			self.assertNotIn(mutable, confirm.inputSchema["properties"])
+
 	def test_sales_invoice_read_schemas_are_typed_and_accounting_aware(self):
 		tools = {tool.name: tool for tool in self.registered_tools()}
 		for name in ("get_sales_invoice", "query_sales_invoices", "aggregate_sales_invoices"):

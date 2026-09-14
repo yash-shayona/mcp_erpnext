@@ -84,6 +84,33 @@ class RemoteOperationRegistryTests(unittest.TestCase):
         self.assertEqual(result["code"], "SOURCE_NOT_FOUND")
         prepare.assert_called_once_with("MAT-DN-0001")
 
+    @patch("mcp_erpnext.remote_operations.sales_invoice_to_delivery_note.prepare_sales_invoice_to_delivery_note")
+    def test_sales_invoice_delivery_note_conversion_uses_fixed_typed_handler(self, prepare):
+        prepare.return_value = {
+            "status": "error",
+            "code": "SOURCE_NOT_FOUND",
+            "message": "missing",
+            "reference": "MCP-ERR-TEST",
+        }
+        result = remote_operations.execute_remote_operation(
+            "prepare_sales_invoice_to_delivery_note",
+            "sales",
+            {"sales_invoice": "ACC-SINV-0001"},
+        )
+        self.assertEqual(result["code"], "SOURCE_NOT_FOUND")
+        prepare.assert_called_once_with("ACC-SINV-0001")
+
+    @patch("mcp_erpnext.remote_operations.sales_invoice_to_delivery_note.confirm_sales_invoice_to_delivery_note")
+    def test_sales_invoice_delivery_note_confirm_uses_fixed_typed_handler(self, confirm):
+        confirm.return_value = {"status": "error", "code": "CONFIRMATION_UNAVAILABLE"}
+        result = remote_operations.execute_remote_operation(
+            "confirm_sales_invoice_to_delivery_note",
+            "sales",
+            {"approval_token": "opaque", "confirm": True},
+        )
+        self.assertEqual(result["code"], "CONFIRMATION_UNAVAILABLE")
+        confirm.assert_called_once_with("opaque", True)
+
     def test_unknown_operation_and_invalid_payload_fail_closed(self):
         with self.assertRaises(remote_operations.RemoteOperationError):
             remote_operations.execute_remote_operation("frappe.db.sql", "sales", {})

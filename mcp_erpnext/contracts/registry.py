@@ -98,6 +98,14 @@ from .selling.delivery_note_to_sales_invoice import (
     DeliveryNoteToSalesInvoiceInput,
     PrepareDeliveryNoteToSalesInvoiceOutput,
 )
+from .selling.sales_invoice_to_delivery_note import (
+    ConfirmSalesInvoiceToDeliveryNoteOutput,
+    ConfirmSalesInvoiceToDeliveryNoteResult,
+    PrepareSalesInvoiceToDeliveryNoteOutput,
+    PrepareSalesInvoiceToDeliveryNoteResult,
+    SalesInvoiceToDeliveryNoteConfirmInput,
+    SalesInvoiceToDeliveryNoteInput,
+)
 from .selling.delivery_note_read import (
     DeliveryNoteAggregateInput,
     DeliveryNoteAggregateOutput,
@@ -544,6 +552,29 @@ TOOL_CONTRACTS = {
         True,
         DeliveryNoteToSalesInvoiceConfirmInput,
         ConfirmDeliveryNoteToSalesInvoiceOutput,
+        approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+    ),
+    "prepare_sales_invoice_to_delivery_note": ToolContract(
+        "prepare_sales_invoice_to_delivery_note",
+        "Selling",
+        ToolOperation.PREPARE,
+        SideEffectClass.PREPARE,
+        "Prepare a native Draft Delivery Note preview from a Submitted Sales Invoice.",
+        False,
+        SalesInvoiceToDeliveryNoteInput,
+        PrepareSalesInvoiceToDeliveryNoteOutput,
+        interaction_kinds=(InteractionKind.APPROVAL,),
+        approval_confirm_tool="confirm_sales_invoice_to_delivery_note",
+    ),
+    "confirm_sales_invoice_to_delivery_note": ToolContract(
+        "confirm_sales_invoice_to_delivery_note",
+        "Selling",
+        ToolOperation.CONFIRM,
+        SideEffectClass.CONFIRM_WRITE,
+        "Create the approved native Draft Delivery Note from a Sales Invoice.",
+        True,
+        SalesInvoiceToDeliveryNoteConfirmInput,
+        ConfirmSalesInvoiceToDeliveryNoteOutput,
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "prepare_purchase_order": ToolContract(

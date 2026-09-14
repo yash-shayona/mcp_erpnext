@@ -48,6 +48,8 @@ class ToolRegistrationTests(unittest.TestCase):
 				"confirm_sales_invoice",
 				"prepare_sales_order_to_delivery_note",
 				"confirm_sales_order_to_delivery_note",
+				"prepare_sales_invoice_to_delivery_note",
+				"confirm_sales_invoice_to_delivery_note",
 				"prepare_delivery_note_to_sales_invoice",
 				"confirm_delivery_note_to_sales_invoice",
 				"prepare_document_update",
