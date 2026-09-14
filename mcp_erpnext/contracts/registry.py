@@ -149,6 +149,12 @@ from .email import (
     DocumentEmailPrepareInput,
     DocumentEmailPrepareOutput,
 )
+from .accounts.sales_invoice_payment import (
+    ConfirmSalesInvoicePaymentOutput,
+    PrepareSalesInvoicePaymentOutput,
+    SalesInvoicePaymentConfirmInput,
+    SalesInvoicePaymentPrepareInput,
+)
 
 
 class ToolOperation(StrEnum):
@@ -907,6 +913,22 @@ TOOL_CONTRACTS["confirm_document_email"] = ToolContract(
     True,
     DocumentEmailConfirmInput,
     DocumentEmailConfirmOutput,
+    approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+)
+
+TOOL_CONTRACTS["prepare_sales_invoice_payment"] = ToolContract(
+    "prepare_sales_invoice_payment", "Accounts", ToolOperation.PREPARE,
+    SideEffectClass.PREPARE,
+    "Prepare a native Draft customer Payment Entry for one submitted Sales Invoice.",
+    False, SalesInvoicePaymentPrepareInput, PrepareSalesInvoicePaymentOutput,
+    interaction_kinds=(InteractionKind.APPROVAL,),
+    approval_confirm_tool="confirm_sales_invoice_payment",
+)
+TOOL_CONTRACTS["confirm_sales_invoice_payment"] = ToolContract(
+    "confirm_sales_invoice_payment", "Accounts", ToolOperation.CONFIRM,
+    SideEffectClass.CONFIRM_WRITE,
+    "Create the reviewed native Draft customer Payment Entry.",
+    True, SalesInvoicePaymentConfirmInput, ConfirmSalesInvoicePaymentOutput,
     approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
 )
 

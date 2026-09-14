@@ -6,8 +6,9 @@ import unittest
 from unittest.mock import patch
 
 from mcp_erpnext.contracts.audit import audit_tool_contracts
+from mcp_erpnext.approvals import approvals
 from mcp_erpnext.mcp_server import create_mcp
-from mcp_erpnext.settings import MCPProfile, MCPSettings
+from mcp_erpnext.settings import ApprovalMode, MCPProfile, MCPSettings
 
 
 def _settings(profile: MCPProfile) -> MCPSettings:
@@ -115,9 +116,35 @@ class ProfileRegistrationTests(unittest.TestCase):
         )
 
     def test_unknown_profile_fails_at_configuration_load(self):
-        with patch.dict(os.environ, {"MCP_PROFILE": "accounts"}, clear=True):
+        with patch.dict(os.environ, {"MCP_PROFILE": "unknown"}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "MCP_PROFILE"):
                 MCPSettings.from_environment()
+
+    def test_accounts_profile_is_narrow_and_independent(self):
+        try:
+            names = self._tool_names(MCPProfile.ACCOUNTS)
+            self.assertEqual(
+                names,
+                [
+                    "prepare_sales_invoice_payment",
+                    "confirm_sales_invoice_payment",
+                    "prepare_document_submit",
+                    "confirm_document_submit",
+                    "prepare_document_cancel",
+                    "confirm_document_cancel",
+                    "prepare_document_delete",
+                    "confirm_document_delete",
+                ],
+            )
+            self.assertNotIn("prepare_sales_invoice", names)
+            self.assertNotIn("prepare_document_update", names)
+            self.assertNotIn("prepare_document_child_add", names)
+            self.assertEqual(
+                audit_tool_contracts(asyncio.run(create_mcp(_settings(MCPProfile.ACCOUNTS)).list_tools())),
+                [],
+            )
+        finally:
+            approvals.configure_approval_mode(ApprovalMode.TRUSTED_HUMAN)
 
 
 if __name__ == "__main__":

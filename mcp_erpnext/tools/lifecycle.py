@@ -23,19 +23,15 @@ from ..services.common import lifecycle
 def register_lifecycle_tools(mcp: Any, profile: str) -> None:
 	result_adapter = TypeAdapter(LifecycleResult)
 
-	@mcp.tool(description="Prepare an exact existing-document field update without writing.", meta=tool_meta("prepare_document_update"), structured_output=True)
 	def prepare_document_update(request: PrepareUpdateInput, ctx: Context) -> LifecycleResult:
 		return result_adapter.validate_python(execute_tool_with_context(ctx, "prepare_document_update", lambda: lifecycle.prepare_update(request.target.model_dump(), [change.model_dump() for change in request.changes], profile), rest_arguments=request.model_dump(mode="json")))
 
-	@mcp.tool(description="Apply a prepared exact existing-document field update after approval.", meta=tool_meta("confirm_document_update"), structured_output=True)
 	def confirm_document_update(request: LifecycleConfirmInput, ctx: Context) -> LifecycleResult:
 		return result_adapter.validate_python(execute_tool_with_context(ctx, "confirm_document_update", lambda: lifecycle.confirm("update", request.approval_token, request.confirm, profile), rest_arguments=request.model_dump(mode="json")))
 
-	@mcp.tool(description="Prepare adding one resolved Item as a new row to an exact existing Draft transaction.", meta=tool_meta("prepare_document_child_add"), structured_output=True)
 	def prepare_document_child_add(request: PrepareChildAddInput, ctx: Context) -> LifecycleResult:
 		return result_adapter.validate_python(execute_tool_with_context(ctx, "prepare_document_child_add", lambda: lifecycle.prepare_child_add(request.target.model_dump(), request.item.model_dump(), request.qty, request.rate, profile), rest_arguments=request.model_dump(mode="json")))
 
-	@mcp.tool(description="Apply a prepared new item row after approval.", meta=tool_meta("confirm_document_child_add"), structured_output=True)
 	def confirm_document_child_add(request: LifecycleConfirmInput, ctx: Context) -> LifecycleResult:
 		return result_adapter.validate_python(execute_tool_with_context(ctx, "confirm_document_child_add", lambda: lifecycle.confirm("child_add", request.approval_token, request.confirm, profile), rest_arguments=request.model_dump(mode="json")))
 
@@ -53,6 +49,11 @@ def register_lifecycle_tools(mcp: Any, profile: str) -> None:
 		tool.__name__ = name
 		return tool
 
+	if profile != "accounts":
+		mcp.tool(name="prepare_document_update", description="Prepare an exact existing-document field update without writing.", meta=tool_meta("prepare_document_update"), structured_output=True)(prepare_document_update)
+		mcp.tool(name="confirm_document_update", description="Apply a prepared exact existing-document field update after approval.", meta=tool_meta("confirm_document_update"), structured_output=True)(confirm_document_update)
+		mcp.tool(name="prepare_document_child_add", description="Prepare adding one resolved Item as a new row to an exact existing Draft transaction.", meta=tool_meta("prepare_document_child_add"), structured_output=True)(prepare_document_child_add)
+		mcp.tool(name="confirm_document_child_add", description="Apply a prepared new item row after approval.", meta=tool_meta("confirm_document_child_add"), structured_output=True)(confirm_document_child_add)
 	prepare("prepare_document_submit", "submit")
 	confirm_tool("confirm_document_submit", "submit")
 	prepare("prepare_document_cancel", "cancel")

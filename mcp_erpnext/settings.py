@@ -26,6 +26,7 @@ class MCPProfile(StrEnum):
 
     SALES = "sales"
     PURCHASE = "purchase"
+    ACCOUNTS = "accounts"
 
 
 @dataclass(frozen=True)
@@ -95,7 +96,7 @@ class MCPSettings:
         try:
             return MCPProfile(value)
         except ValueError as error:
-            raise RuntimeError("MCP_PROFILE must be either 'sales' or 'purchase'.") from error
+            raise RuntimeError("MCP_PROFILE must be either 'sales', 'purchase', or 'accounts'.") from error
 
     def validate(self) -> None:
         """Validate only the selected backend's required configuration."""
@@ -171,7 +172,7 @@ class MCPSettings:
         try:
             MCPProfile(self.profile)
         except ValueError as error:
-            raise RuntimeError("MCP_PROFILE must be either 'sales' or 'purchase'.") from error
+            raise RuntimeError("MCP_PROFILE must be either 'sales', 'purchase', or 'accounts'.") from error
 
     def validate_transport(self) -> None:
         """Validate the selected MCP transport without exposing secret values."""

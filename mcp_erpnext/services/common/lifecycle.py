@@ -17,6 +17,7 @@ from ...observability import new_error_reference
 PROFILE_DOCTYPES = {
     "sales": frozenset({"Quotation", "Sales Order", "Customer", "Item"}),
     "purchase": frozenset({"Purchase Order", "Supplier", "Item"}),
+    "accounts": frozenset(),
 }
 
 # The legacy profile sets remain the baseline for already-supported doctypes.
@@ -35,6 +36,13 @@ LIFECYCLE_ACTION_DOCTYPES = {
         "submit": PROFILE_DOCTYPES["purchase"],
         "cancel": PROFILE_DOCTYPES["purchase"],
         "delete": PROFILE_DOCTYPES["purchase"],
+    },
+    "accounts": {
+        "update": frozenset(),
+        "child_add": frozenset(),
+        "submit": frozenset({"Payment Entry"}),
+        "cancel": frozenset({"Payment Entry"}),
+        "delete": frozenset({"Payment Entry"}),
     },
 }
 

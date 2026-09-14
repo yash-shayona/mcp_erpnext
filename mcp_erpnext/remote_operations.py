@@ -16,6 +16,10 @@ from .contracts.buying.purchase_order import (
     PurchaseOrderPrepareInput,
 )
 from .contracts.email import DocumentEmailConfirmInput, DocumentEmailPrepareInput
+from .contracts.accounts.sales_invoice_payment import (
+    SalesInvoicePaymentConfirmInput,
+    SalesInvoicePaymentPrepareInput,
+)
 from .contracts.lifecycle import (
     LifecycleConfirmInput,
     PrepareActionInput,
@@ -84,6 +88,7 @@ from .contracts.selling.delivery_note_read import (
     DeliveryNoteAggregateInput,
 )
 from .services.buying import purchase_order
+from .services.accounts import sales_invoice_payment
 from .services.common import email, lifecycle, pdf, read
 from .services.masters import (
     customer,
@@ -522,14 +527,29 @@ _PURCHASE_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
     ),
 }
 
+_ACCOUNTS_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
+    "prepare_sales_invoice_payment": (
+        SalesInvoicePaymentPrepareInput,
+        lambda request, _profile: sales_invoice_payment.prepare_sales_invoice_payment(
+            request.model_dump(mode="json")
+        ),
+    ),
+    "confirm_sales_invoice_payment": (
+        SalesInvoicePaymentConfirmInput,
+        lambda request, _profile: sales_invoice_payment.confirm_sales_invoice_payment(
+            request.approval_token, request.confirm
+        ),
+    ),
+}
+
 
 def execute_remote_operation(
     operation: str, profile: str, arguments: dict[str, Any]
 ) -> dict[str, Any]:
     """Validate and execute one statically registered public operation."""
-    if profile not in {"sales", "purchase"} or not isinstance(arguments, dict):
+    if profile not in {"sales", "purchase", "accounts"} or not isinstance(arguments, dict):
         raise RemoteOperationError("The remote operation request is invalid.")
-    handlers = _SALES_HANDLERS if profile == "sales" else _PURCHASE_HANDLERS
+    handlers = {"sales": _SALES_HANDLERS, "purchase": _PURCHASE_HANDLERS, "accounts": _ACCOUNTS_HANDLERS}[profile]
     definition = handlers.get(operation) or _SHARED_HANDLERS.get(operation)
     if definition is None:
         raise RemoteOperationError("The requested remote operation is unavailable.")

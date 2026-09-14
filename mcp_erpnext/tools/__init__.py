@@ -24,7 +24,12 @@ def register_tools(mcp: Any, profile: MCPProfile | str = MCPProfile.SALES) -> No
 
         register_purchase_profile(mcp)
         return
-    raise RuntimeError("MCP_PROFILE must be either 'sales' or 'purchase'.")
+    if profile == MCPProfile.ACCOUNTS:
+        from ..profiles.accounts import register_accounts_profile
+
+        register_accounts_profile(mcp)
+        return
+    raise RuntimeError("MCP_PROFILE must be either 'sales', 'purchase', or 'accounts'.")
 
 
 def register_sales_tools(mcp: Any) -> None:

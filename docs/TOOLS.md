@@ -776,3 +776,88 @@ Queue one exact prepared document email through Frappe's native Email Queue.
 - Output: `DocumentEmailConfirmOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
+
+## Accounts profile
+
+| Tool | Domain | Operation | Side effect | Interaction | Approval | Contract status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `prepare_sales_invoice_payment` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_invoice_payment` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_submit` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_cancel` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_delete` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+
+### `prepare_sales_invoice_payment`
+
+Prepare a native Draft customer Payment Entry for one submitted Sales Invoice.
+
+- Input: `SalesInvoicePaymentPrepareInput` — Required: `request`
+- Output: `PrepareSalesInvoicePaymentOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_sales_invoice_payment`
+
+Create the reviewed native Draft customer Payment Entry.
+
+- Input: `SalesInvoicePaymentConfirmInput` — Required: `request`
+- Output: `ConfirmSalesInvoicePaymentOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_document_submit`
+
+Prepare submission of an exact existing document.
+
+- Input: `PrepareActionInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_submit`
+
+Submit a prepared exact existing document after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_document_cancel`
+
+Prepare cancellation of an exact existing document.
+
+- Input: `PrepareActionInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_cancel`
+
+Cancel a prepared exact existing document after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_document_delete`
+
+Prepare deletion of an exact existing document with link preflight.
+
+- Input: `PrepareDeleteInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_document_delete`
+
+Delete a prepared exact existing document after approval.
+
+- Input: `LifecycleConfirmInput` — Required: `request`
+- Output: `LifecycleResult`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
