@@ -75,6 +75,15 @@ class RemoteOperationRegistryTests(unittest.TestCase):
         self.assertEqual(result["status"], "resolved")
         search_customers.assert_called_once_with("Acme")
 
+    @patch("mcp_erpnext.remote_operations.delivery_note_to_sales_invoice.prepare_delivery_note_to_sales_invoice")
+    def test_delivery_note_conversion_uses_fixed_typed_handler(self, prepare):
+        prepare.return_value = {"status": "error", "code": "SOURCE_NOT_FOUND", "message": "missing", "reference": "MCP-ERR-TEST"}
+        result = remote_operations.execute_remote_operation(
+            "prepare_delivery_note_to_sales_invoice", "sales", {"delivery_note": "MAT-DN-0001"}
+        )
+        self.assertEqual(result["code"], "SOURCE_NOT_FOUND")
+        prepare.assert_called_once_with("MAT-DN-0001")
+
     def test_unknown_operation_and_invalid_payload_fail_closed(self):
         with self.assertRaises(remote_operations.RemoteOperationError):
             remote_operations.execute_remote_operation("frappe.db.sql", "sales", {})

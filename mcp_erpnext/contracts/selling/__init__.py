@@ -30,6 +30,12 @@ from .sales_order_to_sales_invoice import (
 	PrepareSalesOrderToSalesInvoiceOutput,
 	PrepareSalesOrderToSalesInvoiceResult,
 )
+from .delivery_note_to_sales_invoice import (
+	ConfirmDeliveryNoteToSalesInvoiceOutput,
+	ConfirmDeliveryNoteToSalesInvoiceResult,
+	PrepareDeliveryNoteToSalesInvoiceOutput,
+	PrepareDeliveryNoteToSalesInvoiceResult,
+)
 from .sales_invoice_read import (
 	SalesInvoiceAggregateInput,
 	SalesInvoiceAggregateOutput,
@@ -61,6 +67,10 @@ __all__ = [
 	"ConfirmSalesOrderToSalesInvoiceOutput",
 	"ConfirmSalesOrderToSalesInvoiceResult",
 	"PrepareSalesOrderToSalesInvoiceOutput",
+	"ConfirmDeliveryNoteToSalesInvoiceOutput",
+	"ConfirmDeliveryNoteToSalesInvoiceResult",
+	"PrepareDeliveryNoteToSalesInvoiceOutput",
+	"PrepareDeliveryNoteToSalesInvoiceResult",
 	"PrepareSalesOrderToSalesInvoiceResult",
 	"SalesInvoiceAggregateInput",
 	"SalesInvoiceAggregateOutput",

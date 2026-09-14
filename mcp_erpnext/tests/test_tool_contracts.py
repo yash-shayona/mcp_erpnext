@@ -88,6 +88,18 @@ class ToolContractTests(unittest.TestCase):
 		self.assertNotIn("update_stock", dumps(prepare.inputSchema))
 		self.assertNotIn("sales_order", dumps(prepare.inputSchema))
 
+	def test_delivery_note_to_sales_invoice_contract_is_typed_and_bounded(self):
+		tools = {tool.name: tool for tool in self.registered_tools()}
+		prepare = tools["prepare_delivery_note_to_sales_invoice"]
+		confirm = tools["confirm_delivery_note_to_sales_invoice"]
+		self.assertEqual(prepare.inputSchema["required"], ["delivery_note"])
+		self.assertEqual(confirm.inputSchema["required"], ["approval_token", "confirm"])
+		self.assertEqual(prepare.meta["mcp_erpnext"]["side_effect"], "PREPARE")
+		self.assertEqual(confirm.meta["mcp_erpnext"]["side_effect"], "CONFIRM_WRITE")
+		self.assertEqual(get_tool_contract("prepare_delivery_note_to_sales_invoice").approval_confirm_tool, "confirm_delivery_note_to_sales_invoice")
+		self.assertNotIn("update_stock", dumps(prepare.inputSchema))
+		self.assertNotIn("args", dumps(prepare.inputSchema))
+
 	def test_sales_invoice_read_schemas_are_typed_and_accounting_aware(self):
 		tools = {tool.name: tool for tool in self.registered_tools()}
 		for name in ("get_sales_invoice", "query_sales_invoices", "aggregate_sales_invoices"):

@@ -32,6 +32,8 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `confirm_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_sales_order_to_delivery_note` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_sales_order_to_delivery_note` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_delivery_note_to_sales_invoice` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_delivery_note_to_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_update` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_document_child_add` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
@@ -251,6 +253,24 @@ Create the approved native Draft Delivery Note from a Sales Order.
 
 - Input: `SalesOrderToDeliveryNoteConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmDeliveryNoteOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_delivery_note_to_sales_invoice`
+
+Prepare a native Draft Sales Invoice preview from a Submitted Delivery Note.
+
+- Input: `DeliveryNoteToSalesInvoiceInput` — Required: `delivery_note`
+- Output: `PrepareDeliveryNoteToSalesInvoiceOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_delivery_note_to_sales_invoice`
+
+Create the approved native Draft Sales Invoice from a Delivery Note.
+
+- Input: `DeliveryNoteToSalesInvoiceConfirmInput` — Required: `approval_token`, `confirm`
+- Output: `ConfirmDeliveryNoteToSalesInvoiceOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 

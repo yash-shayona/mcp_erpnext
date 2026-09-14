@@ -70,8 +70,19 @@ from .contracts.selling.sales_order_to_sales_invoice import (
     SalesOrderToSalesInvoiceConfirmInput,
     SalesOrderToSalesInvoiceInput,
 )
-from .contracts.selling.delivery_note import SalesOrderToDeliveryNoteInput, SalesOrderToDeliveryNoteConfirmInput
-from .contracts.selling.delivery_note_read import DeliveryNoteGetInput, DeliveryNoteQueryInput, DeliveryNoteAggregateInput
+from .contracts.selling.delivery_note import (
+    SalesOrderToDeliveryNoteInput,
+    SalesOrderToDeliveryNoteConfirmInput,
+)
+from .contracts.selling.delivery_note_to_sales_invoice import (
+    DeliveryNoteToSalesInvoiceInput,
+    DeliveryNoteToSalesInvoiceConfirmInput,
+)
+from .contracts.selling.delivery_note_read import (
+    DeliveryNoteGetInput,
+    DeliveryNoteQueryInput,
+    DeliveryNoteAggregateInput,
+)
 from .services.buying import purchase_order
 from .services.common import email, lifecycle, pdf, read
 from .services.masters import (
@@ -92,7 +103,11 @@ from .services.selling import (
     sales_order_read,
     sales_order_to_sales_invoice,
 )
-from .services.selling import sales_order_to_delivery_note, delivery_note_read
+from .services.selling import (
+    sales_order_to_delivery_note,
+    delivery_note_read,
+    delivery_note_to_sales_invoice,
+)
 
 RemoteHandler = Callable[[Any, str], dict[str, Any]]
 
@@ -349,8 +364,30 @@ _SALES_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
             request.approval_token, request.confirm
         ),
     ),
-    "prepare_sales_order_to_delivery_note": (SalesOrderToDeliveryNoteInput, lambda request, _profile: sales_order_to_delivery_note.prepare_sales_order_to_delivery_note(request.sales_order)),
-    "confirm_sales_order_to_delivery_note": (SalesOrderToDeliveryNoteConfirmInput, lambda request, _profile: sales_order_to_delivery_note.confirm_sales_order_to_delivery_note(request.approval_token, request.confirm)),
+    "prepare_sales_order_to_delivery_note": (
+        SalesOrderToDeliveryNoteInput,
+        lambda request, _profile: sales_order_to_delivery_note.prepare_sales_order_to_delivery_note(
+            request.sales_order
+        ),
+    ),
+    "confirm_sales_order_to_delivery_note": (
+        SalesOrderToDeliveryNoteConfirmInput,
+        lambda request, _profile: sales_order_to_delivery_note.confirm_sales_order_to_delivery_note(
+            request.approval_token, request.confirm
+        ),
+    ),
+    "prepare_delivery_note_to_sales_invoice": (
+        DeliveryNoteToSalesInvoiceInput,
+        lambda request, _profile: delivery_note_to_sales_invoice.prepare_delivery_note_to_sales_invoice(
+            request.delivery_note
+        ),
+    ),
+    "confirm_delivery_note_to_sales_invoice": (
+        DeliveryNoteToSalesInvoiceConfirmInput,
+        lambda request, _profile: delivery_note_to_sales_invoice.confirm_delivery_note_to_sales_invoice(
+            request.approval_token, request.confirm
+        ),
+    ),
     "get_sales_order": (
         GetSalesOrderInput,
         lambda request, _profile: sales_order_read.get_sales_order(
@@ -433,9 +470,24 @@ _SALES_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
             request.model_dump()
         ),
     ),
-    "get_delivery_note": (DeliveryNoteGetInput, lambda request, _profile: delivery_note_read.get_delivery_note(**request.model_dump())),
-    "query_delivery_notes": (DeliveryNoteQueryInput, lambda request, _profile: delivery_note_read.query_delivery_notes(request.model_dump())),
-    "aggregate_delivery_notes": (DeliveryNoteAggregateInput, lambda request, _profile: delivery_note_read.aggregate_delivery_notes(request.model_dump())),
+    "get_delivery_note": (
+        DeliveryNoteGetInput,
+        lambda request, _profile: delivery_note_read.get_delivery_note(
+            **request.model_dump()
+        ),
+    ),
+    "query_delivery_notes": (
+        DeliveryNoteQueryInput,
+        lambda request, _profile: delivery_note_read.query_delivery_notes(
+            request.model_dump()
+        ),
+    ),
+    "aggregate_delivery_notes": (
+        DeliveryNoteAggregateInput,
+        lambda request, _profile: delivery_note_read.aggregate_delivery_notes(
+            request.model_dump()
+        ),
+    ),
 }
 
 _PURCHASE_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {

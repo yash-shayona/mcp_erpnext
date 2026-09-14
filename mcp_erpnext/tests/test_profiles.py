@@ -37,6 +37,8 @@ class ProfileRegistrationTests(unittest.TestCase):
         self.assertIn("confirm_sales_invoice", names)
         self.assertIn("prepare_sales_order_to_delivery_note", names)
         self.assertIn("confirm_sales_order_to_delivery_note", names)
+        self.assertIn("prepare_delivery_note_to_sales_invoice", names)
+        self.assertIn("confirm_delivery_note_to_sales_invoice", names)
         self.assertIn("prepare_sales_order", names)
         self.assertIn("get_sales_order", names)
         self.assertIn("query_sales_orders", names)
