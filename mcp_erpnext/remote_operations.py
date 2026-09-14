@@ -20,6 +20,10 @@ from .contracts.accounts.sales_invoice_payment import (
     SalesInvoicePaymentConfirmInput,
     SalesInvoicePaymentPrepareInput,
 )
+from .contracts.accounts.multi_invoice_customer_receipt import (
+    MultiInvoiceCustomerReceiptConfirmInput,
+    MultiInvoiceCustomerReceiptPrepareInput,
+)
 from .contracts.accounts.payment_entry_read import (
 	PaymentEntryAggregateInput,
 	PaymentEntryGetInput,
@@ -94,6 +98,7 @@ from .contracts.selling.delivery_note_read import (
 )
 from .services.buying import purchase_order
 from .services.accounts import sales_invoice_payment
+from .services.accounts import multi_invoice_customer_receipt
 from .services.accounts import payment_entry_read
 from .services.common import email, lifecycle, pdf, read
 from .services.masters import (
@@ -534,6 +539,14 @@ _PURCHASE_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
 }
 
 _ACCOUNTS_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
+    "prepare_multi_invoice_customer_receipt": (
+        MultiInvoiceCustomerReceiptPrepareInput,
+        lambda request, _profile: multi_invoice_customer_receipt.prepare_multi_invoice_customer_receipt(request.model_dump(mode="json")),
+    ),
+    "confirm_multi_invoice_customer_receipt": (
+        MultiInvoiceCustomerReceiptConfirmInput,
+        lambda request, _profile: multi_invoice_customer_receipt.confirm_multi_invoice_customer_receipt(request.approval_token, request.confirm),
+    ),
     "prepare_sales_invoice_payment": (
         SalesInvoicePaymentPrepareInput,
         lambda request, _profile: sales_invoice_payment.prepare_sales_invoice_payment(

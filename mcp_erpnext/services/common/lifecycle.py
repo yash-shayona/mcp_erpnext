@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import hashlib
+import json
 from copy import deepcopy
 from typing import Any
 
@@ -258,6 +260,52 @@ def _base_preview(doc: Any, action: str) -> dict[str, Any]:
         "docstatus": int(doc.docstatus),
         "action": action,
     }
+
+
+def _payment_entry_submit_state(doc: Any) -> tuple[dict[str, Any], str]:
+    """Build a bounded, fresh outstanding snapshot for Payment Entry submit approval."""
+    from erpnext.accounts.doctype.payment_entry.payment_entry import get_outstanding_reference_documents
+
+    references = list(doc.get("references") or [])
+    vouchers = [frappe._dict(voucher_type=row.reference_doctype, voucher_no=row.reference_name) for row in references if row.reference_doctype and row.reference_name]
+    latest = get_outstanding_reference_documents({
+        "posting_date": doc.posting_date,
+        "company": doc.company,
+        "party_type": doc.party_type,
+        "payment_type": doc.payment_type,
+        "party": doc.party,
+        "party_account": doc.paid_from if doc.payment_type == "Receive" else doc.paid_to,
+        "get_outstanding_invoices": True,
+        "get_orders_to_be_billed": True,
+        "vouchers": vouchers,
+        "book_advance_payments_in_separate_party_account": doc.book_advance_payments_in_separate_party_account,
+    }, validate=True) or []
+    latest_by_key = {(row.voucher_type, row.voucher_no, row.get("payment_term")): flt(row.outstanding_amount) for row in latest}
+    projected = []
+    for row in references:
+        key = (row.reference_doctype, row.reference_name, row.payment_term)
+        projected.append({
+            "reference_doctype": row.reference_doctype,
+            "reference_name": row.reference_name,
+            "payment_term": row.payment_term,
+            "current_outstanding": latest_by_key.get(key),
+            "allocated_amount": flt(row.allocated_amount),
+        })
+    preview = {
+        "payment_entry": doc.name, "customer": doc.party, "company": doc.company,
+        "payment_type": doc.payment_type, "posting_date": _json(doc.posting_date),
+        "destination": doc.mode_of_payment or doc.bank_account or (doc.paid_to if doc.payment_type == "Receive" else doc.paid_from),
+        "party_currency": doc.paid_from_account_currency if doc.payment_type == "Receive" else doc.paid_to_account_currency,
+        "destination_currency": doc.paid_to_account_currency if doc.payment_type == "Receive" else doc.paid_from_account_currency,
+        "paid_amount": flt(doc.paid_amount), "received_amount": flt(doc.received_amount),
+        "references": projected, "total_allocated_amount": flt(doc.total_allocated_amount),
+        "unallocated_amount": flt(doc.unallocated_amount), "difference_amount": flt(doc.difference_amount),
+        "deductions": [{"account": row.account, "amount": flt(row.amount)} for row in (doc.get("deductions") or [])],
+        "taxes": [{"account": row.account_head, "amount": flt(row.tax_amount)} for row in (doc.get("taxes") or [])],
+        "warning": "Submitting creates native ledger entries and changes every referenced invoice outstanding amount.",
+    }
+    fingerprint = hashlib.sha256(json.dumps(preview, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+    return preview, fingerprint
 
 
 def _create(
@@ -528,13 +576,21 @@ def _prepare_action(
             f"The authenticated user cannot {permission} {doc.doctype} {doc.name}.",
         )
     preview = _base_preview(doc, action.upper())
+    extra_payload: dict[str, Any] = {}
+    if action == "submit" and doc.doctype == "Payment Entry":
+        try:
+            payment_preview, payment_fingerprint = _payment_entry_submit_state(doc)
+        except Exception:
+            return _error("LIFECYCLE_VALIDATION_FAILED", "ERPNext could not refresh Payment Entry references for submit review.")
+        preview["payment_entry_impact"] = payment_preview
+        extra_payload["payment_entry_submit_fingerprint"] = payment_fingerprint
     if action == "delete" and plan == "cancel_delete":
         preview["plan"] = [
             f"Cancel {doc.doctype} {doc.name}",
             f"Delete {doc.doctype} {doc.name}",
         ]
     return _create(
-        action, doc, profile, {"plan": locals().get("plan", action)}, preview
+        action, doc, profile, {"plan": locals().get("plan", action), **extra_payload}, preview
     )
 
 
@@ -582,6 +638,13 @@ def _revalidate(
             "STALE_CONFIRMATION",
             "The document changed after the preview was prepared. Please prepare the action again.",
         )
+    if action == "submit" and doc.doctype == "Payment Entry":
+        try:
+            _, fingerprint = _payment_entry_submit_state(doc)
+        except Exception:
+            return None, _error("STALE_CONFIRMATION", "Payment Entry reference state changed. Please prepare submit again.")
+        if fingerprint != approval.payload.get("payment_entry_submit_fingerprint"):
+            return None, _error("STALE_CONFIRMATION", "Payment Entry reference state changed. Please prepare submit again.")
     return doc, None
 
 

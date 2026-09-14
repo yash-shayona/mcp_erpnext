@@ -155,6 +155,12 @@ from .accounts.sales_invoice_payment import (
     SalesInvoicePaymentConfirmInput,
     SalesInvoicePaymentPrepareInput,
 )
+from .accounts.multi_invoice_customer_receipt import (
+    ConfirmMultiInvoiceCustomerReceiptOutput,
+    MultiInvoiceCustomerReceiptConfirmInput,
+    MultiInvoiceCustomerReceiptPrepareInput,
+    PrepareMultiInvoiceCustomerReceiptOutput,
+)
 from .accounts.payment_entry_read import (
 	PaymentEntryAggregateInput,
 	PaymentEntryAggregateOutput,
@@ -931,6 +937,21 @@ TOOL_CONTRACTS["prepare_sales_invoice_payment"] = ToolContract(
     False, SalesInvoicePaymentPrepareInput, PrepareSalesInvoicePaymentOutput,
     interaction_kinds=(InteractionKind.APPROVAL,),
     approval_confirm_tool="confirm_sales_invoice_payment",
+)
+TOOL_CONTRACTS["prepare_multi_invoice_customer_receipt"] = ToolContract(
+    "prepare_multi_invoice_customer_receipt", "Accounts", ToolOperation.PREPARE,
+    SideEffectClass.PREPARE,
+    "Prepare one explicit Customer receipt allocated across 2-20 submitted Sales Invoices.",
+    False, MultiInvoiceCustomerReceiptPrepareInput, PrepareMultiInvoiceCustomerReceiptOutput,
+    interaction_kinds=(InteractionKind.APPROVAL,),
+    approval_confirm_tool="confirm_multi_invoice_customer_receipt",
+)
+TOOL_CONTRACTS["confirm_multi_invoice_customer_receipt"] = ToolContract(
+    "confirm_multi_invoice_customer_receipt", "Accounts", ToolOperation.CONFIRM,
+    SideEffectClass.CONFIRM_WRITE,
+    "Create the reviewed multi-invoice Customer receipt as one Draft Payment Entry.",
+    True, MultiInvoiceCustomerReceiptConfirmInput, ConfirmMultiInvoiceCustomerReceiptOutput,
+    approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
 )
 TOOL_CONTRACTS["confirm_sales_invoice_payment"] = ToolContract(
     "confirm_sales_invoice_payment", "Accounts", ToolOperation.CONFIRM,

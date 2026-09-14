@@ -114,6 +114,29 @@ class RemoteOperationRegistryTests(unittest.TestCase):
         with self.assertRaises(remote_operations.RemoteOperationError):
             remote_operations.execute_remote_operation("get_payment_entry", "sales", {"name": "PE-1"})
 
+    @patch("mcp_erpnext.remote_operations.multi_invoice_customer_receipt.prepare_multi_invoice_customer_receipt")
+    def test_multi_invoice_receipt_uses_fixed_typed_accounts_handler(self, prepare):
+        prepare.return_value = {"status": "error", "code": "NO_OUTSTANDING", "message": "missing", "reference": "MCP-ERR-TEST"}
+        result = remote_operations.execute_remote_operation(
+            "prepare_multi_invoice_customer_receipt", "accounts",
+            {"customer": "CUST-1", "amount": 30, "allocations": [
+                {"sales_invoice": "SINV-1", "allocated_amount": 10},
+                {"sales_invoice": "SINV-2", "allocated_amount": 20},
+            ], "mode_of_payment": "Bank Transfer"},
+        )
+        self.assertEqual(result["code"], "NO_OUTSTANDING")
+        prepare.assert_called_once()
+
+    def test_multi_invoice_receipt_is_accounts_only(self):
+        with self.assertRaises(remote_operations.RemoteOperationError):
+            remote_operations.execute_remote_operation(
+                "prepare_multi_invoice_customer_receipt", "sales",
+                {"customer": "CUST-1", "amount": 20, "allocations": [
+                    {"sales_invoice": "SINV-1", "allocated_amount": 10},
+                    {"sales_invoice": "SINV-2", "allocated_amount": 10},
+                ], "bank_account": "BANK-1"},
+            )
+
 
 class RemoteErrorTests(unittest.TestCase):
     @patch("mcp_erpnext.remote_api.logged_public_error")
