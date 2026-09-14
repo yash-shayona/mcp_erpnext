@@ -785,6 +785,8 @@ Queue one exact prepared document email through Frappe's native Email Queue.
 | `confirm_sales_invoice_payment` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_multi_invoice_customer_receipt` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_multi_invoice_customer_receipt` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_customer_payment_entry` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_customer_payment_entry` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `get_payment_entry` | Accounts | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `query_payment_entries` | Accounts | Search | READ | None | Not a final write | Explicit typed contract |
 | `aggregate_payment_entries` | Accounts | Search | READ | None | Not a final write | Explicit typed contract |
@@ -828,6 +830,24 @@ Create the reviewed multi-invoice Customer receipt as one Draft Payment Entry.
 
 - Input: `MultiInvoiceCustomerReceiptConfirmInput` — Required: `request`
 - Output: `ConfirmMultiInvoiceCustomerReceiptOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_customer_payment_entry`
+
+Prepare a native standalone Draft Customer receipt Payment Entry with no invoice allocation.
+
+- Input: `CustomerPaymentEntryPrepareInput` — Required: `request`
+- Output: `PrepareCustomerPaymentEntryOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_customer_payment_entry`
+
+Create the reviewed standalone Draft Customer receipt Payment Entry.
+
+- Input: `CustomerPaymentEntryConfirmInput` — Required: `request`
+- Output: `ConfirmCustomerPaymentEntryOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 

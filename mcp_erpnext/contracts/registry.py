@@ -161,6 +161,12 @@ from .accounts.multi_invoice_customer_receipt import (
     MultiInvoiceCustomerReceiptPrepareInput,
     PrepareMultiInvoiceCustomerReceiptOutput,
 )
+from .accounts.customer_payment_entry import (
+    ConfirmCustomerPaymentEntryOutput,
+    CustomerPaymentEntryConfirmInput,
+    CustomerPaymentEntryPrepareInput,
+    PrepareCustomerPaymentEntryOutput,
+)
 from .accounts.payment_entry_read import (
 	PaymentEntryAggregateInput,
 	PaymentEntryAggregateOutput,
@@ -945,6 +951,29 @@ TOOL_CONTRACTS["prepare_multi_invoice_customer_receipt"] = ToolContract(
     False, MultiInvoiceCustomerReceiptPrepareInput, PrepareMultiInvoiceCustomerReceiptOutput,
     interaction_kinds=(InteractionKind.APPROVAL,),
     approval_confirm_tool="confirm_multi_invoice_customer_receipt",
+)
+TOOL_CONTRACTS["prepare_customer_payment_entry"] = ToolContract(
+    "prepare_customer_payment_entry",
+    "Accounts",
+    ToolOperation.PREPARE,
+    SideEffectClass.PREPARE,
+    "Prepare a native standalone Draft Customer receipt Payment Entry with no invoice allocation.",
+    False,
+    CustomerPaymentEntryPrepareInput,
+    PrepareCustomerPaymentEntryOutput,
+    interaction_kinds=(InteractionKind.APPROVAL,),
+    approval_confirm_tool="confirm_customer_payment_entry",
+)
+TOOL_CONTRACTS["confirm_customer_payment_entry"] = ToolContract(
+    "confirm_customer_payment_entry",
+    "Accounts",
+    ToolOperation.CONFIRM,
+    SideEffectClass.CONFIRM_WRITE,
+    "Create the reviewed standalone Draft Customer receipt Payment Entry.",
+    True,
+    CustomerPaymentEntryConfirmInput,
+    ConfirmCustomerPaymentEntryOutput,
+    approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
 )
 TOOL_CONTRACTS["confirm_multi_invoice_customer_receipt"] = ToolContract(
     "confirm_multi_invoice_customer_receipt", "Accounts", ToolOperation.CONFIRM,
