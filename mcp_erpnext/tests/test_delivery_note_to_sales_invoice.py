@@ -7,7 +7,10 @@ from unittest.mock import patch
 import frappe
 
 from mcp_erpnext.approvals import approvals
-from mcp_erpnext.contracts.selling.delivery_note_to_sales_invoice import DeliveryNoteToSalesInvoiceInput
+from mcp_erpnext.contracts.selling.delivery_note_to_sales_invoice import (
+    DeliveryNoteToSalesInvoiceInput,
+    DeliveryNoteToSalesInvoiceReady,
+)
 from mcp_erpnext.services.selling import delivery_note_to_sales_invoice as service
 from mcp_erpnext.tests.approval_test_backend import install_fake_backend
 
@@ -103,6 +106,11 @@ class DeliveryNoteConversionTests(unittest.TestCase):
         with patch.object(service, "_native", side_effect=self.native):
             result = service.prepare_delivery_note_to_sales_invoice(self.source.name)
         self.assertEqual(result["status"], "ready")
+        validated = DeliveryNoteToSalesInvoiceReady.model_validate(result)
+        self.assertEqual(validated.preview.source.doctype, "Delivery Note")
+        self.assertEqual(validated.preview.source.name, self.source.name)
+        self.assertEqual(validated.preview.source.docstatus, 1)
+        self.assertEqual(validated.preview.sales_invoice.target_doctype, "Sales Invoice")
         rows = result["preview"]["sales_invoice"]["items"]
         self.assertEqual([(row["rate"], row["dn_detail"]) for row in rows], [(100, "DN-ITEM-1"), (200, "DN-ITEM-2")])
         self.assertNotIn("update_stock", result["preview"])

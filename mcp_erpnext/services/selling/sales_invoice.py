@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import math
 from typing import Any
 
@@ -15,6 +13,7 @@ from ...config.masters import customer as customer_config
 from ...config.masters import item as item_config
 from ...contracts.interaction import approval_directive, input_directive
 from ...observability import new_error_reference
+from ..common.fingerprint import stable_fingerprint
 from ..common.entity_resolution import revalidate_exact_candidate
 
 _ACTION = "create_sales_invoice"
@@ -78,14 +77,24 @@ def _reference_name(reference: Any, doctype: str) -> str | None:
     return name.strip() if isinstance(name, str) and name.strip() else None
 
 
-def _number(value: Any, *, field: str, positive: bool = False) -> tuple[float | None, dict[str, Any] | None]:
+def _number(
+    value: Any, *, field: str, positive: bool = False
+) -> tuple[float | None, dict[str, Any] | None]:
     if isinstance(value, bool) or value in (None, ""):
-        return None, _error("INVALID_SALES_INVOICE_DETAILS", f"{field} must be a number.")
+        return None, _error(
+            "INVALID_SALES_INVOICE_DETAILS", f"{field} must be a number."
+        )
     try:
         number = float(value)
     except (TypeError, ValueError):
-        return None, _error("INVALID_SALES_INVOICE_DETAILS", f"{field} must be a number.")
-    if not math.isfinite(number) or (positive and number <= 0) or (not positive and number < 0):
+        return None, _error(
+            "INVALID_SALES_INVOICE_DETAILS", f"{field} must be a number."
+        )
+    if (
+        not math.isfinite(number)
+        or (positive and number <= 0)
+        or (not positive and number < 0)
+    ):
         constraint = "greater than zero" if positive else "zero or greater"
         return None, _error(
             "INVALID_SALES_INVOICE_DETAILS", f"{field} must be {constraint}."
@@ -93,11 +102,15 @@ def _number(value: Any, *, field: str, positive: bool = False) -> tuple[float | 
     return number, None
 
 
-def _optional_name(value: Any, *, field: str) -> tuple[str | None, dict[str, Any] | None]:
+def _optional_name(
+    value: Any, *, field: str
+) -> tuple[str | None, dict[str, Any] | None]:
     if value is None:
         return None, None
     if not isinstance(value, str) or not value.strip():
-        return None, _error("INVALID_SALES_INVOICE_DETAILS", f"{field} must be a non-empty name.")
+        return None, _error(
+            "INVALID_SALES_INVOICE_DETAILS", f"{field} must be a non-empty name."
+        )
     return value.strip(), None
 
 
@@ -138,7 +151,9 @@ def _normalise_request(
             return None, failure
         row: dict[str, Any] = {"item": item_name, "qty": quantity}
         if "rate" in raw_item and raw_item.get("rate") is not None:
-            rate, failure = _number(raw_item.get("rate"), field=f"Item row {index} rate")
+            rate, failure = _number(
+                raw_item.get("rate"), field=f"Item row {index} rate"
+            )
             if failure:
                 return None, failure
             row["rate"] = rate
@@ -197,7 +212,9 @@ def _permitted_link(doctype: str, name: str) -> bool:
     return bool(rows)
 
 
-def _resolve_company(request: dict[str, Any]) -> tuple[str | None, dict[str, Any] | None]:
+def _resolve_company(
+    request: dict[str, Any],
+) -> tuple[str | None, dict[str, Any] | None]:
     supplied = request.get("company")
     resolved = supplied or frappe.defaults.get_user_default("Company")
     if not resolved:
@@ -212,7 +229,9 @@ def _resolve_company(request: dict[str, Any]) -> tuple[str | None, dict[str, Any
     return resolved, None
 
 
-def _resolve_optional_links(request: dict[str, Any]) -> tuple[dict[str, str], dict[str, Any] | None]:
+def _resolve_optional_links(
+    request: dict[str, Any],
+) -> tuple[dict[str, str], dict[str, Any] | None]:
     resolved: dict[str, str] = {}
     for fieldname, doctype, label in _OPTIONAL_LINKS:
         value = request.get(fieldname)
@@ -333,13 +352,7 @@ def _preview(doc: Any) -> dict[str, Any]:
 
 
 def _fingerprint(request: dict[str, Any], preview: dict[str, Any]) -> str:
-    encoded = json.dumps(
-        {"request": request, "preview": preview},
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
-    )
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    return stable_fingerprint({"request": request, "preview": preview})
 
 
 def _build(
@@ -347,16 +360,25 @@ def _build(
 ) -> tuple[Any | None, dict[str, Any] | None, dict[str, Any] | None]:
     customer = _revalidate_customer(request["customer"])
     if not customer:
-        return None, None, _error(
-            "INVALID_CUSTOMER", "Customer is not available to the authenticated user."
+        return (
+            None,
+            None,
+            _error(
+                "INVALID_CUSTOMER",
+                "Customer is not available to the authenticated user.",
+            ),
         )
 
     for index, row in enumerate(request["items"], start=1):
         item = _revalidate_item(row["item"])
         if not item:
-            return None, None, _error(
-                "INVALID_ITEM",
-                f"Item row {index} is not available to the authenticated user.",
+            return (
+                None,
+                None,
+                _error(
+                    "INVALID_ITEM",
+                    f"Item row {index} is not available to the authenticated user.",
+                ),
             )
     resolved_company, failure = _resolve_company(request)
     if failure:
@@ -376,14 +398,23 @@ def _build(
         try:
             doc.posting_date = getdate(request["posting_date"])
         except Exception:
-            return None, None, _error(
-                "INVALID_SALES_INVOICE_DETAILS", "posting_date must be a valid date."
+            return (
+                None,
+                None,
+                _error(
+                    "INVALID_SALES_INVOICE_DETAILS",
+                    "posting_date must be a valid date.",
+                ),
             )
     if request.get("selling_price_list"):
         if not _permitted_link("Price List", request["selling_price_list"]):
-            return None, None, _error(
-                "INVALID_SALES_INVOICE_DETAILS",
-                "Selling price list is not available to the authenticated user.",
+            return (
+                None,
+                None,
+                _error(
+                    "INVALID_SALES_INVOICE_DETAILS",
+                    "Selling price list is not available to the authenticated user.",
+                ),
             )
         doc.selling_price_list = request["selling_price_list"]
     for fieldname, value in resolved_links.items():
@@ -409,18 +440,26 @@ def _build(
             return None, None, _blocked(["Sales Order"])
         if "Delivery Note" in native_message:
             return None, None, _blocked(["Delivery Note"])
-        return None, None, _error(
-            "NATIVE_VALIDATION_FAILED",
-            "ERPNext rejected the Sales Invoice during preparation.",
+        return (
+            None,
+            None,
+            _error(
+                "NATIVE_VALIDATION_FAILED",
+                "ERPNext rejected the Sales Invoice during preparation.",
+            ),
         )
     preview = _preview(doc)
     missing_defaults = [
         fieldname for fieldname in _REQUIRED_DEFAULTS if not preview.get(fieldname)
     ]
     if missing_defaults:
-        return None, None, _needs_input(
-            missing_defaults,
-            "ERPNext could not determine all required Sales Invoice defaults.",
+        return (
+            None,
+            None,
+            _needs_input(
+                missing_defaults,
+                "ERPNext could not determine all required Sales Invoice defaults.",
+            ),
         )
     return doc, preview, None
 

@@ -226,6 +226,14 @@ class QuotationToSalesOrderServiceTests(unittest.TestCase):
 			"CONFIRMATION_CONSUMED",
 		)
 
+	def test_confirm_ignores_fresh_native_child_object_identity(self):
+		prepared = self.prepare()
+		self.approve(prepared)
+		self.native = mapped_order()
+		created = service.confirm_quotation_to_sales_order(prepared["approval_token"], True)
+		self.assertEqual(created["status"], "created")
+		self.assertEqual(self.native.insert_calls[0]["ignore_permissions"], False)
+
 	def test_conversion_contract_accepts_only_exact_name(self):
 		self.assertEqual(
 			QuotationToSalesOrderInput.model_validate({"quotation": "SAL-QTN-0001"}).quotation,

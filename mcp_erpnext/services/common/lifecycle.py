@@ -10,7 +10,7 @@ from typing import Any
 
 import frappe
 from frappe.model.delete_doc import get_dynamic_linked_docs, get_linked_docs
-from frappe.utils import get_datetime, getdate
+from frappe.utils import flt, get_datetime, getdate
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from decimal import Decimal
 from typing import Any
 
@@ -12,6 +10,7 @@ import frappe
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
 from ...observability import public_error
+from ..common.fingerprint import stable_fingerprint
 
 _ACTION = "convert_sales_order_to_sales_invoice"
 _SOURCE_DOCTYPE = "Sales Order"
@@ -38,7 +37,9 @@ def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any
 def _current_user() -> str:
     user = getattr(frappe.session, "user", None)
     if not user or user in {"Guest", "guest"}:
-        frappe.throw("An authenticated Frappe user is required.", frappe.PermissionError)
+        frappe.throw(
+            "An authenticated Frappe user is required.", frappe.PermissionError
+        )
     return user
 
 
@@ -46,7 +47,9 @@ def _load_source(name: str) -> tuple[Any | None, dict[str, Any] | None]:
     try:
         sales_order = frappe.get_doc(_SOURCE_DOCTYPE, name)
     except frappe.DoesNotExistError:
-        return None, _error("SOURCE_NOT_FOUND", "The requested Sales Order was not found.")
+        return None, _error(
+            "SOURCE_NOT_FOUND", "The requested Sales Order was not found."
+        )
     except frappe.PermissionError:
         return None, _error(
             "PERMISSION_DENIED",
@@ -89,7 +92,9 @@ def _field(doc: Any, fieldname: str) -> Any:
     return _json_value(doc.get(fieldname))
 
 
-def _stable_rows(doc: Any, table_field: str, fieldnames: tuple[str, ...]) -> list[dict[str, Any]]:
+def _stable_rows(
+    doc: Any, table_field: str, fieldnames: tuple[str, ...]
+) -> list[dict[str, Any]]:
     return [
         {fieldname: _field(row, fieldname) for fieldname in fieldnames}
         for row in doc.get(table_field) or []
@@ -173,7 +178,9 @@ def _preview(sales_order: Any, sales_invoice: Any) -> dict[str, Any]:
             "net_total": _field(sales_order, "net_total"),
             "total_taxes_and_charges": _field(sales_order, "total_taxes_and_charges"),
             "grand_total": _field(sales_order, "grand_total"),
-            "items": [_source_item_preview(row) for row in sales_order.get("items") or []],
+            "items": [
+                _source_item_preview(row) for row in sales_order.get("items") or []
+            ],
         },
         "sales_invoice": {
             "target_doctype": _TARGET_DOCTYPE,
@@ -188,7 +195,9 @@ def _preview(sales_order: Any, sales_invoice: Any) -> dict[str, Any]:
             "billing_address": _field(sales_invoice, "billing_address"),
             "shipping_address": _field(sales_invoice, "shipping_address"),
             "company_address": _field(sales_invoice, "company_address"),
-            "items": [_target_item_preview(row) for row in sales_invoice.get("items") or []],
+            "items": [
+                _target_item_preview(row) for row in sales_invoice.get("items") or []
+            ],
             "taxes": [_tax_preview(row) for row in sales_invoice.get("taxes") or []],
             "payment_schedule": [
                 _payment_schedule_preview(row)
@@ -213,8 +222,7 @@ def _preview(sales_order: Any, sales_invoice: Any) -> dict[str, Any]:
 def _fingerprint(preview: dict[str, Any]) -> str:
     """Hash stable source state and the effective native target projection."""
 
-    encoded = json.dumps(preview, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    return stable_fingerprint(preview)
 
 
 def _map_and_preview(
@@ -223,30 +231,50 @@ def _map_and_preview(
     try:
         sales_invoice = _native_make_sales_invoice(sales_order.name)
     except frappe.PermissionError:
-        return None, None, _error(
-            "PERMISSION_DENIED",
-            "The authenticated user cannot perform that conversion.",
+        return (
+            None,
+            None,
+            _error(
+                "PERMISSION_DENIED",
+                "The authenticated user cannot perform that conversion.",
+            ),
         )
     except frappe.ValidationError:
-        return None, None, _error(
-            "NATIVE_VALIDATION_FAILED",
-            "ERPNext rejected the Sales Order to Sales Invoice conversion.",
+        return (
+            None,
+            None,
+            _error(
+                "NATIVE_VALIDATION_FAILED",
+                "ERPNext rejected the Sales Order to Sales Invoice conversion.",
+            ),
         )
     except Exception:
-        return None, None, _error(
-            "CONVERSION_UNAVAILABLE",
-            "ERPNext could not prepare this Sales Order conversion.",
+        return (
+            None,
+            None,
+            _error(
+                "CONVERSION_UNAVAILABLE",
+                "ERPNext could not prepare this Sales Order conversion.",
+            ),
         )
 
     if int(sales_invoice.docstatus or 0) != 0:
-        return None, None, _error(
-            "CONVERSION_UNAVAILABLE",
-            "The mapped Sales Invoice is not a Draft.",
+        return (
+            None,
+            None,
+            _error(
+                "CONVERSION_UNAVAILABLE",
+                "The mapped Sales Invoice is not a Draft.",
+            ),
         )
     if not sales_invoice.get("items"):
-        return None, None, _error(
-            "NO_MAPPABLE_ITEMS",
-            "No remaining billable Sales Order items are available for a Sales Invoice.",
+        return (
+            None,
+            None,
+            _error(
+                "NO_MAPPABLE_ITEMS",
+                "No remaining billable Sales Order items are available for a Sales Invoice.",
+            ),
         )
     return sales_invoice, _preview(sales_order, sales_invoice), None
 
@@ -256,7 +284,9 @@ def prepare_sales_order_to_sales_invoice(sales_order: str) -> dict[str, Any]:
 
     approvals.prune_expired()
     user = _current_user()
-    source, failure = _load_source(sales_order.strip() if isinstance(sales_order, str) else "")
+    source, failure = _load_source(
+        sales_order.strip() if isinstance(sales_order, str) else ""
+    )
     if failure:
         return failure
 
@@ -316,7 +346,9 @@ def confirm_sales_order_to_sales_invoice(
         user=user,
     )
     if state != "available" or approval is None:
-        code, message, retryable = confirmation_failure(state, "Sales Invoice conversion")
+        code, message, retryable = confirmation_failure(
+            state, "Sales Invoice conversion"
+        )
         return _error(code, message, retryable=retryable)
 
     payload = approval.payload

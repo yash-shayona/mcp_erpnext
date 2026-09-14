@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from decimal import Decimal
 from typing import Any
 
@@ -12,6 +10,7 @@ import frappe
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
 from ...observability import public_error
+from ..common.fingerprint import stable_fingerprint
 
 _ACTION = "convert_delivery_note_to_sales_invoice"
 _SOURCE = "Delivery Note"
@@ -121,19 +120,24 @@ def _schedule(row: Any) -> dict[str, Any]:
 def _preview(source: Any, target: Any) -> dict[str, Any]:
     return {
         "source": {
-            key: _field(source, key)
-            for key in (
-                "status",
-                "customer",
-                "customer_name",
-                "company",
-                "currency",
-                "posting_date",
-                "is_return",
-                "total_qty",
-                "net_total",
-                "grand_total",
-            )
+            "doctype": _SOURCE,
+            "name": source.name,
+            "docstatus": int(source.docstatus),
+            **{
+                key: _field(source, key)
+                for key in (
+                    "status",
+                    "customer",
+                    "customer_name",
+                    "company",
+                    "currency",
+                    "posting_date",
+                    "is_return",
+                    "total_qty",
+                    "net_total",
+                    "grand_total",
+                )
+            },
         },
         "sales_invoice": {
             "target_doctype": _TARGET,
@@ -159,17 +163,12 @@ def _preview(source: Any, target: Any) -> dict[str, Any]:
                     "total_qty",
                 )
             },
-            "doctype": _SOURCE,
-            "name": source.name,
-            "docstatus": int(source.docstatus),
         },
     }
 
 
 def _fingerprint(preview: dict[str, Any]) -> str:
-    return hashlib.sha256(
-        json.dumps(preview, sort_keys=True, separators=(",", ":"), default=str).encode()
-    ).hexdigest()
+    return stable_fingerprint(preview)
 
 
 def _map(source: Any):

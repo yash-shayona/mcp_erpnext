@@ -1,13 +1,13 @@
 """Permission-safe native Sales Order to Draft Delivery Note conversion."""
 
 from __future__ import annotations
-import hashlib, json
 from decimal import Decimal
 from typing import Any
 import frappe
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
 from ...observability import public_error
+from ..common.fingerprint import stable_fingerprint
 
 _ACTION = "convert_sales_order_to_delivery_note"
 _SOURCE = "Sales Order"
@@ -183,9 +183,9 @@ def _map(source):
 
 
 def _fingerprint(preview):
-    return hashlib.sha256(
-        json.dumps(preview, sort_keys=True, separators=(",", ":"), default=str).encode()
-    ).hexdigest()
+    return stable_fingerprint(
+        preview, ignored_paths={("delivery_note", "posting_time")}
+    )
 
 
 def prepare_sales_order_to_delivery_note(sales_order):
