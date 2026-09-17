@@ -175,13 +175,27 @@ from .accounts.customer_payment_entry import (
     CustomerPaymentEntryPrepareInput,
     PrepareCustomerPaymentEntryOutput,
 )
+from .accounts.sales_order_advance_payment import (
+    ConfirmSalesOrderAdvancePaymentOutput,
+    PrepareSalesOrderAdvancePaymentOutput,
+    SalesOrderAdvancePaymentConfirmInput,
+    SalesOrderAdvancePaymentPrepareInput,
+)
+from .accounts.customer_payment_reconciliation import (
+    ConfirmCustomerPaymentReconciliationOutput,
+    ConfirmCustomerPaymentReconciliationResult,
+    CustomerPaymentReconciliationConfirmInput,
+    CustomerPaymentReconciliationPrepareInput,
+    PrepareCustomerPaymentReconciliationOutput,
+    PrepareCustomerPaymentReconciliationResult,
+)
 from .accounts.payment_entry_read import (
-	PaymentEntryAggregateInput,
-	PaymentEntryAggregateOutput,
-	PaymentEntryGetInput,
-	PaymentEntryGetOutput,
-	PaymentEntryQueryInput,
-	PaymentEntryQueryOutput,
+    PaymentEntryAggregateInput,
+    PaymentEntryAggregateOutput,
+    PaymentEntryGetInput,
+    PaymentEntryGetOutput,
+    PaymentEntryQueryInput,
+    PaymentEntryQueryOutput,
 )
 
 
@@ -968,18 +982,26 @@ TOOL_CONTRACTS["confirm_document_email"] = ToolContract(
 )
 
 TOOL_CONTRACTS["prepare_sales_invoice_payment"] = ToolContract(
-    "prepare_sales_invoice_payment", "Accounts", ToolOperation.PREPARE,
+    "prepare_sales_invoice_payment",
+    "Accounts",
+    ToolOperation.PREPARE,
     SideEffectClass.PREPARE,
     "Prepare a native Draft customer Payment Entry for one submitted Sales Invoice.",
-    False, SalesInvoicePaymentPrepareInput, PrepareSalesInvoicePaymentOutput,
+    False,
+    SalesInvoicePaymentPrepareInput,
+    PrepareSalesInvoicePaymentOutput,
     interaction_kinds=(InteractionKind.APPROVAL,),
     approval_confirm_tool="confirm_sales_invoice_payment",
 )
 TOOL_CONTRACTS["prepare_multi_invoice_customer_receipt"] = ToolContract(
-    "prepare_multi_invoice_customer_receipt", "Accounts", ToolOperation.PREPARE,
+    "prepare_multi_invoice_customer_receipt",
+    "Accounts",
+    ToolOperation.PREPARE,
     SideEffectClass.PREPARE,
     "Prepare one explicit Customer receipt allocated across 2-20 submitted Sales Invoices.",
-    False, MultiInvoiceCustomerReceiptPrepareInput, PrepareMultiInvoiceCustomerReceiptOutput,
+    False,
+    MultiInvoiceCustomerReceiptPrepareInput,
+    PrepareMultiInvoiceCustomerReceiptOutput,
     interaction_kinds=(InteractionKind.APPROVAL,),
     approval_confirm_tool="confirm_multi_invoice_customer_receipt",
 )
@@ -1006,50 +1028,104 @@ TOOL_CONTRACTS["confirm_customer_payment_entry"] = ToolContract(
     ConfirmCustomerPaymentEntryOutput,
     approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
 )
+TOOL_CONTRACTS["prepare_sales_order_advance_payment"] = ToolContract(
+    "prepare_sales_order_advance_payment",
+    "Accounts",
+    ToolOperation.PREPARE,
+    SideEffectClass.PREPARE,
+    "Prepare a native Draft Customer advance Payment Entry for one submitted Sales Order.",
+    False,
+    SalesOrderAdvancePaymentPrepareInput,
+    PrepareSalesOrderAdvancePaymentOutput,
+    interaction_kinds=(InteractionKind.APPROVAL,),
+    approval_confirm_tool="confirm_sales_order_advance_payment",
+)
+TOOL_CONTRACTS["confirm_sales_order_advance_payment"] = ToolContract(
+    "confirm_sales_order_advance_payment",
+    "Accounts",
+    ToolOperation.CONFIRM,
+    SideEffectClass.CONFIRM_WRITE,
+    "Create the reviewed native Draft Customer advance Payment Entry.",
+    True,
+    SalesOrderAdvancePaymentConfirmInput,
+    ConfirmSalesOrderAdvancePaymentOutput,
+    approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+)
+TOOL_CONTRACTS["prepare_customer_payment_reconciliation"] = ToolContract(
+    "prepare_customer_payment_reconciliation",
+    "Accounts",
+    ToolOperation.PREPARE,
+    SideEffectClass.PREPARE,
+    "Prepare a bounded projection for applying one existing submitted Customer Payment Entry to one submitted Sales Invoice through native reconciliation.",
+    False,
+    CustomerPaymentReconciliationPrepareInput,
+    PrepareCustomerPaymentReconciliationOutput,
+    interaction_kinds=(InteractionKind.APPROVAL,),
+    approval_confirm_tool="confirm_customer_payment_reconciliation",
+)
+TOOL_CONTRACTS["confirm_customer_payment_reconciliation"] = ToolContract(
+    "confirm_customer_payment_reconciliation",
+    "Accounts",
+    ToolOperation.CONFIRM,
+    SideEffectClass.CONFIRM_WRITE,
+    "Apply the approved existing submitted Customer Payment Entry to one Sales Invoice through native ERPNext reconciliation.",
+    True,
+    CustomerPaymentReconciliationConfirmInput,
+    ConfirmCustomerPaymentReconciliationOutput,
+    approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+)
 TOOL_CONTRACTS["confirm_multi_invoice_customer_receipt"] = ToolContract(
-    "confirm_multi_invoice_customer_receipt", "Accounts", ToolOperation.CONFIRM,
+    "confirm_multi_invoice_customer_receipt",
+    "Accounts",
+    ToolOperation.CONFIRM,
     SideEffectClass.CONFIRM_WRITE,
     "Create the reviewed multi-invoice Customer receipt as one Draft Payment Entry.",
-    True, MultiInvoiceCustomerReceiptConfirmInput, ConfirmMultiInvoiceCustomerReceiptOutput,
+    True,
+    MultiInvoiceCustomerReceiptConfirmInput,
+    ConfirmMultiInvoiceCustomerReceiptOutput,
     approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
 )
 TOOL_CONTRACTS["confirm_sales_invoice_payment"] = ToolContract(
-    "confirm_sales_invoice_payment", "Accounts", ToolOperation.CONFIRM,
+    "confirm_sales_invoice_payment",
+    "Accounts",
+    ToolOperation.CONFIRM,
     SideEffectClass.CONFIRM_WRITE,
     "Create the reviewed native Draft customer Payment Entry.",
-    True, SalesInvoicePaymentConfirmInput, ConfirmSalesInvoicePaymentOutput,
+    True,
+    SalesInvoicePaymentConfirmInput,
+    ConfirmSalesInvoicePaymentOutput,
     approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
 )
 TOOL_CONTRACTS["get_payment_entry"] = ToolContract(
-	"get_payment_entry",
-	"Accounts",
-	ToolOperation.RESOLVE,
-	SideEffectClass.READ,
-	"Retrieve selected fields and bounded native references from one permitted Payment Entry.",
-	False,
-	PaymentEntryGetInput,
-	PaymentEntryGetOutput,
-	resolution_states=("ok", "not_found", "error"),
+    "get_payment_entry",
+    "Accounts",
+    ToolOperation.RESOLVE,
+    SideEffectClass.READ,
+    "Retrieve selected fields and bounded native references from one permitted Payment Entry.",
+    False,
+    PaymentEntryGetInput,
+    PaymentEntryGetOutput,
+    resolution_states=("ok", "not_found", "error"),
 )
 TOOL_CONTRACTS["query_payment_entries"] = ToolContract(
-	"query_payment_entries",
-	"Accounts",
-	ToolOperation.SEARCH,
-	SideEffectClass.READ,
-	"Query permitted Payment Entries using typed filters, bounded projection, sorting, and pagination.",
-	False,
-	PaymentEntryQueryInput,
-	PaymentEntryQueryOutput,
+    "query_payment_entries",
+    "Accounts",
+    ToolOperation.SEARCH,
+    SideEffectClass.READ,
+    "Query permitted Payment Entries using typed filters, bounded projection, sorting, and pagination.",
+    False,
+    PaymentEntryQueryInput,
+    PaymentEntryQueryOutput,
 )
 TOOL_CONTRACTS["aggregate_payment_entries"] = ToolContract(
-	"aggregate_payment_entries",
-	"Accounts",
-	ToolOperation.SEARCH,
-	SideEffectClass.READ,
-	"Calculate currency-safe permission-aware Payment Entry metrics on the server.",
-	False,
-	PaymentEntryAggregateInput,
-	PaymentEntryAggregateOutput,
+    "aggregate_payment_entries",
+    "Accounts",
+    ToolOperation.SEARCH,
+    SideEffectClass.READ,
+    "Calculate currency-safe permission-aware Payment Entry metrics on the server.",
+    False,
+    PaymentEntryAggregateInput,
+    PaymentEntryAggregateOutput,
 )
 
 

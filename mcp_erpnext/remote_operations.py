@@ -25,9 +25,17 @@ from .contracts.accounts.multi_invoice_customer_receipt import (
     MultiInvoiceCustomerReceiptPrepareInput,
 )
 from .contracts.accounts.payment_entry_read import (
-	PaymentEntryAggregateInput,
-	PaymentEntryGetInput,
-	PaymentEntryQueryInput,
+    PaymentEntryAggregateInput,
+    PaymentEntryGetInput,
+    PaymentEntryQueryInput,
+)
+from .contracts.accounts.sales_order_advance_payment import (
+    SalesOrderAdvancePaymentConfirmInput,
+    SalesOrderAdvancePaymentPrepareInput,
+)
+from .contracts.accounts.customer_payment_reconciliation import (
+    CustomerPaymentReconciliationConfirmInput,
+    CustomerPaymentReconciliationPrepareInput,
 )
 from .contracts.lifecycle import (
     LifecycleConfirmInput,
@@ -104,6 +112,8 @@ from .services.buying import purchase_order
 from .services.accounts import sales_invoice_payment
 from .services.accounts import multi_invoice_customer_receipt
 from .services.accounts import payment_entry_read
+from .services.accounts import sales_order_advance_payment
+from .services.accounts import customer_payment_reconciliation
 from .services.common import email, lifecycle, pdf, read
 from .services.masters import (
     customer,
@@ -556,13 +566,41 @@ _PURCHASE_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
 }
 
 _ACCOUNTS_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
+    "prepare_sales_order_advance_payment": (
+        SalesOrderAdvancePaymentPrepareInput,
+        lambda request, _profile: sales_order_advance_payment.prepare_sales_order_advance_payment(
+            request.model_dump(mode="json")
+        ),
+    ),
+    "confirm_sales_order_advance_payment": (
+        SalesOrderAdvancePaymentConfirmInput,
+        lambda request, _profile: sales_order_advance_payment.confirm_sales_order_advance_payment(
+            request.approval_token, request.confirm
+        ),
+    ),
+    "prepare_customer_payment_reconciliation": (
+        CustomerPaymentReconciliationPrepareInput,
+        lambda request, _profile: customer_payment_reconciliation.prepare_customer_payment_reconciliation(
+            request.model_dump(mode="json")
+        ),
+    ),
+    "confirm_customer_payment_reconciliation": (
+        CustomerPaymentReconciliationConfirmInput,
+        lambda request, _profile: customer_payment_reconciliation.confirm_customer_payment_reconciliation(
+            request.approval_token, request.confirm
+        ),
+    ),
     "prepare_multi_invoice_customer_receipt": (
         MultiInvoiceCustomerReceiptPrepareInput,
-        lambda request, _profile: multi_invoice_customer_receipt.prepare_multi_invoice_customer_receipt(request.model_dump(mode="json")),
+        lambda request, _profile: multi_invoice_customer_receipt.prepare_multi_invoice_customer_receipt(
+            request.model_dump(mode="json")
+        ),
     ),
     "confirm_multi_invoice_customer_receipt": (
         MultiInvoiceCustomerReceiptConfirmInput,
-        lambda request, _profile: multi_invoice_customer_receipt.confirm_multi_invoice_customer_receipt(request.approval_token, request.confirm),
+        lambda request, _profile: multi_invoice_customer_receipt.confirm_multi_invoice_customer_receipt(
+            request.approval_token, request.confirm
+        ),
     ),
     "prepare_sales_invoice_payment": (
         SalesInvoicePaymentPrepareInput,
@@ -576,24 +614,24 @@ _ACCOUNTS_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
             request.approval_token, request.confirm
         ),
     ),
-	"get_payment_entry": (
-		PaymentEntryGetInput,
-		lambda request, _profile: payment_entry_read.get_payment_entry(
-			**request.model_dump()
-		),
-	),
-	"query_payment_entries": (
-		PaymentEntryQueryInput,
-		lambda request, _profile: payment_entry_read.query_payment_entries(
-			request.model_dump()
-		),
-	),
-	"aggregate_payment_entries": (
-		PaymentEntryAggregateInput,
-		lambda request, _profile: payment_entry_read.aggregate_payment_entries(
-			request.model_dump()
-		),
-	),
+    "get_payment_entry": (
+        PaymentEntryGetInput,
+        lambda request, _profile: payment_entry_read.get_payment_entry(
+            **request.model_dump()
+        ),
+    ),
+    "query_payment_entries": (
+        PaymentEntryQueryInput,
+        lambda request, _profile: payment_entry_read.query_payment_entries(
+            request.model_dump()
+        ),
+    ),
+    "aggregate_payment_entries": (
+        PaymentEntryAggregateInput,
+        lambda request, _profile: payment_entry_read.aggregate_payment_entries(
+            request.model_dump()
+        ),
+    ),
 }
 
 
@@ -601,9 +639,15 @@ def execute_remote_operation(
     operation: str, profile: str, arguments: dict[str, Any]
 ) -> dict[str, Any]:
     """Validate and execute one statically registered public operation."""
-    if profile not in {"sales", "purchase", "accounts"} or not isinstance(arguments, dict):
+    if profile not in {"sales", "purchase", "accounts"} or not isinstance(
+        arguments, dict
+    ):
         raise RemoteOperationError("The remote operation request is invalid.")
-    handlers = {"sales": _SALES_HANDLERS, "purchase": _PURCHASE_HANDLERS, "accounts": _ACCOUNTS_HANDLERS}[profile]
+    handlers = {
+        "sales": _SALES_HANDLERS,
+        "purchase": _PURCHASE_HANDLERS,
+        "accounts": _ACCOUNTS_HANDLERS,
+    }[profile]
     definition = handlers.get(operation) or _SHARED_HANDLERS.get(operation)
     if definition is None:
         raise RemoteOperationError("The requested remote operation is unavailable.")

@@ -807,6 +807,10 @@ Queue one exact prepared document email through Frappe's native Email Queue.
 | `confirm_multi_invoice_customer_receipt` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_customer_payment_entry` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_customer_payment_entry` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_sales_order_advance_payment` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_order_advance_payment` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_customer_payment_reconciliation` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_customer_payment_reconciliation` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `get_payment_entry` | Accounts | Resolve | READ | None | Not a final write | Explicit typed contract |
 | `query_payment_entries` | Accounts | Search | READ | None | Not a final write | Explicit typed contract |
 | `aggregate_payment_entries` | Accounts | Search | READ | None | Not a final write | Explicit typed contract |
@@ -868,6 +872,42 @@ Create the reviewed standalone Draft Customer receipt Payment Entry.
 
 - Input: `CustomerPaymentEntryConfirmInput` — Required: `request`
 - Output: `ConfirmCustomerPaymentEntryOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_sales_order_advance_payment`
+
+Prepare a native Draft Customer advance Payment Entry for one submitted Sales Order.
+
+- Input: `SalesOrderAdvancePaymentPrepareInput` — Required: `request`
+- Output: `PrepareSalesOrderAdvancePaymentOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_sales_order_advance_payment`
+
+Create the reviewed native Draft Customer advance Payment Entry.
+
+- Input: `SalesOrderAdvancePaymentConfirmInput` — Required: `request`
+- Output: `ConfirmSalesOrderAdvancePaymentOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_customer_payment_reconciliation`
+
+Prepare a bounded projection for applying one existing submitted Customer Payment Entry to one submitted Sales Invoice through native reconciliation.
+
+- Input: `CustomerPaymentReconciliationPrepareInput` — Required: `request`
+- Output: `PrepareCustomerPaymentReconciliationOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_customer_payment_reconciliation`
+
+Apply the approved existing submitted Customer Payment Entry to one Sales Invoice through native ERPNext reconciliation.
+
+- Input: `CustomerPaymentReconciliationConfirmInput` — Required: `request`
+- Output: `ConfirmCustomerPaymentReconciliationOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 

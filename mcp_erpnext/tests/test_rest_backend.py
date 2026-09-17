@@ -164,6 +164,82 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                 ], "bank_account": "BANK-1"},
             )
 
+    @patch("mcp_erpnext.remote_operations.sales_order_advance_payment.prepare_sales_order_advance_payment")
+    def test_sales_order_advance_payment_uses_fixed_typed_accounts_handler(self, prepare):
+        prepare.return_value = {
+            "status": "error",
+            "code": "SALES_ORDER_NOT_FOUND",
+            "message": "missing",
+            "reference": "MCP-ERR-TEST",
+        }
+        result = remote_operations.execute_remote_operation(
+            "prepare_sales_order_advance_payment",
+            "accounts",
+            {
+                "sales_order": "SAL-ORD-1",
+                "amount": 50,
+                "mode_of_payment": "Bank Transfer",
+            },
+        )
+        self.assertEqual(result["code"], "SALES_ORDER_NOT_FOUND")
+        prepare.assert_called_once()
+
+    def test_sales_order_advance_payment_is_accounts_only(self):
+        with self.assertRaises(remote_operations.RemoteOperationError):
+            remote_operations.execute_remote_operation(
+                "prepare_sales_order_advance_payment",
+                "sales",
+                {"sales_order": "SAL-ORD-1", "amount": 50, "bank_account": "BANK-1"},
+            )
+
+    @patch("mcp_erpnext.remote_operations.sales_order_advance_payment.confirm_sales_order_advance_payment")
+    def test_sales_order_advance_payment_confirm_uses_fixed_typed_handler(self, confirm):
+        confirm.return_value = {"status": "error", "code": "CONFIRMATION_UNAVAILABLE"}
+        result = remote_operations.execute_remote_operation(
+            "confirm_sales_order_advance_payment",
+            "accounts",
+            {"approval_token": "opaque", "confirm": True},
+        )
+        self.assertEqual(result["code"], "CONFIRMATION_UNAVAILABLE")
+        confirm.assert_called_once_with("opaque", True)
+
+    @patch("mcp_erpnext.remote_operations.customer_payment_reconciliation.prepare_customer_payment_reconciliation")
+    def test_customer_payment_reconciliation_uses_fixed_typed_accounts_handler(self, prepare):
+        prepare.return_value = {
+            "status": "error",
+            "code": "PAYMENT_ENTRY_NOT_FOUND",
+            "message": "missing",
+            "reference": "MCP-ERR-TEST",
+        }
+        result = remote_operations.execute_remote_operation(
+            "prepare_customer_payment_reconciliation",
+            "accounts",
+            {"payment_entry": "ACC-PAY-1", "sales_invoice": "ACC-SINV-1", "amount": 25},
+        )
+        self.assertEqual(result["code"], "PAYMENT_ENTRY_NOT_FOUND")
+        prepare.assert_called_once_with(
+            {"payment_entry": "ACC-PAY-1", "sales_invoice": "ACC-SINV-1", "amount": 25}
+        )
+
+    @patch("mcp_erpnext.remote_operations.customer_payment_reconciliation.confirm_customer_payment_reconciliation")
+    def test_customer_payment_reconciliation_confirm_uses_fixed_typed_handler(self, confirm):
+        confirm.return_value = {"status": "error", "code": "CONFIRMATION_UNAVAILABLE"}
+        result = remote_operations.execute_remote_operation(
+            "confirm_customer_payment_reconciliation",
+            "accounts",
+            {"approval_token": "opaque", "confirm": True},
+        )
+        self.assertEqual(result["code"], "CONFIRMATION_UNAVAILABLE")
+        confirm.assert_called_once_with("opaque", True)
+
+    def test_customer_payment_reconciliation_is_accounts_only(self):
+        with self.assertRaises(remote_operations.RemoteOperationError):
+            remote_operations.execute_remote_operation(
+                "prepare_customer_payment_reconciliation",
+                "sales",
+                {"payment_entry": "ACC-PAY-1", "sales_invoice": "ACC-SINV-1", "amount": 25},
+            )
+
 
 class RemoteErrorTests(unittest.TestCase):
     @patch("mcp_erpnext.remote_api.logged_public_error")

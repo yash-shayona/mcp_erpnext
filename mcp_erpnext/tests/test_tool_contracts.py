@@ -147,6 +147,83 @@ class ToolContractTests(unittest.TestCase):
 		self.assertNotIn("filters", dumps(tools["query_payment_entries"].inputSchema))
 		self.assertNotIn("bank_account_no", dumps(tools["get_payment_entry"].inputSchema))
 
+	def test_sales_order_advance_payment_contract_is_typed_and_bounded(self):
+		settings = replace(MCPSettings.from_environment(), profile=MCPProfile.ACCOUNTS)
+		tools = {tool.name: tool for tool in asyncio.run(create_mcp(settings).list_tools())}
+		prepare = tools["prepare_sales_order_advance_payment"]
+		confirm = tools["confirm_sales_order_advance_payment"]
+		prepare_input = prepare.inputSchema["$defs"]["SalesOrderAdvancePaymentPrepareInput"]
+		confirm_input = confirm.inputSchema["$defs"]["SalesOrderAdvancePaymentConfirmInput"]
+		self.assertEqual(prepare_input["required"], ["sales_order", "amount"])
+		self.assertEqual(confirm_input["required"], ["approval_token", "confirm"])
+		self.assertEqual(prepare.meta["mcp_erpnext"]["side_effect"], "PREPARE")
+		self.assertEqual(confirm.meta["mcp_erpnext"]["side_effect"], "CONFIRM_WRITE")
+		self.assertEqual(
+			get_tool_contract("prepare_sales_order_advance_payment").approval_confirm_tool,
+			"confirm_sales_order_advance_payment",
+		)
+		for internal in (
+			"party_type",
+			"payment_type",
+			"paid_from",
+			"paid_to",
+			"party_account",
+			"advance_account",
+			"references",
+			"ignore_permissions",
+			"site",
+			"user",
+		):
+			self.assertNotIn(internal, dumps(prepare.inputSchema))
+		for mutable in ("sales_order", "amount", "mode_of_payment", "bank_account"):
+			self.assertNotIn(mutable, confirm_input["properties"])
+
+	def test_customer_payment_reconciliation_contract_is_typed_and_bounded(self):
+		settings = replace(MCPSettings.from_environment(), profile=MCPProfile.ACCOUNTS)
+		tools = {tool.name: tool for tool in asyncio.run(create_mcp(settings).list_tools())}
+		prepare = tools["prepare_customer_payment_reconciliation"]
+		confirm = tools["confirm_customer_payment_reconciliation"]
+		prepare_input = prepare.inputSchema["$defs"]["CustomerPaymentReconciliationPrepareInput"]
+		confirm_input = confirm.inputSchema["$defs"]["CustomerPaymentReconciliationConfirmInput"]
+		self.assertEqual(prepare_input["required"], ["payment_entry", "sales_invoice", "amount"])
+		self.assertEqual(confirm_input["required"], ["approval_token", "confirm"])
+		self.assertEqual(prepare.meta["mcp_erpnext"]["side_effect"], "PREPARE")
+		self.assertEqual(confirm.meta["mcp_erpnext"]["side_effect"], "CONFIRM_WRITE")
+		self.assertEqual(
+			get_tool_contract("prepare_customer_payment_reconciliation").approval_confirm_tool,
+			"confirm_customer_payment_reconciliation",
+		)
+		for internal in (
+			"company",
+			"party_type",
+			"payment_type",
+			"reference_row",
+			"sales_order",
+			"paid_from",
+			"paid_to",
+			"account",
+			"advance_account",
+			"currency",
+			"exchange_rate",
+			"ignore_permissions",
+			"site",
+			"user",
+		):
+			self.assertNotIn(internal, prepare_input["properties"])
+		for mutable in ("payment_entry", "sales_invoice", "amount"):
+			self.assertNotIn(mutable, confirm_input["properties"])
+
+	def test_customer_payment_reconciliation_input_rejects_invalid_amounts(self):
+		from mcp_erpnext.contracts.accounts.customer_payment_reconciliation import (
+			CustomerPaymentReconciliationPrepareInput,
+		)
+
+		for amount in (0, -1, True, float("nan"), float("inf")):
+			with self.subTest(amount=amount), self.assertRaises(ValidationError):
+				CustomerPaymentReconciliationPrepareInput(
+					payment_entry="ACC-PAY-1", sales_invoice="ACC-SINV-1", amount=amount
+				)
+
 	def test_public_schemas_do_not_expose_server_approval_policy_internals(self):
 		schemas = dumps(
 			[
