@@ -12,6 +12,7 @@ explicit for this Docker-to-WSL development bridge only; it is not the default.
 export MCP_BACKEND=direct
 export MCP_FRAPPE_SITE=yob.localhost
 export MCP_TRANSPORT=streamable-http
+export MCP_HTTP_AUTH_MODE=trusted_header
 export MCP_PROFILE=sales
 export MCP_HTTP_HOST=0.0.0.0
 export MCP_HTTP_PORT=8765

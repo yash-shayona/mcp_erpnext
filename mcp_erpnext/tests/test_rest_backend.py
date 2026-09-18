@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from mcp_erpnext import remote_operations
+from mcp_erpnext import remote_operations, runtime
 from mcp_erpnext.contracts.common import ToolError
 from mcp_erpnext import remote_api
 from mcp_erpnext.rest_client import ERPNextRestClient, RestBackendError
@@ -63,6 +63,28 @@ class RESTSettingsTests(unittest.TestCase):
     def test_rest_rejects_local_streamable_http_identity_mix(self):
         with self.assertRaisesRegex(RuntimeError, "MCP_TRANSPORT=stdio"):
             _settings(transport="streamable-http").validate()
+
+    @patch("mcp_erpnext.observability.execute_tool", side_effect=lambda _name, operation: operation())
+    @patch("mcp_erpnext.runtime.resolve_configured_frappe_user")
+    @patch("mcp_erpnext.runtime._run_stdio_tool")
+    @patch("mcp_erpnext.runtime.ERPNextRestClient")
+    @patch("mcp_erpnext.runtime.MCPSettings.from_environment")
+    def test_rest_execution_uses_only_remote_api_principal_semantics(
+        self, from_environment, rest_client, run_stdio, resolve_user, _execute_tool
+    ):
+        from_environment.return_value = _settings(frappe_user="local@example.com")
+        rest_client.return_value.execute.return_value = {"status": "ok"}
+
+        result = runtime.execute_tool_with_context(
+            Mock(), "search_customers", Mock(), rest_arguments={"query": "Acme"}
+        )
+
+        self.assertEqual(result, {"status": "ok"})
+        run_stdio.assert_not_called()
+        resolve_user.assert_not_called()
+        rest_client.return_value.execute.assert_called_once_with(
+            operation="search_customers", profile="sales", arguments={"query": "Acme"}
+        )
 
 
 class RemoteOperationRegistryTests(unittest.TestCase):

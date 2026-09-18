@@ -3,14 +3,13 @@ from __future__ import annotations
 import asyncio
 import os
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from mcp_identity.identity import get_http_identity_inputs
-from mcp_erpnext.http_transport import SharedSecretAuthenticationMiddleware
+from mcp_erpnext.http_transport import create_http_app
 from mcp_erpnext.mcp_server import create_mcp
 from mcp_erpnext.settings import MCPSettings
-from starlette.requests import Request
-from starlette.responses import Response
 
 
 SECRET = "this-is-a-development-only-secret-with-32-chars"
@@ -42,6 +41,10 @@ class TransportSettingsTests(unittest.TestCase):
 	def test_explicit_stdio_preserves_service_user_development_mode(self):
 		_settings(transport="stdio").validate_transport()
 
+	@patch.dict(os.environ, {"MCP_HTTP_AUTH_MODE": "oauth"}, clear=True)
+	def test_stdio_does_not_validate_http_auth_mode(self):
+		_settings(transport="stdio").validate_transport()
+
 	def test_invalid_transport_fails_deterministically(self):
 		with self.assertRaisesRegex(RuntimeError, "MCP_TRANSPORT"):
 			_settings(transport="sse").validate_transport()
@@ -54,6 +57,11 @@ class TransportSettingsTests(unittest.TestCase):
 				with self.assertRaisesRegex(Exception, "MCP_HTTP_SHARED_SECRET"):
 					_settings().validate_transport()
 
+	@patch.dict(os.environ, {"MCP_HTTP_AUTH_MODE": "oauth"}, clear=True)
+	def test_http_oauth_mode_requires_oauth_configuration(self):
+		with self.assertRaisesRegex(Exception, "MCP_OAUTH_ISSUER_URL"):
+			_settings().validate_transport()
+
 	@patch.dict(os.environ, {"MCP_HTTP_SHARED_SECRET": SECRET}, clear=True)
 	def test_http_rejects_invalid_port_and_wildcard_host(self):
 		with self.assertRaisesRegex(RuntimeError, "MCP_HTTP_PORT"):
@@ -62,41 +70,47 @@ class TransportSettingsTests(unittest.TestCase):
 			_settings(http_allowed_hosts=("*:8765",)).validate_transport()
 
 
-class SharedSecretAuthenticationTests(unittest.TestCase):
-	def setUp(self):
-		async def app(_scope, _receive, _send):
-			return None
-
-		self.middleware = SharedSecretAuthenticationMiddleware(app, shared_secret=SECRET, path="/mcp")
-
-	def _dispatch(self, authorization: str | None) -> Response:
-		headers = [] if authorization is None else [(b"authorization", authorization.encode())]
-		request = Request(
-			{
-				"type": "http", "method": "POST", "path": "/mcp", "headers": headers,
-				"query_string": b"", "scheme": "http", "server": ("testserver", 80),
-				"client": ("testclient", 50000),
-			}
+class HTTPAppAssemblyTests(unittest.TestCase):
+	@patch.dict(
+		os.environ,
+		{
+			"MCP_HTTP_AUTH_MODE": "oauth",
+			"MCP_FRAPPE_SITE": "test.localhost",
+			"MCP_OAUTH_ISSUER_URL": "https://erp.example.com",
+			"MCP_OAUTH_RESOURCE_SERVER_URL": "https://mcp.example.com/mcp",
+			"MCP_OAUTH_REQUIRED_SCOPES": "mcp:access",
+			"MCP_OAUTH_FRAPPE_CLIENT_ID": "client-a",
+		},
+		clear=True,
+	)
+	@patch("mcp_erpnext.mcp_server.FrappeOAuthTokenVerifier")
+	@patch("mcp_erpnext.mcp_server.validate_oauth_resource_server_startup")
+	def test_oauth_uses_sdk_auth_and_metadata_routes(self, startup, verifier):
+		startup.return_value = SimpleNamespace(
+			issuer_url="https://erp.example.com",
+			resource_server_url="https://mcp.example.com/mcp",
+			required_scopes=("mcp:access",),
 		)
+		mcp = create_mcp(_settings())
+		self.assertEqual(str(mcp.settings.auth.resource_server_url), "https://mcp.example.com/mcp")
+		self.assertEqual(mcp.settings.auth.required_scopes, ["mcp:access"])
+		self.assertTrue(mcp._token_verifier is verifier.return_value)
+		app = create_http_app(mcp, _settings())
+		self.assertTrue(any("oauth-protected-resource" in route.path for route in app.routes))
+		verifier.assert_called_once_with(startup.return_value)
 
-		async def call_next(_request):
-			return Response(status_code=204)
+	@patch.dict(os.environ, {"MCP_HTTP_SHARED_SECRET": SECRET}, clear=True)
+	@patch("mcp_erpnext.http_transport.add_trusted_header_authentication")
+	def test_http_authentication_is_supplied_by_mcp_identity(self, add_authentication):
+		app = Mock()
+		mcp = Mock()
+		mcp.streamable_http_app.return_value = app
+		add_authentication.return_value = app
 
-		return asyncio.run(self.middleware.dispatch(request, call_next))
-
-	def test_missing_malformed_and_wrong_bearer_values_are_rejected(self):
-		for authorization in (None, "Basic value", "Bearer wrong-secret"):
-			with self.subTest(authorization=authorization):
-				self.assertEqual(self._dispatch(authorization).status_code, 401)
-
-	def test_correct_bearer_value_reaches_the_mcp_app(self):
-		self.assertEqual(self._dispatch(f"Bearer {SECRET}").status_code, 204)
-
-	@patch("mcp_erpnext.http_transport.logger")
-	def test_authentication_log_never_contains_the_secret(self, logger):
-		self._dispatch("Bearer incorrect")
-		self.assertEqual(logger.warning.call_args.args, ("MCP HTTP authentication failed",))
-		self.assertNotIn(SECRET, str(logger.warning.call_args))
+		self.assertIs(create_http_app(mcp, _settings()), app)
+		add_authentication.assert_called_once_with(
+			app, shared_secret=SECRET, path="/mcp"
+		)
 
 
 class RequestIdentityTests(unittest.TestCase):

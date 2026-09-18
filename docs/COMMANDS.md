@@ -16,8 +16,11 @@ cp apps/mcp_erpnext/.env.example apps/mcp_erpnext/.env
 chmod 600 apps/mcp_erpnext/.env
 ```
 
-The HTTP shared secret must be at least 32 characters. Keep `.env` private and
-never commit it.
+The HTTP auth mode defaults to `trusted_header`; the example sets it explicitly.
+In that mode the shared secret must be at least 32 characters. Keep `.env`
+private and never commit it. OAuth mode instead uses the native Frappe OAuth
+Client/token settings documented by `mcp_identity` and does not use the shared
+secret or `X-MCP-User-Email`.
 
 ## Streamable HTTP
 

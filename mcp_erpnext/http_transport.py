@@ -1,55 +1,34 @@
-"""Authenticated Streamable HTTP transport helpers for the MCP server."""
+"""Streamable HTTP transport assembly for the MCP server."""
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import PlainTextResponse, Response
-
 from mcp_identity.identity import (
-    MCPIdentityError,
+    HTTPAuthMode,
+    get_http_auth_mode_from_environment,
     get_http_shared_secret_from_environment,
-    validate_bearer_secret,
-    validate_http_shared_secret_configuration,
+    validate_http_auth_configuration,
 )
+from mcp_identity.http import add_trusted_header_authentication
 
 from .settings import MCPSettings
 
-logger = logging.getLogger(__name__)
-
-
-class SharedSecretAuthenticationMiddleware(BaseHTTPMiddleware):
-    """Require the configured Bearer secret before handing an MCP request to the SDK."""
-
-    def __init__(self, app: Any, *, shared_secret: str, path: str) -> None:
-        super().__init__(app)
-        self.shared_secret = shared_secret
-        self.path = path
-
-    async def dispatch(self, request: Request, call_next: Any) -> Response:
-        if request.url.path != self.path:
-            return await call_next(request)
-        try:
-            validate_bearer_secret(request.headers.get("authorization"), self.shared_secret)
-        except MCPIdentityError:
-            logger.warning("MCP HTTP authentication failed")
-            return PlainTextResponse("Unauthorized", status_code=401)
-        return await call_next(request)
-
 
 def create_http_app(mcp: Any, settings: MCPSettings) -> Any:
-    """Wrap the SDK Streamable HTTP app with the project's shared-secret check."""
+    """Build the SDK app and delegate authentication assembly to mcp_identity."""
     settings.validate_transport()
-    shared_secret = validate_http_shared_secret_configuration(
-        get_http_shared_secret_from_environment()
-    )
+    mode = validate_http_auth_configuration()
+    if mode is HTTPAuthMode.OAUTH:
+        # FastMCP already supplies bearer authentication, scope enforcement,
+        # challenges, and protected-resource metadata for this mode.
+        return mcp.streamable_http_app()
+    shared_secret = get_http_shared_secret_from_environment()
+    if shared_secret is None:  # The validator above guarantees this invariant.
+        raise RuntimeError("Trusted-header authentication is not configured.")
     app = mcp.streamable_http_app()
-    app.add_middleware(
-        SharedSecretAuthenticationMiddleware,
+    return add_trusted_header_authentication(
+        app,
         shared_secret=shared_secret,
         path=settings.http_path,
     )
-    return app

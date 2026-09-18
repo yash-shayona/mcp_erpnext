@@ -6,6 +6,11 @@ from .approvals import approvals
 from .http_transport import create_http_app
 from .settings import MCPSettings
 from .tools import register_tools
+from mcp_identity.identity import HTTPAuthMode, get_http_auth_mode_from_environment
+from mcp_identity.oauth_resource_server import (
+    FrappeOAuthTokenVerifier,
+    validate_oauth_resource_server_startup,
+)
 
 SALES_RESPONSE_PRECISION_INSTRUCTION = """\
 RESPONSE PRECISION POLICY: Answer only the information the user asked for.
@@ -30,6 +35,18 @@ def create_mcp(settings: MCPSettings | None = None):
     if FastMCP is None or TransportSecuritySettings is None:
         return None
     settings = settings or MCPSettings.from_environment()
+    auth = None
+    token_verifier = None
+    if settings.transport == "streamable-http" and get_http_auth_mode_from_environment() is HTTPAuthMode.OAUTH:
+        from mcp.server.auth.settings import AuthSettings
+
+        oauth_settings = validate_oauth_resource_server_startup()
+        auth = AuthSettings(
+            issuer_url=oauth_settings.issuer_url,
+            resource_server_url=oauth_settings.resource_server_url,
+            required_scopes=list(oauth_settings.required_scopes),
+        )
+        token_verifier = FrappeOAuthTokenVerifier(oauth_settings)
     settings.validate_approval_mode()
     settings.validate_profile()
     approvals.configure_approval_mode(settings.approval_mode)
@@ -43,6 +60,8 @@ def create_mcp(settings: MCPSettings | None = None):
         host=settings.http_host,
         port=settings.http_port_number(),
         streamable_http_path=settings.http_path,
+        auth=auth,
+        token_verifier=token_verifier,
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
             allowed_hosts=list(settings.http_allowed_hosts),

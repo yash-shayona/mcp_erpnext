@@ -1,5 +1,9 @@
 # ERPNext MCP Server
 
+## Architecture & Mental Model
+
+![MCP ERPNext Architecture & Mental Model](docs/architecture/mcp-erpnext-architecture-mental-model.png)
+
 `mcp_erpnext` is one local ERPNext MCP app with explicit profile-specific server
 inventories. It exposes a small, controlled
 set of reusable ERPNext capabilities; it is not a generic ERPNext, Frappe, SQL,
@@ -148,21 +152,21 @@ multiple workers do not share them.
 
 The default transport is local `stdio` with `MCP_BACKEND=direct`, a configured
 `MCP_FRAPPE_SITE`, and `MCP_FRAPPE_USER` for local development/testing.
-
-LibreChat login is sufficient to start this local MCP flow; an ERP-enabled
-LibreChat user still needs an administrator-created mapping, but does not need
-to log in to Frappe Desk. Frappe roles, User Permissions, and DocType
-permissions remain the authority after the runtime sets the resolved user. A
-caller cannot pick the user through a tool argument. All record lookup and
-persistence remains subject to normal Frappe permissions. Existing OAuth work
-is unchanged.
+`mcp_identity` validates that configured identity after `mcp_erpnext` opens the
+site context; `mcp_erpnext` then applies it with `frappe.set_user()`.
+Frappe roles, User Permissions, and DocType permissions remain the authority. A
+caller cannot pick the user through a tool argument, and all record lookup and
+persistence remains subject to normal Frappe permissions.
 
 For the controlled Docker-to-WSL bridge, set `MCP_TRANSPORT=streamable-http`.
-HTTP requires a minimum 32-character `MCP_HTTP_SHARED_SECRET` in
+`MCP_HTTP_AUTH_MODE` is owned by `mcp_identity`; when absent it defaults to
+`trusted_header`. That mode requires a minimum 32-character
+`MCP_HTTP_SHARED_SECRET` in
 `Authorization: Bearer ...` and a verified `X-MCP-User-Email` on every
 request. `mcp_identity` resolves that email only after authentication. HTTP
 never uses `MCP_FRAPPE_USER` as a fallback and clears Frappe context after each
-tool call.
+tool call. The recognized `oauth` mode remains unavailable and fails startup
+closed until Frappe OAuth resource binding is implemented.
 
 `MCP_BACKEND=rest` calls the fixed authenticated
 `mcp_erpnext.remote_api.execute_mcp_operation` bridge on a compatible remote

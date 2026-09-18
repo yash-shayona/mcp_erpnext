@@ -10,12 +10,15 @@ from typing import TYPE_CHECKING, TypeVar
 
 import frappe
 from mcp_identity.identity import (
+    HTTPAuthMode,
     HTTPIdentityInputs,
-    MCPIdentityConfigurationError,
+    MCPAuthenticationMissingError,
     get_http_identity_inputs,
     get_http_shared_secret_from_environment,
+    resolve_configured_frappe_user,
     resolve_frappe_user_from_http,
-    validate_http_shared_secret_configuration,
+    validate_http_auth_configuration,
+    get_http_auth_mode_from_environment,
 )
 
 from .settings import MCPSettings
@@ -66,12 +69,18 @@ def execute_tool_with_context(
                 arguments=rest_arguments,
             ),
         )
-    runtime_identity = _get_http_runtime_identity(context)
-    if runtime_identity is None:
+    if settings.transport == "stdio":
         return execute_tool(tool_name, lambda: _run_stdio_tool(settings, operation))
+    if settings.transport == "streamable-http":
+        return execute_tool(
+            tool_name,
+            lambda: _run_configured_http_tool(settings, context, operation),
+        )
     return execute_tool(
         tool_name,
-        lambda: _run_http_tool(settings, runtime_identity, operation),
+        lambda: (_ for _ in ()).throw(
+            RuntimeError("MCP_TRANSPORT must be either 'stdio' or 'streamable-http'.")
+        ),
     )
 
 
@@ -82,16 +91,36 @@ def _run_stdio_tool(settings: MCPSettings, operation: Callable[[], ResultT]) -> 
 
 def _run_http_tool(
     settings: MCPSettings,
-    runtime_identity: HTTPIdentityInputs,
+    runtime_identity: HTTPIdentityInputs | None,
     operation: Callable[[], ResultT],
+    *,
+    oauth_user: str | None = None,
 ) -> ResultT:
     if settings.transport != "streamable-http":
         raise RuntimeError(
             "HTTP request context requires MCP_TRANSPORT=streamable-http."
         )
     with _http_runtime_scope():
-        _ensure_context(settings, runtime_identity=runtime_identity)
+        _ensure_context(settings, runtime_identity=runtime_identity, oauth_user=oauth_user)
         return operation()
+
+
+def _run_configured_http_tool(
+    settings: MCPSettings,
+    context: Context,
+    operation: Callable[[], ResultT],
+) -> ResultT:
+    """Validate the configured HTTP strategy before reading request identity."""
+    mode = validate_http_auth_configuration()
+    if mode is HTTPAuthMode.OAUTH:
+        from mcp.server.auth.middleware.auth_context import get_access_token
+
+        access_token = get_access_token()
+        subject = getattr(access_token, "subject", None) if access_token else None
+        if not subject:
+            raise MCPAuthenticationMissingError()
+        return _run_http_tool(settings, None, operation, oauth_user=str(subject))
+    return _run_http_tool(settings, _require_http_runtime_identity(context), operation)
 
 
 @contextmanager
@@ -110,6 +139,7 @@ def _ensure_context(
     site: str | None = None,
     user: str | None = None,
     runtime_identity: HTTPIdentityInputs | None = None,
+    oauth_user: str | None = None,
 ) -> dict[str, str]:
     """Connect one Frappe runtime scope to the selected, resolved user."""
     if settings.backend != "direct":
@@ -141,31 +171,40 @@ def _ensure_context(
         frappe.init(site=configured_site, sites_path=sites_path, force=True)
         frappe.connect(set_admin_as_user=False)
 
-    if runtime_identity is None:
-        configured_user = user or settings.frappe_user
+    if oauth_user is not None:
+        configured_user = oauth_user
+    elif runtime_identity is None:
+        configured_user = resolve_configured_frappe_user(user or settings.frappe_user)
     else:
-        shared_secret = validate_http_shared_secret_configuration(
-            get_http_shared_secret_from_environment()
-        )
+        validate_http_auth_configuration()
+        shared_secret = get_http_shared_secret_from_environment()
+        if shared_secret is None:  # The validator above guarantees this invariant.
+            raise RuntimeError("Trusted-header authentication is not configured.")
         configured_user = resolve_frappe_user_from_http(
             runtime_identity, shared_secret=shared_secret
         )
-    if configured_user:
-        frappe.set_user(configured_user)
+    frappe.set_user(configured_user)
 
     current_user = getattr(frappe.session, "user", None)
     if not current_user or current_user in {"Guest", "guest"}:
-        if runtime_identity is not None:
-            raise MCPIdentityConfigurationError()
-        raise RuntimeError("Set MCP_FRAPPE_USER before using stdio MCP tools.")
+        raise RuntimeError("The verified Frappe user could not be applied.")
 
     return {"site": configured_site, "user": current_user}
 
 
 def _get_http_runtime_identity(context: Context) -> HTTPIdentityInputs | None:
     """Copy generic headers from one SDK request without retaining the request."""
-    request = context.request_context.request
+    request_context = getattr(context, "request_context", None)
+    request = getattr(request_context, "request", None)
     headers = getattr(request, "headers", None)
     if headers is None:
         return None
     return get_http_identity_inputs(headers)
+
+
+def _require_http_runtime_identity(context: Context) -> HTTPIdentityInputs:
+    """Fail closed when an HTTP process has no request authentication context."""
+    identity = _get_http_runtime_identity(context)
+    if identity is None:
+        raise MCPAuthenticationMissingError()
+    return identity

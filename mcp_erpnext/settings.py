@@ -9,8 +9,8 @@ from enum import StrEnum
 from urllib.parse import urlsplit, urlunsplit
 
 from mcp_identity.identity import (
-    get_http_shared_secret_from_environment,
-    validate_http_shared_secret_configuration,
+    get_configured_frappe_user_from_environment,
+    validate_http_auth_configuration,
 )
 
 
@@ -53,7 +53,7 @@ class MCPSettings:
         return cls(
             backend=os.environ.get("MCP_BACKEND", "direct").strip().lower(),
             frappe_site=os.environ.get("MCP_FRAPPE_SITE"),
-            frappe_user=os.environ.get("MCP_FRAPPE_USER"),
+            frappe_user=get_configured_frappe_user_from_environment(),
             erpnext_base_url=os.environ.get("ERPNEXT_BASE_URL"),
             erpnext_api_key=os.environ.get("ERPNEXT_API_KEY"),
             erpnext_api_secret=os.environ.get("ERPNEXT_API_SECRET"),
@@ -182,7 +182,7 @@ class MCPSettings:
             )
         if self.transport == "stdio":
             return
-        validate_http_shared_secret_configuration(get_http_shared_secret_from_environment())
+        validate_http_auth_configuration()
         if not self.http_host:
             raise RuntimeError("MCP_HTTP_HOST is required for Streamable HTTP.")
         if (

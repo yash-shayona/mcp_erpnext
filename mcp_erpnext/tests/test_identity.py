@@ -60,3 +60,15 @@ class SettingsTests(unittest.TestCase):
 	)
 	def test_stdio_keeps_the_configured_development_user(self):
 		self.assertIsNone(MCPSettings.from_environment().frappe_user)
+
+	@patch.dict(
+		os.environ,
+		{
+			"MCP_BACKEND": "direct",
+			"MCP_FRAPPE_SITE": "test.localhost",
+			"MCP_FRAPPE_USER": "stdio@example.com",
+		},
+		clear=True,
+	)
+	def test_stdio_user_environment_name_is_backward_compatible(self):
+		self.assertEqual(MCPSettings.from_environment().frappe_user, "stdio@example.com")
