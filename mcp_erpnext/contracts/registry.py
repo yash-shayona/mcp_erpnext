@@ -43,10 +43,18 @@ from .masters.item_read import (
     ItemQueryOutput,
 )
 from .masters.customer import (
-    ConfirmCustomerOutput,
-    CustomerConfirmInput,
-    CustomerPrepareInput,
-    PrepareCustomerOutput,
+	ConfirmCustomerOutput,
+	CustomerConfirmInput,
+	CustomerPrepareInput,
+	PrepareCustomerOutput,
+)
+from .masters.contact import (
+	ConfirmCustomerContactOutput,
+	ContactSearchInput,
+	ContactSearchOutput,
+	CustomerContactConfirmInput,
+	CustomerContactPrepareInput,
+	PrepareCustomerContactOutput,
 )
 from .masters.item import (
     ConfirmItemOutput,
@@ -330,6 +338,40 @@ TOOL_CONTRACTS = {
         True,
         CustomerConfirmInput,
         ConfirmCustomerOutput,
+        approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+    ),
+    "search_contacts": ToolContract(
+        "search_contacts",
+        "Masters",
+        ToolOperation.SEARCH,
+        SideEffectClass.READ,
+        "Find permission-visible Contacts with exact global or Customer-scoped bounded matching.",
+        False,
+        ContactSearchInput,
+        ContactSearchOutput,
+        interaction_kinds=(InteractionKind.SELECTION,),
+    ),
+    "prepare_customer_contact": ToolContract(
+        "prepare_customer_contact",
+        "Masters",
+        ToolOperation.PREPARE,
+        SideEffectClass.PREPARE,
+        "Prepare a native Contact create or explicit Customer link without writing.",
+        False,
+        CustomerContactPrepareInput,
+        PrepareCustomerContactOutput,
+        interaction_kinds=(InteractionKind.APPROVAL,),
+        approval_confirm_tool="confirm_customer_contact",
+    ),
+    "confirm_customer_contact": ToolContract(
+        "confirm_customer_contact",
+        "Masters",
+        ToolOperation.CONFIRM,
+        SideEffectClass.CONFIRM_WRITE,
+        "Create or link the reviewed native Contact for an existing Customer.",
+        True,
+        CustomerContactConfirmInput,
+        ConfirmCustomerContactOutput,
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "search_items": ToolContract(

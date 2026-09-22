@@ -35,6 +35,7 @@ def register_tools(mcp: Any, profile: MCPProfile | str = MCPProfile.SALES) -> No
 def register_sales_tools(mcp: Any) -> None:
     """Backward-compatible Sales registration entrypoint for static callers."""
     from .masters.customer import register_customer_tools
+    from .masters.customer_contact import register_customer_contact_tools
     from .masters.item import register_item_tools
     from .masters.selection import register_selection_tools
     from .selling.quotation import register_quotation_tools
@@ -55,6 +56,7 @@ def register_sales_tools(mcp: Any) -> None:
     )
 
     register_customer_tools(mcp)
+    register_customer_contact_tools(mcp)
     register_item_tools(mcp)
     register_selection_tools(mcp)
     register_sales_order_tools(mcp)

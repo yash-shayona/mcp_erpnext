@@ -15,6 +15,9 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `resolve_customer` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
 | `prepare_customer` | Masters | Prepare | PREPARE | INPUT, SELECTION, APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_customer` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `search_contacts` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
+| `prepare_customer_contact` | Masters | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_customer_contact` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `search_items` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
 | `resolve_item` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
 | `prepare_item` | Masters | Prepare | PREPARE | INPUT, SELECTION, APPROVAL | Not a final write | Explicit typed contract |
@@ -102,6 +105,33 @@ Create a prepared Customer.
 
 - Input: `CustomerConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmCustomerOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `search_contacts`
+
+Find permission-visible Contacts with exact global or Customer-scoped bounded matching.
+
+- Input: `ContactSearchInput` — Required: `query`
+- Output: `ContactSearchOutput`; published through MCP `outputSchema`.
+- Side effect: `READ`; approval does not perform the final write.
+- Interaction: `SELECTION`; emitted only for the documented result states.
+
+### `prepare_customer_contact`
+
+Prepare a native Contact create or explicit Customer link without writing.
+
+- Input: `CustomerContactPrepareInput` — Required: `request`
+- Output: `PrepareCustomerContactOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_customer_contact`
+
+Create or link the reviewed native Contact for an existing Customer.
+
+- Input: `CustomerContactConfirmInput` — Required: `approval_token`, `confirm`
+- Output: `ConfirmCustomerContactOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 

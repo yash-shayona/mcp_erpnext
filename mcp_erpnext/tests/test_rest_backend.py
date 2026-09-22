@@ -88,6 +88,23 @@ class RESTSettingsTests(unittest.TestCase):
 
 
 class RemoteOperationRegistryTests(unittest.TestCase):
+    @patch("mcp_erpnext.remote_operations.customer_contact.search_contacts")
+    def test_sales_contact_search_uses_fixed_typed_handler(self, search_contacts):
+        search_contacts.return_value = {"status": "ok", "contacts": [], "count": 0, "limit": 20, "offset": 0}
+        result = remote_operations.execute_remote_operation(
+            "search_contacts", "sales", {"query": "amit@example.com", "match": "email"}
+        )
+        self.assertEqual(result["status"], "ok")
+        search_contacts.assert_called_once()
+
+    def test_contact_mutation_is_not_available_in_purchase_or_accounts(self):
+        for profile in ("purchase", "accounts"):
+            with self.subTest(profile=profile), self.assertRaises(remote_operations.RemoteOperationError):
+                remote_operations.execute_remote_operation(
+                    "prepare_customer_contact", profile,
+                    {"customer": {"doctype": "Customer", "name": "CUST-1"}, "mode": "create", "new_contact": {"first_name": "A"}},
+                )
+
     @patch("mcp_erpnext.remote_operations.customer.search_customers")
     def test_sales_operation_uses_fixed_handler(self, search_customers):
         search_customers.return_value = {"status": "resolved", "results": []}
