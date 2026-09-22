@@ -79,6 +79,89 @@ class NewContactInput(PublicContractModel):
 	mobile: NonEmptyString | None = None
 
 
+class ContactCreateInput(PublicContractModel):
+	"""The bounded public input for a standalone Contact."""
+
+	first_name: NonEmptyString | None = None
+	middle_name: NonEmptyString | None = None
+	last_name: NonEmptyString | None = None
+	company_name: NonEmptyString | None = None
+	designation: NonEmptyString | None = None
+	department: NonEmptyString | None = None
+	email: NonEmptyString | None = None
+	mobile: NonEmptyString | None = None
+	phone: NonEmptyString | None = None
+
+
+class ContactPrepareInput(PublicContractModel):
+	"""One standalone Contact creation intent."""
+
+	contact: ContactCreateInput
+
+
+class ContactCreatePreview(PublicContractModel):
+	"""Safe, derived preview data for a standalone Contact."""
+
+	action: Literal["create"]
+	full_name: NonEmptyString
+	company_name: NonEmptyString | None = None
+	designation: NonEmptyString | None = None
+	department: NonEmptyString | None = None
+	email: NonEmptyString | None = None
+	mobile: NonEmptyString | None = None
+	phone: NonEmptyString | None = None
+	linked_to_customer: Literal[False] = False
+	link_count: Annotated[int, Field(ge=0)] = 0
+
+
+class ContactReady(PublicContractModel):
+	status: Literal["ready"]
+	approval_token: Annotated[
+		NonEmptyString,
+		Field(description="Opaque pending-operation handle; it is not proof of approval."),
+	]
+	expires_in_seconds: Annotated[int, Field(gt=0)]
+	preview: ContactCreatePreview
+	interaction: InteractionDirective
+
+
+ContactPrepareResult = Annotated[
+	ContactReady | ToolError,
+	Field(discriminator="status"),
+]
+
+
+class PrepareContactOutput(RootModel[ContactPrepareResult]):
+	"""Root-shaped typed output for standalone Contact preparation."""
+
+	model_config = ConfigDict(json_schema_extra={"type": "object"})
+
+
+class ContactConfirmInput(PublicContractModel):
+	"""Requested execution of a pending standalone Contact operation."""
+
+	approval_token: NonEmptyString
+	confirm: bool
+
+
+class ContactCreated(PublicContractModel):
+	status: Literal["created"]
+	contact: ContactProjection
+	idempotent: Literal[False] = False
+
+
+ContactConfirmResult = Annotated[
+	ContactCreated | ToolError,
+	Field(discriminator="status"),
+]
+
+
+class ConfirmContactOutput(RootModel[ContactConfirmResult]):
+	"""Root-shaped typed output for standalone Contact confirmation."""
+
+	model_config = ConfigDict(json_schema_extra={"type": "object"})
+
+
 class CustomerContactPrepareInput(PublicContractModel):
 	"""One explicit create-or-link Customer Contact intent."""
 

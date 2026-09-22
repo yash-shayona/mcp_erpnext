@@ -45,6 +45,8 @@ from .contracts.lifecycle import (
 )
 from .contracts.masters.customer import CustomerConfirmInput, CustomerPrepareInput
 from .contracts.masters.contact import (
+	ContactConfirmInput,
+	ContactPrepareInput,
 	ContactSearchInput,
 	CustomerContactConfirmInput,
 	CustomerContactPrepareInput,
@@ -123,6 +125,7 @@ from .services.common import email, lifecycle, pdf, read
 from .services.masters import (
     customer,
     customer_contact,
+    contact as standalone_contact,
     customer_read,
     item,
     item_read,
@@ -356,6 +359,18 @@ _SALES_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
             request.approval_token, request.confirm
         ),
     ),
+    "prepare_contact": (
+		ContactPrepareInput,
+		lambda request, _profile: standalone_contact.prepare_contact(
+			request.model_dump(mode="json")
+		),
+	),
+	"confirm_contact": (
+		ContactConfirmInput,
+		lambda request, _profile: standalone_contact.confirm_contact(
+			request.approval_token, request.confirm
+		),
+	),
     "search_items": (EntityResolveInput, _sales_search_items),
     "resolve_item": (EntityResolveInput, _sales_resolve_items),
     "prepare_item": (

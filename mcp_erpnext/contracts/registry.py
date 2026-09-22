@@ -49,11 +49,15 @@ from .masters.customer import (
 	PrepareCustomerOutput,
 )
 from .masters.contact import (
+	ConfirmContactOutput,
+	ContactConfirmInput,
 	ConfirmCustomerContactOutput,
+	ContactPrepareInput,
 	ContactSearchInput,
 	ContactSearchOutput,
 	CustomerContactConfirmInput,
 	CustomerContactPrepareInput,
+	PrepareContactOutput,
 	PrepareCustomerContactOutput,
 )
 from .masters.item import (
@@ -372,6 +376,29 @@ TOOL_CONTRACTS = {
         True,
         CustomerContactConfirmInput,
         ConfirmCustomerContactOutput,
+        approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+    ),
+    "prepare_contact": ToolContract(
+        "prepare_contact",
+        "Masters",
+        ToolOperation.PREPARE,
+        SideEffectClass.PREPARE,
+        "Prepare a standalone native Contact without a party link.",
+        False,
+        ContactPrepareInput,
+        PrepareContactOutput,
+        interaction_kinds=(InteractionKind.APPROVAL,),
+        approval_confirm_tool="confirm_contact",
+    ),
+    "confirm_contact": ToolContract(
+        "confirm_contact",
+        "Masters",
+        ToolOperation.CONFIRM,
+        SideEffectClass.CONFIRM_WRITE,
+        "Create the reviewed standalone native Contact.",
+        True,
+        ContactConfirmInput,
+        ConfirmContactOutput,
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "search_items": ToolContract(
