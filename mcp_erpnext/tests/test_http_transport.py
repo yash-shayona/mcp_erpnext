@@ -49,6 +49,16 @@ class TransportSettingsTests(unittest.TestCase):
 		with self.assertRaisesRegex(RuntimeError, "MCP_TRANSPORT"):
 			_settings(transport="sse").validate_transport()
 
+	@patch.dict(os.environ, {"MCP_QUOTATION_VALIDITY_DAYS": "30"}, clear=True)
+	def test_quotation_validity_days_defaults_and_accepts_non_negative_days(self):
+		self.assertEqual(MCPSettings.from_environment().quotation_validity_days, 30)
+		_settings(quotation_validity_days=0).validate_quotation_validity_days()
+
+	@patch.dict(os.environ, {"MCP_QUOTATION_VALIDITY_DAYS": "-1"}, clear=True)
+	def test_quotation_validity_days_rejects_negative_values(self):
+		with self.assertRaisesRegex(RuntimeError, "MCP_QUOTATION_VALIDITY_DAYS"):
+			MCPSettings.from_environment()
+
 	def test_http_rejects_missing_or_short_secret(self):
 		for secret in (None, "too-short"):
 			with self.subTest(secret=secret), patch.dict(

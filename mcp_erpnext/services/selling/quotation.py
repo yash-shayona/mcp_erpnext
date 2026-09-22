@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from datetime import timedelta
 from typing import Any
 
 import frappe
@@ -11,6 +12,7 @@ from frappe.utils import getdate, nowdate
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive, input_directive
 from ...observability import new_error_reference
+from ...settings import MCPSettings
 
 _ACTION = "create_quotation"
 _COMMERCIAL_DEFAULTS = (
@@ -252,7 +254,7 @@ def _preview(doc: Any) -> dict[str, Any]:
 def prepare_quotation(
     customer: dict[str, str],
     items: list[dict[str, Any]],
-    valid_till: str,
+    valid_till: str | None = None,
     company: str | None = None,
     transaction_date: str | None = None,
     selling_price_list: str | None = None,
@@ -278,12 +280,19 @@ def prepare_quotation(
     prepared_items, failure = _prepare_items(items)
     if failure:
         return failure
-    validity, failure = _date(valid_till, field="valid_till")
-    if failure:
-        return failure
     transaction = getdate(nowdate())
     if transaction_date is not None:
         transaction, failure = _date(transaction_date, field="transaction_date")
+        if failure:
+            return failure
+    if valid_till is None:
+        # Treat the configured period as days from the effective transaction date,
+        # so an explicit backdated transaction still passes ERPNext's native rule.
+        validity = transaction + timedelta(
+            days=MCPSettings.from_environment().quotation_validity_days
+        )
+    else:
+        validity, failure = _date(valid_till, field="valid_till")
         if failure:
             return failure
     resolved_company = _resolve_company(company)

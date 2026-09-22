@@ -11,6 +11,7 @@ from pydantic import TypeAdapter
 from mcp_erpnext.approvals import APPROVAL_TTL_SECONDS, approvals
 from mcp_erpnext.contracts.selling.quotation import PrepareQuotationResult
 from mcp_erpnext.services.selling import quotation as quotation_service
+from mcp_erpnext.settings import ApprovalMode
 from mcp_erpnext.tests.approval_test_backend import (
 	install_fake_backend,
 	mutate_record,
@@ -184,10 +185,16 @@ class QuotationServiceTests(unittest.TestCase):
 		self.assertEqual(result["status"], "ready")
 		self.assertEqual([row["item_code"] for row in result["preview"]["items"]], ["ITEM-001", "ITEM-002"])
 
-	def test_valid_till_is_required(self):
+	def test_omitted_valid_till_defaults_to_the_transaction_date(self):
 		result = self.prepare(valid_till=None)
-		self.assertEqual(result["status"], "needs_input")
-		self.assertEqual(result["missing"], ["valid_till"])
+		self.assertEqual(result["status"], "ready")
+		self.assertEqual(result["preview"]["valid_till"], "2026-08-25")
+
+	def test_omitted_valid_till_uses_configured_validity_days(self):
+		with patch.dict("os.environ", {"MCP_QUOTATION_VALIDITY_DAYS": "30"}):
+			result = self.prepare(valid_till=None, transaction_date="2026-08-20")
+		self.assertEqual(result["status"], "ready")
+		self.assertEqual(result["preview"]["valid_till"], "2026-09-19")
 
 	def test_native_validation_rejects_valid_till_before_transaction_date(self):
 		self.native_validation_error = frappe.ValidationError(
@@ -298,10 +305,15 @@ class QuotationServiceTests(unittest.TestCase):
 		self.assertEqual(self.commit_count, 0)
 
 	def test_model_confirm_true_cannot_self_grant_approval(self):
-		prepared = self.prepare()
-		result = quotation_service.confirm_quotation(prepared["approval_token"], True)
-		self.assertEqual(result["code"], "TRUSTED_APPROVAL_UNAVAILABLE")
-		self.assertEqual(self.commit_count, 0)
+		previous_mode = approvals._approval_mode
+		approvals.configure_approval_mode(ApprovalMode.TRUSTED_HUMAN)
+		try:
+			prepared = self.prepare()
+			result = quotation_service.confirm_quotation(prepared["approval_token"], True)
+			self.assertEqual(result["code"], "TRUSTED_APPROVAL_UNAVAILABLE")
+			self.assertEqual(self.commit_count, 0)
+		finally:
+			approvals.configure_approval_mode(previous_mode)
 
 
 if __name__ == "__main__":

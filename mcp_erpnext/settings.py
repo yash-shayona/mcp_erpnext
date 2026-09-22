@@ -47,6 +47,7 @@ class MCPSettings:
     http_allowed_hosts: tuple[str, ...] = ("127.0.0.1:8765", "localhost:8765")
     approval_mode: ApprovalMode = ApprovalMode.AGENT_DELEGATED
     profile: MCPProfile = MCPProfile.SALES
+    quotation_validity_days: int = 0
 
     @classmethod
     def from_environment(cls) -> "MCPSettings":
@@ -74,6 +75,7 @@ class MCPSettings:
             ),
             approval_mode=cls._approval_mode_from_environment(),
             profile=cls._profile_from_environment(),
+            quotation_validity_days=cls._quotation_validity_days_from_environment(),
         )
 
     @staticmethod
@@ -98,6 +100,17 @@ class MCPSettings:
         except ValueError as error:
             raise RuntimeError("MCP_PROFILE must be either 'sales', 'purchase', or 'accounts'.") from error
 
+    @staticmethod
+    def _quotation_validity_days_from_environment() -> int:
+        value = os.environ.get("MCP_QUOTATION_VALIDITY_DAYS", "0").strip()
+        try:
+            days = int(value)
+        except ValueError as error:
+            raise RuntimeError("MCP_QUOTATION_VALIDITY_DAYS must be a whole number zero or greater.") from error
+        if days < 0:
+            raise RuntimeError("MCP_QUOTATION_VALIDITY_DAYS must be a whole number zero or greater.")
+        return days
+
     def validate(self) -> None:
         """Validate only the selected backend's required configuration."""
         if self.backend not in {"direct", "rest"}:
@@ -119,6 +132,7 @@ class MCPSettings:
         self.validate_transport()
         self.validate_approval_mode()
         self.validate_profile()
+        self.validate_quotation_validity_days()
 
     def rest_endpoint_url(self) -> str:
         """Return the single approved remote bridge URL without exposing secrets."""
@@ -173,6 +187,13 @@ class MCPSettings:
             MCPProfile(self.profile)
         except ValueError as error:
             raise RuntimeError("MCP_PROFILE must be either 'sales', 'purchase', or 'accounts'.") from error
+
+    def validate_quotation_validity_days(self) -> None:
+        """Keep Quotation validity defaults non-negative and predictable."""
+        if isinstance(self.quotation_validity_days, bool) or not isinstance(
+            self.quotation_validity_days, int
+        ) or self.quotation_validity_days < 0:
+            raise RuntimeError("MCP_QUOTATION_VALIDITY_DAYS must be a whole number zero or greater.")
 
     def validate_transport(self) -> None:
         """Validate the selected MCP transport without exposing secret values."""

@@ -207,7 +207,7 @@ def _prepare_quotation(request: QuotationPrepareInput, _profile: str) -> dict[st
     return quotation.prepare_quotation(
         request.customer.model_dump(),
         [row.to_service_payload() for row in request.items],
-        request.valid_till.isoformat(),
+        request.valid_till.isoformat() if request.valid_till else None,
         request.company,
         request.transaction_date.isoformat() if request.transaction_date else None,
         request.selling_price_list,

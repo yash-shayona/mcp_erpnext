@@ -38,16 +38,28 @@ class ToolContractTests(unittest.TestCase):
 		customer = schema["$defs"]["CustomerReference"]
 		item = schema["$defs"]["ItemReference"]
 		row = schema["$defs"]["QuotationItemInput"]
-		self.assertEqual(schema["required"], ["customer", "items", "valid_till"])
+		self.assertEqual(schema["required"], ["customer", "items"])
 		self.assertEqual(customer["properties"]["doctype"]["const"], "Customer")
 		self.assertEqual(customer["required"], ["doctype", "name"])
 		self.assertEqual(item["properties"]["doctype"]["const"], "Item")
 		self.assertEqual(item["required"], ["doctype", "name"])
 		self.assertEqual(row["properties"]["qty"]["exclusiveMinimum"], 0)
-		self.assertEqual(schema["properties"]["valid_till"]["format"], "date")
+		valid_till_options = schema["properties"]["valid_till"]["anyOf"]
+		self.assertIn(
+			{"format": "date", "type": "string"}, valid_till_options
+		)
 		self.assertNotIn("item_code", schema["properties"])
 		self.assertNotIn("quantity", row["properties"])
 		self.assertNotIn("ctx", schema["properties"])
+
+	def test_quotation_request_allows_omitted_valid_till(self):
+		request = QuotationPrepareInput.model_validate(
+			{
+				"customer": {"doctype": "Customer", "name": "CUST-001"},
+				"items": [{"item": {"doctype": "Item", "name": "ITEM-001"}, "qty": 1}],
+			}
+		)
+		self.assertIsNone(request.valid_till)
 
 	def test_quotation_output_schema_models_every_prepare_state(self):
 		tools = {tool.name: tool for tool in self.registered_tools()}

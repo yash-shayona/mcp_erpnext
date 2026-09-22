@@ -45,8 +45,8 @@ def _with_interaction(result: dict[str, Any]) -> dict[str, Any]:
 def prepare_quotation(
 	customer: CustomerReference,
 	items: QuotationItems,
-	valid_till: date,
 	ctx: Context,
+	valid_till: date | None = None,
 	company: NonEmptyString | None = None,
 	transaction_date: date | None = None,
 	selling_price_list: NonEmptyString | None = None,
@@ -74,7 +74,7 @@ def prepare_quotation(
 		lambda: _prepare_quotation(
 			request.customer.model_dump(),
 			[item.to_service_payload() for item in request.items],
-			request.valid_till.isoformat(),
+			request.valid_till.isoformat() if request.valid_till else None,
 			request.company,
 			request.transaction_date.isoformat() if request.transaction_date else None,
 			request.selling_price_list,

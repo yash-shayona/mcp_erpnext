@@ -55,7 +55,7 @@ class QuotationPrepareInput(PublicContractModel):
 
 	customer: CustomerReference
 	items: QuotationItems
-	valid_till: date
+	valid_till: date | None = None
 	company: NonEmptyString | None = None
 	transaction_date: date | None = None
 	selling_price_list: NonEmptyString | None = None

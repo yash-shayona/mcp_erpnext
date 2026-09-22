@@ -64,6 +64,7 @@ def create_mcp(settings: MCPSettings | None = None):
         token_verifier = FrappeOAuthTokenVerifier(oauth_settings)
     settings.validate_approval_mode()
     settings.validate_profile()
+    settings.validate_quotation_validity_days()
     approvals.configure_approval_mode(settings.approval_mode)
     mcp = FastMCP(
         f"mcp_erpnext_{settings.profile.value}",
