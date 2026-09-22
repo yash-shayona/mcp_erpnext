@@ -169,6 +169,7 @@ def _child_parent_names(
 		doctype,
 		filters=filters,
 		fields=["parent", fieldname],
+		parent_doctype="Contact",
 		limit_page_length=_MAX_SEARCH_ROWS,
 		ignore_permissions=False,
 	)

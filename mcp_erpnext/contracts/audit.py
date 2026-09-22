@@ -262,6 +262,11 @@ def audit_tool_contracts(
                     f"{name}: output schema does not expose every declared resolution state."
                 )
         meta = getattr(tool, "meta", None) or getattr(tool, "_meta", None) or {}
+        annotations = getattr(tool, "annotations", None)
+        if annotations is None:
+            issues.append(f"{name}: missing standard MCP annotations.")
+        elif annotations.model_dump() != contract.mcp_annotations().model_dump():
+            issues.append(f"{name}: standard MCP annotations differ from its contract.")
         if meta.get("mcp_erpnext", {}).get("side_effect") != contract.side_effect.value:
             issues.append(
                 f"{name}: side-effect classification is missing from public metadata."

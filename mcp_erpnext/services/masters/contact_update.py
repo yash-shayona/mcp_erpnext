@@ -1,4 +1,4 @@
-"""Customer-scoped, approval-bound updates for existing native Contacts."""
+"""Scoped, approval-bound updates for existing native Contacts."""
 
 from __future__ import annotations
 
@@ -75,6 +75,16 @@ def _relationship_state(contact: Any, customer_name: str) -> list[dict[str, str]
 def _shared_failure(contact: Any, customer_name: str) -> dict[str, Any] | None:
 	if _relationship_state(contact, customer_name):
 		return _error("CONTACT_SHARED_WITH_OTHER_PARTIES", "The selected Contact is shared with another party and cannot be updated in V1.")
+	return None
+
+
+def _standalone_scope_failure(contact: Any) -> dict[str, Any] | None:
+	"""Require an explicit Customer scope for every linked Contact."""
+	if _links(contact):
+		return _error(
+			"CONTACT_SCOPE_REQUIRED",
+			"The selected Contact is linked to a party; provide the exact Customer scope.",
+		)
 	return None
 
 
@@ -187,7 +197,7 @@ def _operation_preview(contact: Any, customer: Any, operation: dict[str, Any], *
 		_apply_operation(proposed_contact, operation)
 	return {
 		"action": action,
-		"customer": _customer_reference(customer),
+		"customer": _customer_reference(customer) if customer is not None else None,
 		"contact": {"doctype": "Contact", "name": str(_value(contact, "name"))},
 		"full_name_before": _clean(_value(contact, "full_name")) or str(_value(contact, "name")),
 		"full_name_after": _full_name(proposed_contact),
@@ -196,7 +206,7 @@ def _operation_preview(contact: Any, customer: Any, operation: dict[str, Any], *
 		"proposed_value": proposed,
 		"selected_row_is_primary": bool(_value(selected, "is_primary", 0)) if selected is not None and "email" in action else (bool(_value(selected, "is_primary_phone", 0) or _value(selected, "is_primary_mobile_no", 0)) if selected is not None else None),
 		**_primary_values(proposed_contact),
-		"customer_projection_refresh_required": _customer_primary(customer, contact),
+		"customer_projection_refresh_required": customer is not None and _customer_primary(customer, contact),
 		"crm_snapshot_refresh_may_occur": True,
 		"other_party_link_count": 0,
 		"idempotent": idempotent,
@@ -338,28 +348,37 @@ def _stale(message: str = "The Contact or Customer changed after preparation. Pl
 def prepare_contact_update(request: dict[str, Any]) -> dict[str, Any]:
 	approvals.prune_expired()
 	user = _current_user()
-	customer_ref = request.get("customer") or {}
+	customer_ref = request.get("customer")
 	contact_ref = request.get("contact") or {}
-	if customer_ref.get("doctype") != "Customer":
+	if customer_ref is not None and customer_ref.get("doctype") != "Customer":
 		return _error("CUSTOMER_NOT_FOUND", "Only Customer references are supported.")
 	if contact_ref.get("doctype") != "Contact":
 		return _error("CONTACT_NOT_FOUND", "Only Contact references are supported.")
-	customer, failure = _load_customer(customer_ref.get("name", ""))
-	if failure:
-		return failure
+	customer = None
+	if customer_ref is not None:
+		customer, failure = _load_customer(customer_ref.get("name", ""))
+		if failure:
+			return failure
 	contact, failure = _load_contact(contact_ref.get("name", ""), "read")
 	if failure:
 		return failure
-	assert customer is not None and contact is not None
+	assert contact is not None
 	if not contact.has_permission("write"):
 		return _permission_error("Contact", "write")
-	if not _has_customer_link(contact, _value(customer, "name")):
-		return _error("CONTACT_NOT_LINKED_TO_CUSTOMER", "The selected Contact is not linked to the selected Customer.")
-	if shared := _shared_failure(contact, _value(customer, "name")):
-		return shared
-	primary = _customer_primary(customer, contact)
-	if primary and not customer.has_permission("write"):
-		return _error("CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED", "Customer write permission is required to refresh its Contact projections.")
+	if customer is None:
+		if failure := _standalone_scope_failure(contact):
+			return failure
+		primary = False
+		relationship_state = []
+	else:
+		if not _has_customer_link(contact, _value(customer, "name")):
+			return _error("CONTACT_NOT_LINKED_TO_CUSTOMER", "The selected Contact is not linked to the selected Customer.")
+		if shared := _shared_failure(contact, _value(customer, "name")):
+			return shared
+		primary = _customer_primary(customer, contact)
+		if primary and not customer.has_permission("write"):
+			return _error("CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED", "Customer write permission is required to refresh its Contact projections.")
+		relationship_state = _relationship_state(contact, _value(customer, "name"))
 	operation = dict(request.get("operation") or {})
 	failure, preview, selected, _value_field = _prepare_operation(contact, customer, operation)
 	if failure:
@@ -368,11 +387,12 @@ def prepare_contact_update(request: dict[str, Any]) -> dict[str, Any]:
 	row_state = _affected_state(contact, operation["action"])
 	payload = {
 		"profile": _PROFILE,
-		"customer_name": str(_value(customer, "name")),
-		"customer_modified": str(_value(customer, "modified")),
+		"scope": "customer" if customer is not None else "standalone",
+		"customer_name": str(_value(customer, "name")) if customer is not None else None,
+		"customer_modified": str(_value(customer, "modified")) if customer is not None else None,
 		"contact_name": str(_value(contact, "name")),
 		"contact_modified": str(_value(contact, "modified")),
-		"relationship_state": _relationship_state(contact, _value(customer, "name")),
+		"relationship_state": relationship_state,
 		"customer_primary": primary,
 		"operation": operation,
 		"affected_rows": row_state,
@@ -398,27 +418,40 @@ def confirm_contact_update(approval_token: str, confirm: bool) -> dict[str, Any]
 	payload = approval.payload
 	if payload.get("profile") != _PROFILE:
 		return _error("CONFIRMATION_UNAVAILABLE", "This Contact update belongs to another profile.")
-	customer, failure = _load_customer(payload.get("customer_name", ""))
-	if failure:
-		return failure
+	scope = payload.get("scope")
+	if scope not in {"standalone", "customer"}:
+		return _error("CONFIRMATION_UNAVAILABLE", "This Contact update has no valid scope.")
+	customer = None
+	if scope == "customer":
+		customer, failure = _load_customer(payload.get("customer_name", ""))
+		if failure:
+			return failure
 	contact, failure = _load_contact(payload.get("contact_name", ""), "read")
 	if failure:
 		return failure
-	assert customer is not None and contact is not None
+	assert contact is not None
 	if not contact.has_permission("write"):
 		return _permission_error("Contact", "write")
-	if not _has_customer_link(contact, payload["customer_name"]):
-		return _stale("The Customer link was removed after preparation.")
-	if shared := _shared_failure(contact, payload["customer_name"]):
-		return _stale("The Contact became shared after preparation.") | {"reference": shared["reference"]}
-	primary = _customer_primary(customer, contact)
-	if primary != payload.get("customer_primary"):
-		return _stale("The Customer primary Contact changed after preparation.")
-	if primary and not customer.has_permission("write"):
-		return _error("CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED", "Customer write permission is required to refresh its Contact projections.")
-	if str(_value(customer, "modified")) != payload.get("customer_modified") or str(_value(contact, "modified")) != payload.get("contact_modified"):
+	if scope == "standalone":
+		if _links(contact):
+			return _stale("The standalone Contact became linked after preparation.")
+		primary = False
+	else:
+		assert customer is not None
+		if not _has_customer_link(contact, payload["customer_name"]):
+			return _stale("The Customer link was removed after preparation.")
+		if shared := _shared_failure(contact, payload["customer_name"]):
+			return _stale("The Contact became shared after preparation.") | {"reference": shared["reference"]}
+		primary = _customer_primary(customer, contact)
+		if primary != payload.get("customer_primary"):
+			return _stale("The Customer primary Contact changed after preparation.")
+		if primary and not customer.has_permission("write"):
+			return _error("CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED", "Customer write permission is required to refresh its Contact projections.")
+		if str(_value(customer, "modified")) != payload.get("customer_modified"):
+			return _stale()
+	if str(_value(contact, "modified")) != payload.get("contact_modified"):
 		return _stale()
-	if stable_fingerprint(_relationship_state(contact, payload["customer_name"])) != stable_fingerprint(payload["relationship_state"]):
+	if scope == "customer" and stable_fingerprint(_relationship_state(contact, payload["customer_name"])) != stable_fingerprint(payload["relationship_state"]):
 		return _stale()
 	if stable_fingerprint(_affected_state(contact, payload["operation"]["action"])) != payload.get("child_fingerprint"):
 		return _error("CONTACT_CHILD_STALE_STATE", "The selected Contact communication rows changed after preparation.", retryable=True)
@@ -441,4 +474,4 @@ def confirm_contact_update(approval_token: str, confirm: bool) -> dict[str, Any]
 		return _error("CONTACT_UPDATE_FAILED", "Native Contact update failed.", retryable=True)
 	preview["full_name_after"] = _clean(_value(contact, "full_name")) or str(_value(contact, "name"))
 	preview.update(_primary_values(contact))
-	return {"status": "updated", "customer": _customer_reference(customer), "contact": _projection(contact, _value(customer, "name")), "preview": preview, "idempotent": bool(preview["idempotent"])}
+	return {"status": "updated", "customer": _customer_reference(customer) if customer is not None else None, "contact": _projection(contact, _value(customer, "name") if customer is not None else None), "preview": preview, "idempotent": bool(preview["idempotent"])}

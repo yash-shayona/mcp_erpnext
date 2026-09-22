@@ -4,79 +4,81 @@
 
 This catalog is generated from the profile-registered MCP tools and their contract metadata. `tools/list` remains the authoritative machine-readable schema.
 
+Each public tool publishes both project-specific `mcp_erpnext` metadata and standard MCP safety annotations. `ToolContract` is the single source of truth for both layers; host approval policy remains separate from server-enforced business approval.
+
 The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/MCP_DOCUMENT_PDF.md), and the generic email capability is documented in [MCP_DOCUMENT_EMAIL.md](architecture/MCP_DOCUMENT_EMAIL.md).
 
 
 ## Sales profile
 
-| Tool | Domain | Operation | Side effect | Interaction | Approval | Contract status |
-| --- | --- | --- | --- | --- | --- | --- |
-| `search_customers` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
-| `resolve_customer` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
-| `prepare_customer` | Masters | Prepare | PREPARE | INPUT, SELECTION, APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_customer` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `search_contacts` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
-| `prepare_customer_contact` | Masters | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_customer_contact` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_customer_primary_contact` | Masters | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_customer_primary_contact` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_contact` | Masters | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_contact` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_contact_update` | Masters | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_contact_update` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `search_items` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
-| `resolve_item` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
-| `prepare_item` | Masters | Prepare | PREPARE | INPUT, SELECTION, APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_item` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `select_resolved_candidate` | Masters | Resolve | RESOLVE | None | Not a final write | Explicit typed contract |
-| `prepare_sales_order` | Selling | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_sales_order` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_quotation` | Selling | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_quotation` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_quotation_to_sales_order` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_quotation_to_sales_order` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_sales_order_to_sales_invoice` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_sales_order_to_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_sales_invoice` | Selling | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_sales_order_to_delivery_note` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_sales_order_to_delivery_note` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_sales_invoice_to_delivery_note` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_sales_invoice_to_delivery_note` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_delivery_note_to_sales_invoice` | Selling | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_delivery_note_to_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_update` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_child_add` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_child_add` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_submit` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_cancel` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_delete` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `get_sales_order` | Selling | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `query_sales_orders` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
-| `aggregate_sales_orders` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
-| `query_sales_order_items` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
-| `get_customer` | Masters | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `query_customers` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
-| `aggregate_customers` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
-| `get_item` | Masters | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `query_items` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
-| `aggregate_items` | Masters | Search | READ | None | Not a final write | Explicit typed contract |
-| `get_quotation` | Selling | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `query_quotations` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
-| `aggregate_quotations` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
-| `get_sales_invoice` | Selling | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `query_sales_invoices` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
-| `aggregate_sales_invoices` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
-| `get_delivery_note` | Selling | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `query_delivery_notes` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
-| `aggregate_delivery_notes` | Selling | Search | READ | None | Not a final write | Explicit typed contract |
-| `render_document_pdf` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `prepare_document_email` | Existing Documents | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_email` | Existing Documents | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| Tool | Domain | Operation | Side effect | MCP annotations | Interaction | Approval | Contract status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `search_customers` | Masters | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | SELECTION | Not a final write | Explicit typed contract |
+| `resolve_customer` | Masters | Resolve | RESOLVE | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | SELECTION | Not a final write | Explicit typed contract |
+| `prepare_customer` | Masters | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | INPUT, SELECTION, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_customer` | Masters | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `search_contacts` | Masters | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | SELECTION | Not a final write | Explicit typed contract |
+| `prepare_customer_contact` | Masters | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_customer_contact` | Masters | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_customer_primary_contact` | Masters | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_customer_primary_contact` | Masters | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_contact` | Masters | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_contact` | Masters | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_contact_update` | Masters | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_contact_update` | Masters | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `search_items` | Masters | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | SELECTION | Not a final write | Explicit typed contract |
+| `resolve_item` | Masters | Resolve | RESOLVE | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | SELECTION | Not a final write | Explicit typed contract |
+| `prepare_item` | Masters | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | INPUT, SELECTION, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_item` | Masters | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `select_resolved_candidate` | Masters | Resolve | RESOLVE | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `prepare_sales_order` | Selling | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | INPUT, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_order` | Selling | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_quotation` | Selling | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | INPUT, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_quotation` | Selling | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_quotation_to_sales_order` | Selling | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_quotation_to_sales_order` | Selling | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_sales_order_to_sales_invoice` | Selling | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_order_to_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_sales_invoice` | Selling | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | INPUT, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_sales_order_to_delivery_note` | Selling | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_order_to_delivery_note` | Selling | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_sales_invoice_to_delivery_note` | Selling | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_invoice_to_delivery_note` | Selling | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_delivery_note_to_sales_invoice` | Selling | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_delivery_note_to_sales_invoice` | Selling | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_update` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_child_add` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_child_add` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_submit` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_cancel` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_delete` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `get_sales_order` | Selling | Resolve | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `query_sales_orders` | Selling | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `aggregate_sales_orders` | Selling | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `query_sales_order_items` | Selling | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `get_customer` | Masters | Resolve | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `query_customers` | Masters | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `aggregate_customers` | Masters | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `get_item` | Masters | Resolve | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `query_items` | Masters | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `aggregate_items` | Masters | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `get_quotation` | Selling | Resolve | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `query_quotations` | Selling | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `aggregate_quotations` | Selling | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `get_sales_invoice` | Selling | Resolve | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `query_sales_invoices` | Selling | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `aggregate_sales_invoices` | Selling | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `get_delivery_note` | Selling | Resolve | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `query_delivery_notes` | Selling | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `aggregate_delivery_notes` | Selling | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `render_document_pdf` | Existing Documents | Resolve | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `prepare_document_email` | Existing Documents | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | INPUT, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_email` | Existing Documents | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=true` | None | Explicit approval required; server policy enforced | Explicit typed contract |
 
 ### `search_customers`
 
@@ -85,6 +87,7 @@ Find permitted active Customers with explicit candidate references.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `CustomerSearchOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: `SELECTION`; emitted only for the documented result states.
 
 ### `resolve_customer`
@@ -94,6 +97,7 @@ Resolve one permitted Customer or return a terminal selection state.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `CustomerResolutionOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `RESOLVE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: `SELECTION`; emitted only for the documented result states.
 
 ### `prepare_customer`
@@ -103,6 +107,7 @@ Validate a Customer preview without writing.
 - Input: `CustomerPrepareInput` — Required: `customer`
 - Output: `PrepareCustomerOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `INPUT`, `SELECTION`, `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_customer`
@@ -112,6 +117,7 @@ Create a prepared Customer.
 - Input: `CustomerConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmCustomerOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `search_contacts`
@@ -121,6 +127,7 @@ Find permission-visible Contacts with exact global or Customer-scoped bounded ma
 - Input: `ContactSearchInput` — Required: `query`
 - Output: `ContactSearchOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: `SELECTION`; emitted only for the documented result states.
 
 ### `prepare_customer_contact`
@@ -130,6 +137,7 @@ Prepare a native Contact create or explicit Customer link without writing.
 - Input: `CustomerContactPrepareInput` — Required: `request`
 - Output: `PrepareCustomerContactOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_customer_contact`
@@ -139,6 +147,7 @@ Create or link the reviewed native Contact for an existing Customer.
 - Input: `CustomerContactConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmCustomerContactOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_customer_primary_contact`
@@ -148,6 +157,7 @@ Prepare promotion of an existing single-Customer Contact to the Customer primary
 - Input: `CustomerPrimaryContactPrepareInput` — Required: `request`
 - Output: `PrepareCustomerPrimaryContactOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_customer_primary_contact`
@@ -157,6 +167,7 @@ Promote the reviewed existing Contact through native Contact and Customer saves.
 - Input: `CustomerPrimaryContactConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmCustomerPrimaryContactOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_contact`
@@ -166,6 +177,7 @@ Prepare a standalone native Contact without a party link.
 - Input: `ContactPrepareInput` — Required: `request`
 - Output: `PrepareContactOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_contact`
@@ -175,24 +187,27 @@ Create the reviewed standalone native Contact.
 - Input: `ContactConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmContactOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_contact_update`
 
-Prepare one Customer-scoped native Contact detail or communication update without writing.
+Prepare one standalone or Customer-scoped native Contact detail or communication update without writing.
 
 - Input: `ContactUpdatePrepareInput` — Required: `request`
 - Output: `PrepareContactUpdateOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_contact_update`
 
-Apply one approved Customer-scoped native Contact update.
+Apply one approved standalone or Customer-scoped native Contact update.
 
 - Input: `ContactUpdateConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmContactUpdateOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `search_items`
@@ -202,6 +217,7 @@ Find permitted profile-enabled Items with explicit candidate references.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `ItemSearchOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: `SELECTION`; emitted only for the documented result states.
 
 ### `resolve_item`
@@ -211,6 +227,7 @@ Resolve one permitted profile-enabled Item or return a terminal selection state.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `ItemResolutionOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `RESOLVE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: `SELECTION`; emitted only for the documented result states.
 
 ### `prepare_item`
@@ -220,6 +237,7 @@ Validate an Item preview without writing.
 - Input: `ItemPrepareInput` — Required: `item`
 - Output: `PrepareItemOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `INPUT`, `SELECTION`, `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_item`
@@ -229,6 +247,7 @@ Create a prepared Item.
 - Input: `ItemConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmItemOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `select_resolved_candidate`
@@ -238,6 +257,7 @@ Revalidate a user-selected Customer or Item reference without writing.
 - Input: `SelectedCandidateInput` — Required: `doctype`, `name`
 - Output: `SelectResolvedCandidateOutput`; resolution states: `resolved`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `RESOLVE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_sales_order`
@@ -247,6 +267,7 @@ Prepare a Sales Order preview without writing.
 - Input: `SalesOrderPrepareInput` — Required: `customer`, `items`
 - Output: `PrepareSalesOrderOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `INPUT`, `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_sales_order`
@@ -256,6 +277,7 @@ Create a prepared Sales Order.
 - Input: `SalesOrderConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmSalesOrderOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_quotation`
@@ -265,6 +287,7 @@ Prepare an ERPNext-calculated Quotation preview without writing.
 - Input: `QuotationPrepareInput` — Required: `customer`, `items`, `valid_till`
 - Output: `PrepareQuotationOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `INPUT`, `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_quotation`
@@ -274,6 +297,7 @@ Create a prepared Draft Quotation after explicit approval.
 - Input: `QuotationConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmQuotationOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_quotation_to_sales_order`
@@ -283,6 +307,7 @@ Prepare a Draft Sales Order preview from an eligible Submitted Customer Quotatio
 - Input: `QuotationToSalesOrderInput` — Required: `quotation`
 - Output: `PrepareQuotationToSalesOrderOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_quotation_to_sales_order`
@@ -292,6 +317,7 @@ Create the reviewed Draft Sales Order from a prepared Quotation conversion after
 - Input: `QuotationToSalesOrderConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmQuotationToSalesOrderOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_sales_order_to_sales_invoice`
@@ -301,6 +327,7 @@ Prepare a Draft Sales Invoice preview from an eligible Submitted Sales Order usi
 - Input: `SalesOrderToSalesInvoiceInput` — Required: `sales_order`
 - Output: `PrepareSalesOrderToSalesInvoiceOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_sales_order_to_sales_invoice`
@@ -310,6 +337,7 @@ Create the reviewed Draft Sales Invoice from a prepared Sales Order conversion a
 - Input: `SalesOrderToSalesInvoiceConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmSalesOrderToSalesInvoiceOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_sales_invoice`
@@ -319,6 +347,7 @@ Prepare a standalone ERPNext-calculated Draft Sales Invoice preview without writ
 - Input: `SalesInvoicePrepareInput` — Required: `customer`, `items`
 - Output: `PrepareSalesInvoiceOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `INPUT`, `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_sales_invoice`
@@ -328,6 +357,7 @@ Create a prepared standalone Draft Sales Invoice after explicit approval.
 - Input: `SalesInvoiceConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmSalesInvoiceOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_sales_order_to_delivery_note`
@@ -337,6 +367,7 @@ Prepare a native Draft Delivery Note preview from a Submitted Sales Order.
 - Input: `SalesOrderToDeliveryNoteInput` — Required: `sales_order`
 - Output: `PrepareDeliveryNoteOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_sales_order_to_delivery_note`
@@ -346,6 +377,7 @@ Create the approved native Draft Delivery Note from a Sales Order.
 - Input: `SalesOrderToDeliveryNoteConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmDeliveryNoteOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_sales_invoice_to_delivery_note`
@@ -355,6 +387,7 @@ Prepare a native Draft Delivery Note preview from a Submitted Sales Invoice.
 - Input: `SalesInvoiceToDeliveryNoteInput` — Required: `sales_invoice`
 - Output: `PrepareSalesInvoiceToDeliveryNoteOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_sales_invoice_to_delivery_note`
@@ -364,6 +397,7 @@ Create the approved native Draft Delivery Note from a Sales Invoice.
 - Input: `SalesInvoiceToDeliveryNoteConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmSalesInvoiceToDeliveryNoteOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_delivery_note_to_sales_invoice`
@@ -373,6 +407,7 @@ Prepare a native Draft Sales Invoice preview from a Submitted Delivery Note.
 - Input: `DeliveryNoteToSalesInvoiceInput` — Required: `delivery_note`
 - Output: `PrepareDeliveryNoteToSalesInvoiceOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_delivery_note_to_sales_invoice`
@@ -382,6 +417,7 @@ Create the approved native Draft Sales Invoice from a Delivery Note.
 - Input: `DeliveryNoteToSalesInvoiceConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmDeliveryNoteToSalesInvoiceOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_update`
@@ -391,6 +427,7 @@ Prepare an exact existing-document field update without writing.
 - Input: `PrepareUpdateInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_update`
@@ -400,6 +437,7 @@ Apply a prepared exact existing-document update after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_child_add`
@@ -409,6 +447,7 @@ Prepare adding one resolved Item as a new row to an exact Draft transaction.
 - Input: `PrepareChildAddInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_child_add`
@@ -418,6 +457,7 @@ Apply a prepared new transaction item row after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_submit`
@@ -427,6 +467,7 @@ Prepare submission of an exact existing document.
 - Input: `PrepareActionInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_submit`
@@ -436,6 +477,7 @@ Submit a prepared exact existing document after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_cancel`
@@ -445,6 +487,7 @@ Prepare cancellation of an exact existing document.
 - Input: `PrepareActionInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_cancel`
@@ -454,6 +497,7 @@ Cancel a prepared exact existing document after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_delete`
@@ -463,6 +507,7 @@ Prepare deletion of an exact existing document with link preflight.
 - Input: `PrepareDeleteInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_delete`
@@ -472,6 +517,7 @@ Delete a prepared exact existing document after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `get_sales_order`
@@ -481,6 +527,7 @@ Retrieve selected fields from one permitted Sales Order by exact reference.
 - Input: `GetSalesOrderInput` — Required: `sales_order`
 - Output: `GetSalesOrderOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `query_sales_orders`
@@ -490,6 +537,7 @@ Query permitted Sales Orders using typed filters, projection, sorting, and pagin
 - Input: `SalesOrderQueryInput` — Required: none
 - Output: `SalesOrderQueryOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `aggregate_sales_orders`
@@ -499,6 +547,7 @@ Calculate deterministic permission-aware Sales Order metrics on the server.
 - Input: `SalesOrderAggregateInput` — Required: `metrics`
 - Output: `SalesOrderAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `query_sales_order_items`
@@ -508,6 +557,7 @@ Query permitted Sales Order Item history and optional server-side item metrics.
 - Input: `SalesOrderItemQueryInput` — Required: none
 - Output: `SalesOrderItemQueryOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `get_customer`
@@ -517,6 +567,7 @@ Retrieve selected fields from one permitted Customer by exact reference.
 - Input: `CustomerGetInput` — Required: `customer`
 - Output: `CustomerGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `query_customers`
@@ -526,6 +577,7 @@ Query permitted Customers with exact filters, projection, sorting, and paginatio
 - Input: `CustomerQueryInput` — Required: none
 - Output: `CustomerQueryOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `aggregate_customers`
@@ -535,6 +587,7 @@ Calculate deterministic permission-aware Customer counts on the server.
 - Input: `CustomerAggregateInput` — Required: none
 - Output: `CustomerAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `get_item`
@@ -544,6 +597,7 @@ Retrieve selected fields from one permitted Item by exact reference.
 - Input: `ItemGetInput` — Required: `item`
 - Output: `ItemGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `query_items`
@@ -553,6 +607,7 @@ Query permitted Items with exact field filters, projection, sorting, and paginat
 - Input: `ItemQueryInput` — Required: none
 - Output: `ItemQueryOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `aggregate_items`
@@ -562,6 +617,7 @@ Calculate deterministic permission-aware Item counts, optionally grouped by an a
 - Input: `ItemAggregateInput` — Required: none
 - Output: `ItemAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `get_quotation`
@@ -571,6 +627,7 @@ Retrieve selected fields from one permitted Quotation by exact reference.
 - Input: `QuotationGetInput` — Required: `quotation`
 - Output: `QuotationGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `query_quotations`
@@ -580,6 +637,7 @@ Query permitted Quotations using typed filters, projection, sorting, and paginat
 - Input: `QuotationQueryInput` — Required: none
 - Output: `QuotationQueryOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `aggregate_quotations`
@@ -589,6 +647,7 @@ Calculate deterministic permission-aware Quotation metrics on the server.
 - Input: `QuotationAggregateInput` — Required: none
 - Output: `QuotationAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `get_sales_invoice`
@@ -598,6 +657,7 @@ Retrieve selected fields from one permitted Sales Invoice by exact reference.
 - Input: `SalesInvoiceGetInput` — Required: `sales_invoice`
 - Output: `SalesInvoiceGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `query_sales_invoices`
@@ -607,6 +667,7 @@ Query permitted Sales Invoices using typed filters, projection, sorting, and pag
 - Input: `SalesInvoiceQueryInput` — Required: none
 - Output: `SalesInvoiceQueryOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `aggregate_sales_invoices`
@@ -616,6 +677,7 @@ Calculate deterministic permission-aware Sales Invoice metrics on the server.
 - Input: `SalesInvoiceAggregateInput` — Required: none
 - Output: `SalesInvoiceAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `get_delivery_note`
@@ -625,6 +687,7 @@ Retrieve selected fields from one permitted Delivery Note.
 - Input: `DeliveryNoteGetInput` — Required: `delivery_note`
 - Output: `DeliveryNoteGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `query_delivery_notes`
@@ -634,6 +697,7 @@ Query permitted Delivery Notes using typed filters and projections.
 - Input: `DeliveryNoteQueryInput` — Required: `request`
 - Output: `DeliveryNoteQueryOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `aggregate_delivery_notes`
@@ -643,6 +707,7 @@ Calculate deterministic permission-aware Delivery Note metrics.
 - Input: `DeliveryNoteAggregateInput` — Required: `request`
 - Output: `DeliveryNoteAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `render_document_pdf`
@@ -652,6 +717,7 @@ Render one permitted existing transactional document as an ephemeral PDF artifac
 - Input: `RenderDocumentPdfInput` — Required: `doctype`, `name`
 - Output: `RenderDocumentPdfOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_email`
@@ -661,6 +727,7 @@ Prepare an exact email preview with a permission-checked generic PDF attachment.
 - Input: `DocumentEmailPrepareInput` — Required: `request`
 - Output: `DocumentEmailPrepareOutput`; resolution states: `ready_for_approval`, `needs_input`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `INPUT`, `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_email`
@@ -670,33 +737,34 @@ Queue one exact prepared document email through Frappe's native Email Queue.
 - Input: `DocumentEmailConfirmInput` — Required: `request`
 - Output: `DocumentEmailConfirmOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=true`.
 - Interaction: none declared.
 
 ## Purchase profile
 
-| Tool | Domain | Operation | Side effect | Interaction | Approval | Contract status |
-| --- | --- | --- | --- | --- | --- | --- |
-| `search_suppliers` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
-| `resolve_supplier` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
-| `search_items` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
-| `resolve_item` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
-| `prepare_purchase_order` | Buying | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_purchase_order` | Buying | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_update` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_child_add` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_child_add` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_submit` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_cancel` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_delete` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `get_purchase_order` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `search_purchase_orders` | Existing Documents | Search | READ | None | Not a final write | Explicit typed contract |
-| `render_document_pdf` | Existing Documents | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `prepare_document_email` | Existing Documents | Prepare | PREPARE | INPUT, APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_email` | Existing Documents | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| Tool | Domain | Operation | Side effect | MCP annotations | Interaction | Approval | Contract status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `search_suppliers` | Masters | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | SELECTION | Not a final write | Explicit typed contract |
+| `resolve_supplier` | Masters | Resolve | RESOLVE | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | SELECTION | Not a final write | Explicit typed contract |
+| `search_items` | Masters | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | SELECTION | Not a final write | Explicit typed contract |
+| `resolve_item` | Masters | Resolve | RESOLVE | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | SELECTION | Not a final write | Explicit typed contract |
+| `prepare_purchase_order` | Buying | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | INPUT, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_purchase_order` | Buying | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_update` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_update` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_child_add` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_child_add` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_submit` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_cancel` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_delete` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `get_purchase_order` | Existing Documents | Resolve | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `search_purchase_orders` | Existing Documents | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `render_document_pdf` | Existing Documents | Resolve | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `prepare_document_email` | Existing Documents | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | INPUT, APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_email` | Existing Documents | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=true` | None | Explicit approval required; server policy enforced | Explicit typed contract |
 
 ### `search_suppliers`
 
@@ -705,6 +773,7 @@ Find permitted active Suppliers with explicit candidate references.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `SupplierSearchOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: `SELECTION`; emitted only for the documented result states.
 
 ### `resolve_supplier`
@@ -714,6 +783,7 @@ Resolve one permitted Supplier or return a terminal selection state.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `SupplierResolutionOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `RESOLVE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: `SELECTION`; emitted only for the documented result states.
 
 ### `search_items`
@@ -723,6 +793,7 @@ Find permitted profile-enabled Items with explicit candidate references.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `ItemSearchOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: `SELECTION`; emitted only for the documented result states.
 
 ### `resolve_item`
@@ -732,6 +803,7 @@ Resolve one permitted profile-enabled Item or return a terminal selection state.
 - Input: `EntityResolveInput` — Required: `query`
 - Output: `ItemResolutionOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `RESOLVE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: `SELECTION`; emitted only for the documented result states.
 
 ### `prepare_purchase_order`
@@ -741,6 +813,7 @@ Prepare an ERPNext-calculated Purchase Order preview without writing.
 - Input: `PurchaseOrderPrepareInput` — Required: `supplier`, `items`
 - Output: `PreparePurchaseOrderOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `INPUT`, `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_purchase_order`
@@ -750,6 +823,7 @@ Create a prepared Draft Purchase Order after explicit approval.
 - Input: `PurchaseOrderConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmPurchaseOrderOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_update`
@@ -759,6 +833,7 @@ Prepare an exact existing-document field update without writing.
 - Input: `PrepareUpdateInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_update`
@@ -768,6 +843,7 @@ Apply a prepared exact existing-document update after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_child_add`
@@ -777,6 +853,7 @@ Prepare adding one resolved Item as a new row to an exact Draft transaction.
 - Input: `PrepareChildAddInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_child_add`
@@ -786,6 +863,7 @@ Apply a prepared new transaction item row after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_submit`
@@ -795,6 +873,7 @@ Prepare submission of an exact existing document.
 - Input: `PrepareActionInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_submit`
@@ -804,6 +883,7 @@ Submit a prepared exact existing document after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_cancel`
@@ -813,6 +893,7 @@ Prepare cancellation of an exact existing document.
 - Input: `PrepareActionInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_cancel`
@@ -822,6 +903,7 @@ Cancel a prepared exact existing document after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_delete`
@@ -831,6 +913,7 @@ Prepare deletion of an exact existing document with link preflight.
 - Input: `PrepareDeleteInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_delete`
@@ -840,6 +923,7 @@ Delete a prepared exact existing document after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `get_purchase_order`
@@ -849,6 +933,7 @@ Retrieve a permitted existing Purchase Order summary.
 - Input: `DocumentReadInput` — Required: `request`
 - Output: `DocumentReadOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `search_purchase_orders`
@@ -858,6 +943,7 @@ Search permitted Purchase Orders with bounded business filters.
 - Input: `DocumentSearchInput` — Required: `request`
 - Output: `DocumentSearchOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `render_document_pdf`
@@ -867,6 +953,7 @@ Render one permitted existing transactional document as an ephemeral PDF artifac
 - Input: `RenderDocumentPdfInput` — Required: `doctype`, `name`
 - Output: `RenderDocumentPdfOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_email`
@@ -876,6 +963,7 @@ Prepare an exact email preview with a permission-checked generic PDF attachment.
 - Input: `DocumentEmailPrepareInput` — Required: `request`
 - Output: `DocumentEmailPrepareOutput`; resolution states: `ready_for_approval`, `needs_input`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `INPUT`, `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_email`
@@ -885,31 +973,32 @@ Queue one exact prepared document email through Frappe's native Email Queue.
 - Input: `DocumentEmailConfirmInput` — Required: `request`
 - Output: `DocumentEmailConfirmOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=true`.
 - Interaction: none declared.
 
 ## Accounts profile
 
-| Tool | Domain | Operation | Side effect | Interaction | Approval | Contract status |
-| --- | --- | --- | --- | --- | --- | --- |
-| `prepare_sales_invoice_payment` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_sales_invoice_payment` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_multi_invoice_customer_receipt` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_multi_invoice_customer_receipt` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_customer_payment_entry` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_customer_payment_entry` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_sales_order_advance_payment` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_sales_order_advance_payment` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_customer_payment_reconciliation` | Accounts | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_customer_payment_reconciliation` | Accounts | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `get_payment_entry` | Accounts | Resolve | READ | None | Not a final write | Explicit typed contract |
-| `query_payment_entries` | Accounts | Search | READ | None | Not a final write | Explicit typed contract |
-| `aggregate_payment_entries` | Accounts | Search | READ | None | Not a final write | Explicit typed contract |
-| `prepare_document_submit` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_cancel` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
-| `prepare_document_delete` | Lifecycle | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
-| `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| Tool | Domain | Operation | Side effect | MCP annotations | Interaction | Approval | Contract status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `prepare_sales_invoice_payment` | Accounts | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_invoice_payment` | Accounts | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_multi_invoice_customer_receipt` | Accounts | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_multi_invoice_customer_receipt` | Accounts | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_customer_payment_entry` | Accounts | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_customer_payment_entry` | Accounts | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_sales_order_advance_payment` | Accounts | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_sales_order_advance_payment` | Accounts | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_customer_payment_reconciliation` | Accounts | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_customer_payment_reconciliation` | Accounts | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `get_payment_entry` | Accounts | Resolve | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `query_payment_entries` | Accounts | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `aggregate_payment_entries` | Accounts | Search | READ | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `prepare_document_submit` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_submit` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_cancel` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_cancel` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_document_delete` | Lifecycle | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_document_delete` | Lifecycle | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
 
 ### `prepare_sales_invoice_payment`
 
@@ -918,6 +1007,7 @@ Prepare a native Draft customer Payment Entry for one submitted Sales Invoice.
 - Input: `SalesInvoicePaymentPrepareInput` — Required: `request`
 - Output: `PrepareSalesInvoicePaymentOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_sales_invoice_payment`
@@ -927,6 +1017,7 @@ Create the reviewed native Draft customer Payment Entry.
 - Input: `SalesInvoicePaymentConfirmInput` — Required: `request`
 - Output: `ConfirmSalesInvoicePaymentOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_multi_invoice_customer_receipt`
@@ -936,6 +1027,7 @@ Prepare one explicit Customer receipt allocated across 2-20 submitted Sales Invo
 - Input: `MultiInvoiceCustomerReceiptPrepareInput` — Required: `request`
 - Output: `PrepareMultiInvoiceCustomerReceiptOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_multi_invoice_customer_receipt`
@@ -945,6 +1037,7 @@ Create the reviewed multi-invoice Customer receipt as one Draft Payment Entry.
 - Input: `MultiInvoiceCustomerReceiptConfirmInput` — Required: `request`
 - Output: `ConfirmMultiInvoiceCustomerReceiptOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_customer_payment_entry`
@@ -954,6 +1047,7 @@ Prepare a native standalone Draft Customer receipt Payment Entry with no invoice
 - Input: `CustomerPaymentEntryPrepareInput` — Required: `request`
 - Output: `PrepareCustomerPaymentEntryOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_customer_payment_entry`
@@ -963,6 +1057,7 @@ Create the reviewed standalone Draft Customer receipt Payment Entry.
 - Input: `CustomerPaymentEntryConfirmInput` — Required: `request`
 - Output: `ConfirmCustomerPaymentEntryOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_sales_order_advance_payment`
@@ -972,6 +1067,7 @@ Prepare a native Draft Customer advance Payment Entry for one submitted Sales Or
 - Input: `SalesOrderAdvancePaymentPrepareInput` — Required: `request`
 - Output: `PrepareSalesOrderAdvancePaymentOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_sales_order_advance_payment`
@@ -981,6 +1077,7 @@ Create the reviewed native Draft Customer advance Payment Entry.
 - Input: `SalesOrderAdvancePaymentConfirmInput` — Required: `request`
 - Output: `ConfirmSalesOrderAdvancePaymentOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_customer_payment_reconciliation`
@@ -990,6 +1087,7 @@ Prepare a bounded projection for applying one existing submitted Customer Paymen
 - Input: `CustomerPaymentReconciliationPrepareInput` — Required: `request`
 - Output: `PrepareCustomerPaymentReconciliationOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_customer_payment_reconciliation`
@@ -999,6 +1097,7 @@ Apply the approved existing submitted Customer Payment Entry to one Sales Invoic
 - Input: `CustomerPaymentReconciliationConfirmInput` — Required: `request`
 - Output: `ConfirmCustomerPaymentReconciliationOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `get_payment_entry`
@@ -1008,6 +1107,7 @@ Retrieve selected fields and bounded native references from one permitted Paymen
 - Input: `PaymentEntryGetInput` — Required: `name`
 - Output: `PaymentEntryGetOutput`; resolution states: `ok`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `query_payment_entries`
@@ -1017,6 +1117,7 @@ Query permitted Payment Entries using typed filters, bounded projection, sorting
 - Input: `PaymentEntryQueryInput` — Required: none
 - Output: `PaymentEntryQueryOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `aggregate_payment_entries`
@@ -1026,6 +1127,7 @@ Calculate currency-safe permission-aware Payment Entry metrics on the server.
 - Input: `PaymentEntryAggregateInput` — Required: none
 - Output: `PaymentEntryAggregateOutput`; published through MCP `outputSchema`.
 - Side effect: `READ`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_submit`
@@ -1035,6 +1137,7 @@ Prepare submission of an exact existing document.
 - Input: `PrepareActionInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_submit`
@@ -1044,6 +1147,7 @@ Submit a prepared exact existing document after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_cancel`
@@ -1053,6 +1157,7 @@ Prepare cancellation of an exact existing document.
 - Input: `PrepareActionInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_cancel`
@@ -1062,6 +1167,7 @@ Cancel a prepared exact existing document after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.
 
 ### `prepare_document_delete`
@@ -1071,6 +1177,7 @@ Prepare deletion of an exact existing document with link preflight.
 - Input: `PrepareDeleteInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: `APPROVAL`; emitted only for the documented result states.
 
 ### `confirm_document_delete`
@@ -1080,4 +1187,5 @@ Delete a prepared exact existing document after approval.
 - Input: `LifecycleConfirmInput` — Required: `request`
 - Output: `LifecycleResult`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- MCP annotations: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 - Interaction: none declared.

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from mcp.types import ToolAnnotations
+
 from .interaction import InteractionKind
 from .lifecycle import (
     LifecycleConfirmInput,
@@ -237,6 +239,15 @@ TRUSTED_PENDING_OPERATION_GUARD = "trusted_pending_operation"
 
 
 @dataclass(frozen=True)
+class MCPAnnotationOverrides:
+    """Contract-specific deviations from the side-effect annotation defaults."""
+
+    destructive_hint: bool | None = None
+    idempotent_hint: bool | None = None
+    open_world_hint: bool | None = None
+
+
+@dataclass(frozen=True)
 class ToolContract:
     """One public tool's stable contract declaration.
 
@@ -257,6 +268,7 @@ class ToolContract:
     approval_guard: str | None = None
     interaction_kinds: tuple[InteractionKind, ...] = ()
     approval_confirm_tool: str | None = None
+    annotation_overrides: MCPAnnotationOverrides = MCPAnnotationOverrides()
 
     @property
     def compliant(self) -> bool:
@@ -293,6 +305,40 @@ class ToolContract:
                 **interaction,
             }
         }
+
+    def mcp_annotations(self) -> ToolAnnotations:
+        """Return standard MCP safety hints derived from this contract.
+
+        PREPARE tools are intentionally non-read-only: their reviewed-operation
+        state is part of the server environment even when no ERPNext business
+        document has been created yet.
+        """
+        defaults = {
+            SideEffectClass.READ: (True, False, True, False),
+            SideEffectClass.RESOLVE: (True, False, True, False),
+            SideEffectClass.PREPARE: (False, False, False, False),
+            SideEffectClass.CONFIRM_WRITE: (False, False, False, False),
+        }
+        read_only, destructive, idempotent, open_world = defaults[self.side_effect]
+        overrides = self.annotation_overrides
+        return ToolAnnotations(
+            readOnlyHint=read_only,
+            destructiveHint=(
+                overrides.destructive_hint
+                if overrides.destructive_hint is not None
+                else destructive
+            ),
+            idempotentHint=(
+                overrides.idempotent_hint
+                if overrides.idempotent_hint is not None
+                else idempotent
+            ),
+            openWorldHint=(
+                overrides.open_world_hint
+                if overrides.open_world_hint is not None
+                else open_world
+            ),
+        )
 
 
 # This set is the complete pre-07A legacy inventory. Future migrations may
@@ -408,6 +454,7 @@ TOOL_CONTRACTS = {
         CustomerPrimaryContactConfirmInput,
         ConfirmCustomerPrimaryContactOutput,
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+        annotation_overrides=MCPAnnotationOverrides(destructive_hint=True),
     ),
     "prepare_contact": ToolContract(
         "prepare_contact",
@@ -437,7 +484,7 @@ TOOL_CONTRACTS = {
         "Masters",
         ToolOperation.PREPARE,
         SideEffectClass.PREPARE,
-        "Prepare one Customer-scoped native Contact detail or communication update without writing.",
+		"Prepare one standalone or Customer-scoped native Contact detail or communication update without writing.",
         False,
         ContactUpdatePrepareInput,
         PrepareContactUpdateOutput,
@@ -449,11 +496,12 @@ TOOL_CONTRACTS = {
         "Masters",
         ToolOperation.CONFIRM,
         SideEffectClass.CONFIRM_WRITE,
-        "Apply one approved Customer-scoped native Contact update.",
+		"Apply one approved standalone or Customer-scoped native Contact update.",
         True,
         ContactUpdateConfirmInput,
         ConfirmContactUpdateOutput,
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+        annotation_overrides=MCPAnnotationOverrides(destructive_hint=True),
     ),
     "search_items": ToolContract(
         "search_items",
@@ -842,6 +890,17 @@ for _name, _action, _purpose, _input_model in (
         _input_model,
         LifecycleResult,
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+        annotation_overrides=MCPAnnotationOverrides(
+            # Updating replaces stored values; submit makes a Draft immutable;
+            # cancel invalidates it; delete removes it (and may cancel first).
+            destructive_hint=_name
+            in {
+                "confirm_document_update",
+                "confirm_document_submit",
+                "confirm_document_cancel",
+                "confirm_document_delete",
+            }
+        ),
     )
 
 for _name, _domain, _operation, _purpose, _input_model, _output_model in (
@@ -1102,6 +1161,7 @@ TOOL_CONTRACTS["confirm_document_email"] = ToolContract(
     DocumentEmailConfirmInput,
     DocumentEmailConfirmOutput,
     approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+    annotation_overrides=MCPAnnotationOverrides(open_world_hint=True),
 )
 
 TOOL_CONTRACTS["prepare_sales_invoice_payment"] = ToolContract(
@@ -1196,6 +1256,7 @@ TOOL_CONTRACTS["confirm_customer_payment_reconciliation"] = ToolContract(
     CustomerPaymentReconciliationConfirmInput,
     ConfirmCustomerPaymentReconciliationOutput,
     approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+    annotation_overrides=MCPAnnotationOverrides(destructive_hint=True),
 )
 TOOL_CONTRACTS["confirm_multi_invoice_customer_receipt"] = ToolContract(
     "confirm_multi_invoice_customer_receipt",
@@ -1260,3 +1321,8 @@ def get_tool_contract(name: str) -> ToolContract:
 def tool_meta(name: str) -> dict[str, Any]:
     """Return the safe metadata published for a registered public tool."""
     return get_tool_contract(name).mcp_meta()
+
+
+def tool_annotations(name: str) -> ToolAnnotations:
+    """Return standard MCP safety hints for a registered public tool."""
+    return get_tool_contract(name).mcp_annotations()

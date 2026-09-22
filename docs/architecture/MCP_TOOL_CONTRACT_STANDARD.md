@@ -39,6 +39,32 @@ record-level permissions, or approval enforcement. Each `CONFIRM_WRITE`
 contract must declare an approval guard. The contract audit rejects a write tool
 without one and publishes the guard classification in public metadata.
 
+## Standard MCP protocol annotations
+
+`ToolContract` is the single source of truth for both the custom
+`mcp_erpnext` metadata and MCP's standard `ToolAnnotations`. Registration goes
+through the governed registrar, which rejects an uncontracted public tool and
+publishes the contract-derived annotations alongside existing `meta`.
+
+| Side-effect class | read-only | destructive | idempotent | open-world |
+| --- | --- | --- | --- | --- |
+| `READ` | true | false | true | false |
+| `RESOLVE` | true | false | true | false |
+| `PREPARE` | false | false | false | false |
+| `CONFIRM_WRITE` | false | false | false | false |
+
+`PREPARE` is deliberately not read-only: it can create or maintain reviewed
+operation and approval state even though it does not perform the final ERPNext
+business-document write. Explicit contract overrides identify exceptions that
+cannot be inferred from the side-effect class: destructive existing-record
+updates, submission, cancellation, deletion, and payment reconciliation; and
+open-world delivery for `confirm_document_email`. Email preparation remains
+closed-world because it only prepares server state and an attachment.
+
+These annotations are client hints, not authorization. A host policy such as
+`default_tools_approval_mode = "writes"` is separate from the server's
+shared, Frappe-backed `CONFIRM_WRITE` approval guard and can never bypass it.
+
 `confirm=true` is never a human approval signal. A confirm tool may write only
 after its shared guard validates an authenticated, server-recorded approval
 bound to the original Frappe user, site, action, prepared payload digest, TTL,
@@ -121,6 +147,10 @@ domain documentation. It must preserve Frappe-controlled permissions and any
 prepare/confirm write boundary. A `CONFIRM_WRITE` tool additionally needs the
 shared approval guard, rechecks of Frappe permissions at write time, and tests
 proving direct model calls cannot authorize it.
+
+Every new public tool must also register through the governed registration
+path, receive all standard MCP annotations from its `ToolContract`, and have
+the contract audit and catalog check pass.
 
 For a resolver change, completion additionally requires typed terminal states,
 typed candidate references, an explicit selection/revalidation path where

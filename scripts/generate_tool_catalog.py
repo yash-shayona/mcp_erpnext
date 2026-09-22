@@ -27,6 +27,15 @@ def _schema_summary(schema: dict) -> str:
 	return f"Required: {', '.join(f'`{field}`' for field in required) or 'none'}"
 
 
+def _annotation_summary(name: str) -> str:
+	annotations = TOOL_CONTRACTS[name].mcp_annotations()
+	return ", ".join(
+		f"`{field}={str(value).lower()}`"
+		for field, value in annotations.model_dump(by_alias=True, exclude_none=True).items()
+		if field != "title"
+	)
+
+
 async def render_catalog() -> str:
 	"""Render the catalog from the actual FastMCP registration and declaration metadata."""
 	lines = [
@@ -36,6 +45,10 @@ async def render_catalog() -> str:
 		"",
 		"This catalog is generated from the profile-registered MCP tools and their contract metadata. "
 		"`tools/list` remains the authoritative machine-readable schema.",
+		"",
+		"Each public tool publishes both project-specific `mcp_erpnext` metadata and standard MCP "
+		"safety annotations. `ToolContract` is the single source of truth for both layers; host "
+		"approval policy remains separate from server-enforced business approval.",
 		"",
 		"The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/MCP_DOCUMENT_PDF.md), "
 		"and the generic email capability is documented in [MCP_DOCUMENT_EMAIL.md](architecture/MCP_DOCUMENT_EMAIL.md).",
@@ -52,15 +65,16 @@ async def render_catalog() -> str:
 			"",
 			f"## {profile.value.title()} profile",
 			"",
-			"| Tool | Domain | Operation | Side effect | Interaction | Approval | Contract status |",
-			"| --- | --- | --- | --- | --- | --- | --- |",
+			"| Tool | Domain | Operation | Side effect | MCP annotations | Interaction | Approval | Contract status |",
+			"| --- | --- | --- | --- | --- | --- | --- | --- |",
 		])
 		for name in by_name:
 			contract = TOOL_CONTRACTS[name]
 			status = "Legacy migration inventory" if contract.legacy else "Explicit typed contract"
 			lines.append(
 				f"| `{contract.name}` | {contract.domain} | {contract.operation.value.title()} | "
-				f"{contract.side_effect.value} | {', '.join(kind.value for kind in contract.interaction_kinds) or 'None'} | "
+				f"{contract.side_effect.value} | {_annotation_summary(contract.name)} | "
+				f"{', '.join(kind.value for kind in contract.interaction_kinds) or 'None'} | "
 				f"{'Explicit approval required; server policy enforced' if contract.approval_required else 'Not a final write'} | {status} |"
 			)
 		for name, tool in by_name.items():
@@ -77,6 +91,7 @@ async def render_catalog() -> str:
 				+ ("; published through MCP `outputSchema`." if tool.outputSchema and not contract.legacy else "; legacy response shape pending focused migration."),
 				f"- Side effect: `{contract.side_effect.value}`; approval "
 				+ (f"requires explicit approval through `{contract.approval_guard}` before the final write; the server-selected approval policy enforces the trust requirement." if contract.approval_required else "does not perform the final write."),
+				f"- MCP annotations: {_annotation_summary(contract.name)}.",
 				("- Interaction: " + ", ".join(f"`{kind.value}`" for kind in contract.interaction_kinds) + "; emitted only for the documented result states." if contract.interaction_kinds else "- Interaction: none declared."),
 			])
 	return "\n".join(lines) + "\n"

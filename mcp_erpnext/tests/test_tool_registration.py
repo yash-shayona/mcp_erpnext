@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from mcp_erpnext.tools import register_tools
+from mcp_erpnext.tools.registration import tool_registration_kwargs
 
 
 class RecordingMCP:
@@ -10,10 +11,13 @@ class RecordingMCP:
 
 	def __init__(self):
 		self.tool_names: list[str] = []
+		self.tool_kwargs: dict[str, dict] = {}
 
 	def tool(self, **kwargs):
 		def decorator(function):
-			self.tool_names.append(kwargs.get("name", function.__name__))
+			name = kwargs.get("name", function.__name__)
+			self.tool_names.append(name)
+			self.tool_kwargs[name] = kwargs
 			return function
 
 		return decorator
@@ -96,3 +100,11 @@ class ToolRegistrationTests(unittest.TestCase):
 			],
 		)
 		self.assertNotIn("search_sales_orders", mcp.tool_names)
+		for name, kwargs in mcp.tool_kwargs.items():
+			with self.subTest(name=name):
+				self.assertIn("mcp_erpnext", kwargs["meta"])
+				self.assertIsNotNone(kwargs["annotations"])
+
+	def test_uncontracted_tool_cannot_receive_governed_registration_kwargs(self):
+		with self.assertRaisesRegex(RuntimeError, "must declare a ToolContract"):
+			tool_registration_kwargs("ungoverned_public_tool", {})

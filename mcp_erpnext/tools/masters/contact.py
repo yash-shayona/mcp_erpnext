@@ -66,7 +66,7 @@ def confirm_contact(
 
 
 def prepare_contact_update(request: ContactUpdatePrepareInput, ctx: Context) -> PrepareContactUpdateOutput:
-	"""Prepare one Customer-scoped Contact update without writing."""
+	"""Prepare one standalone or Customer-scoped Contact update without writing."""
 	request = ContactUpdatePrepareInput.model_validate(request)
 	result = execute_tool_with_context(
 		ctx,
@@ -82,7 +82,7 @@ def prepare_contact_update(request: ContactUpdatePrepareInput, ctx: Context) -> 
 def confirm_contact_update(
 	approval_token: NonEmptyString, confirm: bool, ctx: Context
 ) -> ConfirmContactUpdateOutput:
-	"""Execute one approved Customer-scoped Contact update."""
+	"""Execute one approved standalone or Customer-scoped Contact update."""
 	request = ContactUpdateConfirmInput(approval_token=approval_token, confirm=confirm)
 	result = execute_tool_with_context(
 		ctx,

@@ -9,11 +9,13 @@ from __future__ import annotations
 from typing import Any
 
 from ..settings import MCPProfile
+from .registration import GovernedMCP
 
 
 def register_tools(mcp: Any, profile: MCPProfile | str = MCPProfile.SALES) -> None:
     """Register exactly one domain profile's public MCP inventory."""
     profile = MCPProfile(profile)
+    mcp = GovernedMCP(mcp)
     if profile == MCPProfile.SALES:
         from ..profiles.sales import register_sales_profile
 

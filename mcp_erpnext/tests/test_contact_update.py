@@ -79,12 +79,14 @@ class ContactUpdateTests(unittest.TestCase):
 		self.approval_patch.stop()
 		self.frappe_patch.stop()
 
-	def request(self, operation):
-		return {
-			"customer": {"doctype": "Customer", "name": "CUST-001"},
+	def request(self, operation, *, customer=True):
+		request = {
 			"contact": {"doctype": "Contact", "name": "CONTACT-001"},
 			"operation": operation,
 		}
+		if customer:
+			request["customer"] = {"doctype": "Customer", "name": "CUST-001"}
+		return request
 
 	def approve(self, prepared):
 		self.store.record_trusted_user_approval(
@@ -144,6 +146,51 @@ class ContactUpdateTests(unittest.TestCase):
 		self.customer.values["can_write"] = False
 		result = service.prepare_contact_update(self.request({"action": "set_primary_email", "email": "amit@example.com"}))
 		self.assertEqual(result["code"], "CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED")
+
+	def test_linked_contact_requires_explicit_customer_scope(self):
+		result = service.prepare_contact_update(
+			self.request({"action": "set_primary_email", "email": "amit@example.com"}, customer=False)
+		)
+		self.assertEqual(result["code"], "CONTACT_SCOPE_REQUIRED")
+
+	def test_standalone_email_update_needs_no_customer(self):
+		self.contact.values["links"] = []
+		self.contact.values["customer_primary_contact"] = None
+		prepared = service.prepare_contact_update(
+			self.request(
+				{
+					"action": "replace_primary_email",
+					"current_email": "amit@example.com",
+					"email": "yash@example.com",
+				},
+				customer=False,
+			)
+		)
+		self.assertEqual(prepared["status"], "ready")
+		self.assertIsNone(prepared["preview"]["customer"])
+		self.assertFalse(prepared["preview"]["customer_projection_refresh_required"])
+		self.approve(prepared)
+		result = service.confirm_contact_update(prepared["approval_token"], True)
+		self.assertEqual(result["status"], "updated")
+		self.assertIsNone(result["customer"])
+		self.assertEqual(self.contact.get("email_ids")[0]["email_id"], "yash@example.com")
+		self.assertEqual(self.contact.save_calls, [{"ignore_permissions": False}])
+		self.assertEqual(self.customer.save_calls, [])
+
+	def test_standalone_phone_update_needs_no_customer(self):
+		self.contact.values["links"] = []
+		prepared = service.prepare_contact_update(
+			self.request(
+				{"action": "replace_primary_mobile", "current_mobile": "9999999999", "phone": "9998999899"},
+				customer=False,
+			)
+		)
+		self.assertEqual(prepared["status"], "ready")
+		self.approve(prepared)
+		result = service.confirm_contact_update(prepared["approval_token"], True)
+		self.assertEqual(result["status"], "updated")
+		self.assertEqual(self.contact.get("phone_nos")[0]["phone"], "9998999899")
+		self.assertEqual(self.customer.save_calls, [])
 
 
 if __name__ == "__main__":

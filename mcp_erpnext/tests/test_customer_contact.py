@@ -103,6 +103,7 @@ class CustomerContactServiceTests(unittest.TestCase):
 		self.approval_patch = patch.object(service, "approvals", self.approval_store)
 		self.approval_patch.start()
 		self.links = []
+		self.list_calls = []
 
 	def tearDown(self):
 		self.approval_patch.stop()
@@ -116,6 +117,7 @@ class CustomerContactServiceTests(unittest.TestCase):
 		return self.docs[f"{doctype_or_payload}:{name}"]
 
 	def _get_list(self, doctype, *, filters=None, **_kwargs):
+		self.list_calls.append({"doctype": doctype, "filters": filters, **_kwargs})
 		if doctype == "Contact Email":
 			return [
 				{"parent": contact.name, "email_id": contact.get("email_id")}
@@ -134,6 +136,12 @@ class CustomerContactServiceTests(unittest.TestCase):
 				return [{"name": name}]
 		return []
 		return []
+
+	def test_global_child_search_uses_parent_contact_permission_context(self):
+		result = service._child_parent_names("Contact Email", "email_id", "amit@example.com")
+
+		self.assertEqual(result, {"Amit Shah-ABC"})
+		self.assertEqual(self.list_calls[-1]["parent_doctype"], "Contact")
 
 	def _commit(self):
 		self.commits += 1

@@ -394,9 +394,9 @@ ContactUpdateOperation = Annotated[
 
 
 class ContactUpdatePrepareInput(PublicContractModel):
-	"""One bounded update for an existing Contact linked to one Customer."""
+	"""One bounded standalone or Customer-scoped update for an existing Contact."""
 
-	customer: CustomerReference
+	customer: CustomerReference | None = None
 	contact: ContactReference
 	operation: ContactUpdateOperation
 
@@ -415,7 +415,7 @@ class ContactUpdatePreview(PublicContractModel):
 		"set_primary_phone",
 		"set_primary_mobile",
 	]
-	customer: CustomerReference
+	customer: CustomerReference | None = None
 	contact: ContactReference
 	full_name_before: NonEmptyString
 	full_name_after: NonEmptyString
@@ -460,7 +460,7 @@ class ContactUpdateConfirmInput(PublicContractModel):
 
 class ContactUpdated(PublicContractModel):
 	status: Literal["updated"]
-	customer: CustomerReference
+	customer: CustomerReference | None = None
 	contact: ContactProjection
 	preview: ContactUpdatePreview
 	idempotent: bool = False
