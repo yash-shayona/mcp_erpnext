@@ -71,6 +71,36 @@ bound to the original Frappe user, site, action, prepared payload digest, TTL,
 and one-time consumption. If no trusted client signal exists, the guard must
 fail closed. See [Explicit User Approval Safety](MCP_EXPLICIT_USER_APPROVAL_SAFETY.md).
 
+## Tool routing and descriptions
+
+`ToolContract` also derives each public tool's routing role, public description,
+and published `mcp_erpnext.routing_role` metadata. Registration always replaces
+a wrapper docstring or local decorator description with that governed
+description, and the contract audit rejects drift. This keeps all profiles on
+one policy without changing public names, business services, schemas, or
+annotations.
+
+| Routing role | Use it when | Do not use it when |
+| --- | --- | --- |
+| `GET` | an exact stable reference is already known | fuzzy discovery or refetching through query |
+| `RESOLVE` | one natural-language reference is needed in a workflow | a known exact reference is available |
+| `SEARCH` | the user explicitly wants candidates or browsing | verifying a successful resolution |
+| `QUERY` | structured filters, fields, sort, or pagination are requested | fuzzy resolution or a dedicated aggregate exists |
+| `AGGREGATE` | a supported count, sum, or grouping is requested | rows would be fetched only for client-side aggregation |
+| `PREPARE` / `CONFIRM` | a consequential operation needs preview then approved execution | discovery, or bypassing the prepared approval flow |
+
+For `resolve_*`, `resolved` is terminal for lookup: reuse the returned
+reference. For `ambiguous`, use the returned candidates and applicable
+selection flow; for `not_found`, ask for clarification and offer discovery
+only when the user requests alternatives. `select_resolved_candidate` currently
+revalidates Customer and Item candidates only; Supplier ambiguity must retain
+its returned candidate context rather than assuming that tool accepts it.
+
+Lifecycle and conversion tools make their exact-document/source requirements
+and prepare -> preview/approval -> confirm sequence explicit. PDF rendering is
+read-only for an exact document, while document-email preparation only creates
+preview/attachment state and confirmation queues the external delivery.
+
 ## Resolution and explicit selection
 
 Resolver tools must declare and publish their supported terminal states. The

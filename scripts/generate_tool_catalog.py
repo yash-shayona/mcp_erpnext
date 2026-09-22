@@ -50,6 +50,16 @@ async def render_catalog() -> str:
 		"safety annotations. `ToolContract` is the single source of truth for both layers; host "
 		"approval policy remains separate from server-enforced business approval.",
 		"",
+		"## Routing policy",
+		"",
+		"Use `get_*` for an exact known reference; `resolve_*` for one natural-language "
+		"reference required by a workflow; `search_*` for explicit discovery; `query_*` for "
+		"structured filters; and `aggregate_*` for supported server-side metrics. A resolver "
+		"`resolved` state is terminal for lookup. Use returned candidates for `ambiguous`; for "
+		"`not_found`, ask for clarification and search only when alternatives are requested. "
+		"Consequential operations follow prepare -> preview/approval -> confirm. The server "
+		"instructions and each contract-derived description publish the same policy.",
+		"",
 		"The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/MCP_DOCUMENT_PDF.md), "
 		"and the generic email capability is documented in [MCP_DOCUMENT_EMAIL.md](architecture/MCP_DOCUMENT_EMAIL.md).",
 		"",
@@ -65,15 +75,15 @@ async def render_catalog() -> str:
 			"",
 			f"## {profile.value.title()} profile",
 			"",
-			"| Tool | Domain | Operation | Side effect | MCP annotations | Interaction | Approval | Contract status |",
-			"| --- | --- | --- | --- | --- | --- | --- | --- |",
+			"| Tool | Domain | Operation | Routing role | Side effect | MCP annotations | Interaction | Approval | Contract status |",
+			"| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
 		])
 		for name in by_name:
 			contract = TOOL_CONTRACTS[name]
 			status = "Legacy migration inventory" if contract.legacy else "Explicit typed contract"
 			lines.append(
 				f"| `{contract.name}` | {contract.domain} | {contract.operation.value.title()} | "
-				f"{contract.side_effect.value} | {_annotation_summary(contract.name)} | "
+				f"{contract.governed_routing_role.value.title().replace('_', ' ')} | {contract.side_effect.value} | {_annotation_summary(contract.name)} | "
 				f"{', '.join(kind.value for kind in contract.interaction_kinds) or 'None'} | "
 				f"{'Explicit approval required; server policy enforced' if contract.approval_required else 'Not a final write'} | {status} |"
 			)
@@ -83,7 +93,7 @@ async def render_catalog() -> str:
 				"",
 				f"### `{contract.name}`",
 				"",
-				contract.purpose,
+				contract.routing_description(),
 				"",
 				f"- Input: `{_model_name(contract.input_model)}` — {_schema_summary(tool.inputSchema)}",
 				f"- Output: `{_model_name(contract.output_model)}`"

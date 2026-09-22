@@ -228,6 +228,146 @@ class ToolOperation(StrEnum):
     CONFIRM = "CONFIRM"
 
 
+class ToolRoutingRole(StrEnum):
+    """MCP-wide role used to govern public-tool routing descriptions."""
+
+    RESOLVE = "RESOLVE"
+    SELECT_RESOLVED_CANDIDATE = "SELECT_RESOLVED_CANDIDATE"
+    GET = "GET"
+    SEARCH = "SEARCH"
+    QUERY = "QUERY"
+    AGGREGATE = "AGGREGATE"
+    PREPARE = "PREPARE"
+    CONFIRM = "CONFIRM"
+    LIFECYCLE_PREPARE = "LIFECYCLE_PREPARE"
+    LIFECYCLE_CONFIRM = "LIFECYCLE_CONFIRM"
+    CONVERSION_PREPARE = "CONVERSION_PREPARE"
+    CONVERSION_CONFIRM = "CONVERSION_CONFIRM"
+    RENDER = "RENDER"
+    EMAIL_PREPARE = "EMAIL_PREPARE"
+    EMAIL_CONFIRM = "EMAIL_CONFIRM"
+
+
+def routing_role_for_tool_name(
+    name: str, operation: ToolOperation | None = None
+) -> ToolRoutingRole:
+    """Classify a stable public tool name without changing its public API."""
+    if name == "select_resolved_candidate":
+        return ToolRoutingRole.SELECT_RESOLVED_CANDIDATE
+    if name == "render_document_pdf":
+        return ToolRoutingRole.RENDER
+    if name == "prepare_document_email":
+        return ToolRoutingRole.EMAIL_PREPARE
+    if name == "confirm_document_email":
+        return ToolRoutingRole.EMAIL_CONFIRM
+    if name.startswith("get_"):
+        return ToolRoutingRole.GET
+    if name.startswith("search_"):
+        return ToolRoutingRole.SEARCH
+    if name.startswith("query_"):
+        return ToolRoutingRole.QUERY
+    if name.startswith("aggregate_"):
+        return ToolRoutingRole.AGGREGATE
+    if name.startswith("prepare_document_"):
+        return ToolRoutingRole.LIFECYCLE_PREPARE
+    if name.startswith("confirm_document_"):
+        return ToolRoutingRole.LIFECYCLE_CONFIRM
+    if name.startswith("prepare_") and "_to_" in name:
+        return ToolRoutingRole.CONVERSION_PREPARE
+    if name.startswith("confirm_") and "_to_" in name:
+        return ToolRoutingRole.CONVERSION_CONFIRM
+    if name.startswith("resolve_"):
+        return ToolRoutingRole.RESOLVE
+    if name.startswith("prepare_"):
+        return ToolRoutingRole.PREPARE
+    if name.startswith("confirm_"):
+        return ToolRoutingRole.CONFIRM
+    if operation is not None:
+        return {
+            ToolOperation.SEARCH: ToolRoutingRole.SEARCH,
+            ToolOperation.RESOLVE: ToolRoutingRole.RESOLVE,
+            ToolOperation.PREPARE: ToolRoutingRole.PREPARE,
+            ToolOperation.CONFIRM: ToolRoutingRole.CONFIRM,
+        }[operation]
+    raise ValueError(f"{name}: unable to derive a governed routing role.")
+
+
+ROUTING_GUIDANCE: dict[ToolRoutingRole, str] = {
+    ToolRoutingRole.RESOLVE: (
+        "Use for one natural-language business reference needed by a workflow. "
+        "`resolved` is terminal for lookup: reuse its reference; do not call "
+        "search/query merely to verify. For `ambiguous`, use the returned "
+        "candidates and selection flow. For `not_found`, ask for clarification; "
+        "use discovery only when the user explicitly requests alternatives."
+    ),
+    ToolRoutingRole.SELECT_RESOLVED_CANDIDATE: (
+        "Use only after an `ambiguous` Customer or Item resolution, with a "
+        "candidate reference returned by that result. Do not use it for general "
+        "get/search, or restart discovery when the candidate set is sufficient."
+    ),
+    ToolRoutingRole.GET: (
+        "Use when the exact stable record or document reference is already known. "
+        "Do not use for fuzzy discovery or query merely to fetch that exact record."
+    ),
+    ToolRoutingRole.SEARCH: (
+        "Use for explicit candidate discovery, browsing, or comparison. Do not use "
+        "after a successful resolver merely to verify it, or when structured "
+        "filtering belongs to a query tool."
+    ),
+    ToolRoutingRole.QUERY: (
+        "Use for structured filtering, projection, sorting, or pagination. It is "
+        "not a fuzzy resolver and should not replace a dedicated aggregate tool."
+    ),
+    ToolRoutingRole.AGGREGATE: (
+        "Use for this supported server-side count, sum, or grouped metric. Do not "
+        "retrieve many rows through query and aggregate them in the client."
+    ),
+    ToolRoutingRole.PREPARE: (
+        "Use after required references and inputs are established. Review the "
+        "returned preview/prepared state, then use the paired confirm tool only "
+        "through the existing approval flow; do not repeatedly prepare the same payload."
+    ),
+    ToolRoutingRole.CONFIRM: (
+        "Execute only its valid prepared operation after the existing approval "
+        "guard succeeds. It is never a read or discovery tool and cannot bypass "
+        "preview or approval."
+    ),
+    ToolRoutingRole.LIFECYCLE_PREPARE: (
+        "Use for this exact existing-document lifecycle action. Review its prepared "
+        "preview/state before the paired confirm action; it does not itself apply "
+        "the lifecycle change."
+    ),
+    ToolRoutingRole.LIFECYCLE_CONFIRM: (
+        "Apply this lifecycle action only for its valid prepared exact-document "
+        "state after the existing approval guard succeeds; do not use it to look up "
+        "or discover documents."
+    ),
+    ToolRoutingRole.CONVERSION_PREPARE: (
+        "Use only with the eligible exact source document required for this "
+        "conversion. It returns a conversion preview/prepared state; review it and "
+        "follow the paired confirm approval flow."
+    ),
+    ToolRoutingRole.CONVERSION_CONFIRM: (
+        "Create this converted document only from its valid prepared source "
+        "conversion after the existing approval guard succeeds; it is not a generic "
+        "create tool."
+    ),
+    ToolRoutingRole.RENDER: (
+        "Use with an exact permitted document reference to return PDF artifact "
+        "content/metadata. It is read-only and must not be used to discover documents."
+    ),
+    ToolRoutingRole.EMAIL_PREPARE: (
+        "Use with an exact permitted document to prepare recipients, preview, and "
+        "attachment state. It does not send email; review the prepared result before "
+        "the paired confirm approval flow."
+    ),
+    ToolRoutingRole.EMAIL_CONFIRM: (
+        "Queue external email only from its valid prepared email state after the "
+        "existing approval guard succeeds. It is not a document lookup or preview tool."
+    ),
+}
+
+
 class SideEffectClass(StrEnum):
     READ = "READ"
     RESOLVE = "RESOLVE"
@@ -269,6 +409,7 @@ class ToolContract:
     interaction_kinds: tuple[InteractionKind, ...] = ()
     approval_confirm_tool: str | None = None
     annotation_overrides: MCPAnnotationOverrides = MCPAnnotationOverrides()
+    routing_role: ToolRoutingRole | None = None
 
     @property
     def compliant(self) -> bool:
@@ -277,6 +418,17 @@ class ToolContract:
             and self.input_model is not None
             and self.output_model is not None
         )
+
+    @property
+    def governed_routing_role(self) -> ToolRoutingRole:
+        """Return the explicit or centrally inferred routing role."""
+        return self.routing_role or routing_role_for_tool_name(
+            self.name, self.operation
+        )
+
+    def routing_description(self) -> str:
+        """Build the single public description from purpose plus routing policy."""
+        return f"{self.purpose} {ROUTING_GUIDANCE[self.governed_routing_role]}"
 
     def mcp_meta(self) -> dict[str, Any]:
         """Publish safe classification metadata alongside the MCP tool."""
@@ -294,6 +446,7 @@ class ToolContract:
             "mcp_erpnext": {
                 "domain": self.domain,
                 "operation": self.operation.value,
+                "routing_role": self.governed_routing_role.value,
                 "side_effect": self.side_effect.value,
                 "approval_required": self.approval_required,
                 **(

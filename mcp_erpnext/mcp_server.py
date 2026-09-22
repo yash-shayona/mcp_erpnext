@@ -12,7 +12,19 @@ from mcp_identity.oauth_resource_server import (
     validate_oauth_resource_server_startup,
 )
 
-SALES_RESPONSE_PRECISION_INSTRUCTION = """\
+MCP_ROUTING_INSTRUCTIONS = """\
+MCP ROUTING POLICY: Use `get_*` for an exact known reference, `resolve_*` for
+a natural-language reference needed by a workflow, `search_*` for explicit
+browsing/discovery, `query_*` for structured listing/filtering, and
+`aggregate_*` for supported aggregate questions. A `resolve_*` result of
+`resolved` is terminal for lookup: reuse it rather than calling an equivalent
+search/query to verify. For `ambiguous`, use returned candidates and the
+selection flow; for `not_found`, ask for clarification and search only when
+the user explicitly requests alternatives. Consequential operations follow
+prepare -> preview/approval -> confirm. Do not duplicate semantically
+equivalent calls merely for verification; reuse identifiers and results already
+obtained in the workflow. Respect the selected profile and domain boundary.
+
 RESPONSE PRECISION POLICY: Answer only the information the user asked for.
 Do not dump unrelated fields or internal tool metadata. For a Sales Order
 status, date, or total request, return only that value (and currency for a
@@ -37,7 +49,10 @@ def create_mcp(settings: MCPSettings | None = None):
     settings = settings or MCPSettings.from_environment()
     auth = None
     token_verifier = None
-    if settings.transport == "streamable-http" and get_http_auth_mode_from_environment() is HTTPAuthMode.OAUTH:
+    if (
+        settings.transport == "streamable-http"
+        and get_http_auth_mode_from_environment() is HTTPAuthMode.OAUTH
+    ):
         from mcp.server.auth.settings import AuthSettings
 
         oauth_settings = validate_oauth_resource_server_startup()
@@ -52,11 +67,7 @@ def create_mcp(settings: MCPSettings | None = None):
     approvals.configure_approval_mode(settings.approval_mode)
     mcp = FastMCP(
         f"mcp_erpnext_{settings.profile.value}",
-        instructions=(
-            SALES_RESPONSE_PRECISION_INSTRUCTION
-            if settings.profile.value == "sales"
-            else None
-        ),
+        instructions=MCP_ROUTING_INSTRUCTIONS,
         host=settings.http_host,
         port=settings.http_port_number(),
         streamable_http_path=settings.http_path,

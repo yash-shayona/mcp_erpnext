@@ -11,8 +11,9 @@ from ..contracts.registry import get_tool_contract
 def tool_registration_kwargs(name: str, kwargs: Mapping[str, Any]) -> dict[str, Any]:
     """Add contract-governed metadata and annotations to one public tool.
 
-    Registration modules may continue to own a tool's name and description, but
-    cannot choose independent project metadata or standard safety hints.
+    Registration modules may own their wrapper implementation, but the public
+    description, project metadata, and standard safety hints come from the
+    declared ToolContract.
     """
     try:
         contract = get_tool_contract(name)
@@ -44,6 +45,7 @@ def tool_registration_kwargs(name: str, kwargs: Mapping[str, Any]) -> dict[str, 
     merged_meta = {**(registered_meta or {}), **contract.mcp_meta()}
     return {
         **kwargs,
+        "description": contract.routing_description(),
         "meta": merged_meta,
         "annotations": contract.mcp_annotations(),
         "structured_output": kwargs.get("structured_output", True),

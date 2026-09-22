@@ -200,6 +200,10 @@ def audit_tool_contracts(
             issues.append(f"{name}: CONFIRM_WRITE tool lacks a shared approval guard.")
         if not getattr(tool, "description", "").strip():
             issues.append(f"{name}: missing public description.")
+        elif tool.description != contract.routing_description():
+            issues.append(
+                f"{name}: public description differs from its governed routing description."
+            )
         input_schema = getattr(tool, "inputSchema", None)
         if not isinstance(input_schema, dict) or input_schema.get("type") != "object":
             issues.append(f"{name}: missing explicit input schema.")
@@ -270,6 +274,13 @@ def audit_tool_contracts(
         if meta.get("mcp_erpnext", {}).get("side_effect") != contract.side_effect.value:
             issues.append(
                 f"{name}: side-effect classification is missing from public metadata."
+            )
+        if (
+            meta.get("mcp_erpnext", {}).get("routing_role")
+            != contract.governed_routing_role.value
+        ):
+            issues.append(
+                f"{name}: routing-role classification is missing from public metadata."
             )
         if contract.resolution_states and meta.get("mcp_erpnext", {}).get(
             "resolution_states"
