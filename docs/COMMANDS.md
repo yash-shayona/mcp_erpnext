@@ -93,3 +93,19 @@ exec python -m mcp_erpnext.mcp_server
 
 Replace placeholders with local environment values. Never put real passwords,
 API keys, tokens, or shared secrets in this file.
+
+## Codex Host PREPARE Overrides
+
+Generate the non-secret Policy-B override tables from the current public-tool
+contracts. Replace the placeholder with the exact existing Codex MCP server ID;
+this prints child tables only and never reads or changes `config.toml`.
+
+```bash
+cd /path/to/your/frappe-bench/apps/mcp_erpnext
+PYTHONDONTWRITEBYTECODE=1 /path/to/your/frappe-bench/env/bin/python \
+  scripts/generate_tool_catalog.py --prepare-approval-overrides \
+  --server-id '<existing-server-id>'
+```
+
+Follow [MCP Host Approval Policy](operations/MCP_HOST_APPROVAL_POLICY.md) for
+the required `writes` baseline, validation, and rollback procedure.

@@ -9,6 +9,10 @@ from dataclasses import replace
 from pathlib import Path
 
 from mcp_erpnext.contracts.audit import audit_tool_contracts
+from mcp_erpnext.contracts.host_approval_policy import (
+	prepare_override_contract_issues,
+	render_prepare_approval_overrides,
+)
 from mcp_erpnext.contracts.registry import TOOL_CONTRACTS
 from mcp_erpnext.mcp_server import create_mcp
 from mcp_erpnext.settings import MCPProfile, MCPSettings
@@ -110,7 +114,27 @@ async def render_catalog() -> str:
 def main() -> None:
 	parser = argparse.ArgumentParser(description=__doc__)
 	parser.add_argument("--check", action="store_true", help="fail when docs/TOOLS.md is stale")
+	parser.add_argument(
+		"--prepare-approval-overrides",
+		action="store_true",
+		help="print contract-derived Codex Policy B PREPARE approval overrides",
+	)
+	parser.add_argument(
+		"--server-id",
+		help="existing mcp_servers ID required with --prepare-approval-overrides",
+	)
 	args = parser.parse_args()
+	if args.prepare_approval_overrides:
+		if not args.server_id:
+			parser.error("--server-id is required with --prepare-approval-overrides")
+		if args.check:
+			parser.error("--check cannot be combined with --prepare-approval-overrides")
+		if issues := prepare_override_contract_issues():
+			raise SystemExit("\n".join(issues))
+		print(render_prepare_approval_overrides(args.server_id), end="")
+		return
+	if args.server_id:
+		parser.error("--server-id requires --prepare-approval-overrides")
 	content = asyncio.run(render_catalog())
 	if args.check:
 		if not CATALOG_PATH.exists() or CATALOG_PATH.read_text() != content:
