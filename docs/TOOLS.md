@@ -18,6 +18,8 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `search_contacts` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
 | `prepare_customer_contact` | Masters | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_customer_contact` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_customer_primary_contact` | Masters | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_customer_primary_contact` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_contact` | Masters | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_contact` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_contact_update` | Masters | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
@@ -136,6 +138,24 @@ Create or link the reviewed native Contact for an existing Customer.
 
 - Input: `CustomerContactConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmCustomerContactOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_customer_primary_contact`
+
+Prepare promotion of an existing single-Customer Contact to the Customer primary Contact.
+
+- Input: `CustomerPrimaryContactPrepareInput` — Required: `request`
+- Output: `PrepareCustomerPrimaryContactOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_customer_primary_contact`
+
+Promote the reviewed existing Contact through native Contact and Customer saves.
+
+- Input: `CustomerPrimaryContactConfirmInput` — Required: `approval_token`, `confirm`
+- Output: `ConfirmCustomerPrimaryContactOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 

@@ -246,6 +246,81 @@ class ConfirmCustomerContactOutput(RootModel[CustomerContactConfirmResult]):
 	model_config = ConfigDict(json_schema_extra={"type": "object"})
 
 
+class CustomerPrimaryContactPrepareInput(PublicContractModel):
+	"""One explicit Customer primary Contact promotion intent."""
+
+	customer: CustomerReference
+	contact: ContactReference
+
+
+class CustomerPrimaryContactPreview(PublicContractModel):
+	action: Literal["promote_customer_primary_contact"]
+	customer: CustomerReference
+	contact: ContactReference
+	current_primary_contact: ContactReference | None = None
+	selected_contact_already_primary: bool
+	customer_pointer_is_selected: bool
+	customer_projections_will_refresh: Literal[True] = True
+	selected_additional_link_count: Literal[0] = 0
+	old_primary_relationship_safe: Literal[True] = True
+	native_side_effect_note: NonEmptyString
+
+
+class CustomerPrimaryContactReady(PublicContractModel):
+	status: Literal["ready"]
+	approval_token: Annotated[
+		NonEmptyString,
+		Field(description="Opaque pending-operation handle; it is not proof of approval."),
+	]
+	expires_in_seconds: Annotated[int, Field(gt=0)]
+	preview: CustomerPrimaryContactPreview
+	interaction: InteractionDirective
+
+
+CustomerPrimaryContactPrepareResult = Annotated[
+	CustomerPrimaryContactReady | ToolError,
+	Field(discriminator="status"),
+]
+
+
+class PrepareCustomerPrimaryContactOutput(RootModel[CustomerPrimaryContactPrepareResult]):
+	"""Root-shaped typed output for Customer primary Contact preparation."""
+
+	model_config = ConfigDict(json_schema_extra={"type": "object"})
+
+
+class CustomerPrimaryContactConfirmInput(PublicContractModel):
+	"""Requested execution of a pending Customer primary Contact promotion."""
+
+	approval_token: NonEmptyString
+	confirm: bool
+
+
+class CustomerPrimaryContactResult(PublicContractModel):
+	status: Literal["promoted", "already_primary"]
+	customer: CustomerReference
+	primary_contact: ContactProjection
+	previous_primary_contact: ContactReference | None = None
+	customer_primary_contact: ContactReference
+	email_id: NonEmptyString | None = None
+	mobile_no: NonEmptyString | None = None
+	first_name: NonEmptyString | None = None
+	last_name: NonEmptyString | None = None
+	idempotent: bool
+
+
+CustomerPrimaryContactConfirmResult = Annotated[
+	CustomerPrimaryContactResult | ToolError,
+	Field(discriminator="status"),
+]
+
+
+class ConfirmCustomerPrimaryContactOutput(RootModel[CustomerPrimaryContactConfirmResult]):
+	"""Root-shaped typed output for Customer primary Contact confirmation."""
+
+	model_config = ConfigDict(json_schema_extra={"type": "object"})
+
+
 class ContactDetailsUpdate(PublicContractModel):
 	"""Allowed mutable parent Contact detail fields."""
 

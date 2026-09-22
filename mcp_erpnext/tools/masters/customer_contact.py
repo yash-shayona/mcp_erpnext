@@ -19,6 +19,12 @@ from ...contracts.masters.contact import (
 	CustomerContactConfirmResult,
 	CustomerContactPrepareInput,
 	CustomerContactPrepareResult,
+	ConfirmCustomerPrimaryContactOutput,
+	CustomerPrimaryContactConfirmInput,
+	CustomerPrimaryContactConfirmResult,
+	CustomerPrimaryContactPrepareInput,
+	CustomerPrimaryContactPrepareResult,
+	PrepareCustomerPrimaryContactOutput,
 	PrepareCustomerContactOutput,
 )
 from ...contracts.registry import tool_meta
@@ -28,11 +34,17 @@ from ...services.masters.customer_contact import (
 	prepare_customer_contact as _prepare_customer_contact,
 	search_contacts as _search_contacts,
 )
+from ...services.masters.customer_primary_contact import (
+	confirm_customer_primary_contact as _confirm_customer_primary_contact,
+	prepare_customer_primary_contact as _prepare_customer_primary_contact,
+)
 
 
 _search_adapter = TypeAdapter(ContactSearchResultContract)
 _prepare_adapter = TypeAdapter(CustomerContactPrepareResult)
 _confirm_adapter = TypeAdapter(CustomerContactConfirmResult)
+_primary_prepare_adapter = TypeAdapter(CustomerPrimaryContactPrepareResult)
+_primary_confirm_adapter = TypeAdapter(CustomerPrimaryContactConfirmResult)
 
 
 def search_contacts(
@@ -92,9 +104,41 @@ def confirm_customer_contact(
 	return ConfirmCustomerContactOutput(root=_confirm_adapter.validate_python(result))
 
 
+def prepare_customer_primary_contact(
+	request: CustomerPrimaryContactPrepareInput, ctx: Context
+) -> PrepareCustomerPrimaryContactOutput:
+	"""Prepare promotion of an existing Customer-linked Contact."""
+	request = CustomerPrimaryContactPrepareInput.model_validate(request)
+	result = execute_tool_with_context(
+		ctx,
+		"prepare_customer_primary_contact",
+		lambda: _prepare_customer_primary_contact(request.model_dump(mode="json")),
+		rest_arguments=request.model_dump(mode="json"),
+	)
+	if result.get("status") == "ready":
+		result = {**result, "interaction": approval_directive().model_dump(mode="json")}
+	return PrepareCustomerPrimaryContactOutput(root=_primary_prepare_adapter.validate_python(result))
+
+
+def confirm_customer_primary_contact(
+	approval_token: NonEmptyString, confirm: bool, ctx: Context
+) -> ConfirmCustomerPrimaryContactOutput:
+	"""Execute one approved Customer primary Contact promotion."""
+	request = CustomerPrimaryContactConfirmInput(approval_token=approval_token, confirm=confirm)
+	result = execute_tool_with_context(
+		ctx,
+		"confirm_customer_primary_contact",
+		lambda: _confirm_customer_primary_contact(request.approval_token, request.confirm),
+		rest_arguments=request.model_dump(mode="json"),
+	)
+	return ConfirmCustomerPrimaryContactOutput(root=_primary_confirm_adapter.validate_python(result))
+
+
 def register_customer_contact_tools(mcp: Any) -> None:
 	"""Register the Sales-only Customer-linked Contact capability."""
 
 	mcp.tool(meta=tool_meta("search_contacts"), structured_output=True)(search_contacts)
 	mcp.tool(meta=tool_meta("prepare_customer_contact"), structured_output=True)(prepare_customer_contact)
 	mcp.tool(meta=tool_meta("confirm_customer_contact"), structured_output=True)(confirm_customer_contact)
+	mcp.tool(meta=tool_meta("prepare_customer_primary_contact"), structured_output=True)(prepare_customer_primary_contact)
+	mcp.tool(meta=tool_meta("confirm_customer_primary_contact"), structured_output=True)(confirm_customer_primary_contact)
