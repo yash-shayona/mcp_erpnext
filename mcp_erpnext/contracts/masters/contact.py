@@ -244,3 +244,158 @@ class ConfirmCustomerContactOutput(RootModel[CustomerContactConfirmResult]):
 	"""Root-shaped typed output for Customer Contact confirmation."""
 
 	model_config = ConfigDict(json_schema_extra={"type": "object"})
+
+
+class ContactDetailsUpdate(PublicContractModel):
+	"""Allowed mutable parent Contact detail fields."""
+
+	action: Literal["set_details"]
+	first_name: NonEmptyString | None = None
+	middle_name: NonEmptyString | None = None
+	last_name: NonEmptyString | None = None
+	company_name: NonEmptyString | None = None
+	designation: NonEmptyString | None = None
+	department: NonEmptyString | None = None
+
+
+class AddEmailUpdate(PublicContractModel):
+	action: Literal["add_email"]
+	email: NonEmptyString
+	make_primary: bool = False
+
+
+class ReplacePrimaryEmailUpdate(PublicContractModel):
+	action: Literal["replace_primary_email"]
+	current_email: NonEmptyString
+	email: NonEmptyString
+
+
+class SetPrimaryEmailUpdate(PublicContractModel):
+	action: Literal["set_primary_email"]
+	email: NonEmptyString
+
+
+class AddPhoneUpdate(PublicContractModel):
+	action: Literal["add_phone"]
+	phone: NonEmptyString
+	kind: Literal["phone", "mobile"]
+	make_primary: bool = False
+
+
+class ReplacePrimaryPhoneUpdate(PublicContractModel):
+	action: Literal["replace_primary_phone"]
+	current_phone: NonEmptyString
+	phone: NonEmptyString
+
+
+class ReplacePrimaryMobileUpdate(PublicContractModel):
+	action: Literal["replace_primary_mobile"]
+	current_mobile: NonEmptyString
+	phone: NonEmptyString
+
+
+class SetPrimaryPhoneUpdate(PublicContractModel):
+	action: Literal["set_primary_phone"]
+	phone: NonEmptyString
+
+
+class SetPrimaryMobileUpdate(PublicContractModel):
+	action: Literal["set_primary_mobile"]
+	phone: NonEmptyString
+
+
+ContactUpdateOperation = Annotated[
+	ContactDetailsUpdate
+	| AddEmailUpdate
+	| ReplacePrimaryEmailUpdate
+	| SetPrimaryEmailUpdate
+	| AddPhoneUpdate
+	| ReplacePrimaryPhoneUpdate
+	| ReplacePrimaryMobileUpdate
+	| SetPrimaryPhoneUpdate
+	| SetPrimaryMobileUpdate,
+	Field(discriminator="action"),
+]
+
+
+class ContactUpdatePrepareInput(PublicContractModel):
+	"""One bounded update for an existing Contact linked to one Customer."""
+
+	customer: CustomerReference
+	contact: ContactReference
+	operation: ContactUpdateOperation
+
+
+class ContactUpdatePreview(PublicContractModel):
+	"""Minimum information needed to review a Contact update."""
+
+	action: Literal[
+		"set_details",
+		"add_email",
+		"replace_primary_email",
+		"set_primary_email",
+		"add_phone",
+		"replace_primary_phone",
+		"replace_primary_mobile",
+		"set_primary_phone",
+		"set_primary_mobile",
+	]
+	customer: CustomerReference
+	contact: ContactReference
+	full_name_before: NonEmptyString
+	full_name_after: NonEmptyString
+	changed_fields: dict[str, str | None] = {}
+	selected_current_value: NonEmptyString | None = None
+	proposed_value: NonEmptyString | None = None
+	selected_row_is_primary: bool | None = None
+	resulting_primary_email: NonEmptyString | None = None
+	resulting_primary_phone: NonEmptyString | None = None
+	resulting_primary_mobile: NonEmptyString | None = None
+	customer_projection_refresh_required: bool
+	crm_snapshot_refresh_may_occur: bool = True
+	other_party_link_count: Literal[0] = 0
+	idempotent: bool = False
+
+
+class ContactUpdateReady(PublicContractModel):
+	status: Literal["ready"]
+	approval_token: Annotated[
+		NonEmptyString,
+		Field(description="Opaque pending-operation handle; it is not proof of approval."),
+	]
+	expires_in_seconds: Annotated[int, Field(gt=0)]
+	preview: ContactUpdatePreview
+	interaction: InteractionDirective
+
+
+ContactUpdatePrepareResult = Annotated[
+	ContactUpdateReady | ToolError,
+	Field(discriminator="status"),
+]
+
+
+class PrepareContactUpdateOutput(RootModel[ContactUpdatePrepareResult]):
+	model_config = ConfigDict(json_schema_extra={"type": "object"})
+
+
+class ContactUpdateConfirmInput(PublicContractModel):
+	approval_token: NonEmptyString
+	confirm: bool
+
+
+class ContactUpdated(PublicContractModel):
+	status: Literal["updated"]
+	customer: CustomerReference
+	contact: ContactProjection
+	preview: ContactUpdatePreview
+	idempotent: bool = False
+
+
+ContactUpdateConfirmResult = Annotated[
+	ContactUpdated | ToolError,
+	Field(discriminator="status"),
+]
+
+
+class ConfirmContactUpdateOutput(RootModel[ContactUpdateConfirmResult]):
+	model_config = ConfigDict(json_schema_extra={"type": "object"})

@@ -36,6 +36,8 @@ class ToolRegistrationTests(unittest.TestCase):
 				"confirm_customer_contact",
 				"prepare_contact",
 				"confirm_contact",
+				"prepare_contact_update",
+				"confirm_contact_update",
 				"search_items",
 				"resolve_item",
 				"prepare_item",

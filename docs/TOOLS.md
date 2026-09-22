@@ -20,6 +20,8 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `confirm_customer_contact` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_contact` | Masters | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_contact` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
+| `prepare_contact_update` | Masters | Prepare | PREPARE | APPROVAL | Not a final write | Explicit typed contract |
+| `confirm_contact_update` | Masters | Confirm | CONFIRM_WRITE | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `search_items` | Masters | Search | READ | SELECTION | Not a final write | Explicit typed contract |
 | `resolve_item` | Masters | Resolve | RESOLVE | SELECTION | Not a final write | Explicit typed contract |
 | `prepare_item` | Masters | Prepare | PREPARE | INPUT, SELECTION, APPROVAL | Not a final write | Explicit typed contract |
@@ -152,6 +154,24 @@ Create the reviewed standalone native Contact.
 
 - Input: `ContactConfirmInput` — Required: `approval_token`, `confirm`
 - Output: `ConfirmContactOutput`; published through MCP `outputSchema`.
+- Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
+- Interaction: none declared.
+
+### `prepare_contact_update`
+
+Prepare one Customer-scoped native Contact detail or communication update without writing.
+
+- Input: `ContactUpdatePrepareInput` — Required: `request`
+- Output: `PrepareContactUpdateOutput`; published through MCP `outputSchema`.
+- Side effect: `PREPARE`; approval does not perform the final write.
+- Interaction: `APPROVAL`; emitted only for the documented result states.
+
+### `confirm_contact_update`
+
+Apply one approved Customer-scoped native Contact update.
+
+- Input: `ContactUpdateConfirmInput` — Required: `approval_token`, `confirm`
+- Output: `ConfirmContactUpdateOutput`; published through MCP `outputSchema`.
 - Side effect: `CONFIRM_WRITE`; approval requires explicit approval through `trusted_pending_operation` before the final write; the server-selected approval policy enforces the trust requirement.
 - Interaction: none declared.
 

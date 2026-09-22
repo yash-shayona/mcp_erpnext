@@ -51,6 +51,9 @@ from .masters.customer import (
 from .masters.contact import (
 	ConfirmContactOutput,
 	ContactConfirmInput,
+	ConfirmContactUpdateOutput,
+	ContactUpdateConfirmInput,
+	ContactUpdatePrepareInput,
 	ConfirmCustomerContactOutput,
 	ContactPrepareInput,
 	ContactSearchInput,
@@ -58,6 +61,7 @@ from .masters.contact import (
 	CustomerContactConfirmInput,
 	CustomerContactPrepareInput,
 	PrepareContactOutput,
+	PrepareContactUpdateOutput,
 	PrepareCustomerContactOutput,
 )
 from .masters.item import (
@@ -399,6 +403,29 @@ TOOL_CONTRACTS = {
         True,
         ContactConfirmInput,
         ConfirmContactOutput,
+        approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
+    ),
+    "prepare_contact_update": ToolContract(
+        "prepare_contact_update",
+        "Masters",
+        ToolOperation.PREPARE,
+        SideEffectClass.PREPARE,
+        "Prepare one Customer-scoped native Contact detail or communication update without writing.",
+        False,
+        ContactUpdatePrepareInput,
+        PrepareContactUpdateOutput,
+        interaction_kinds=(InteractionKind.APPROVAL,),
+        approval_confirm_tool="confirm_contact_update",
+    ),
+    "confirm_contact_update": ToolContract(
+        "confirm_contact_update",
+        "Masters",
+        ToolOperation.CONFIRM,
+        SideEffectClass.CONFIRM_WRITE,
+        "Apply one approved Customer-scoped native Contact update.",
+        True,
+        ContactUpdateConfirmInput,
+        ConfirmContactUpdateOutput,
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "search_items": ToolContract(
