@@ -30,8 +30,12 @@ Do not dump unrelated fields or internal tool metadata. For a Sales Order
 status, date, or total request, return only that value (and currency for a
 total). For a request for Sales Order IDs without requested columns, return
 only IDs. For counts, totals, and averages, return the computed result without
-listing source records. Ask only when a missing distinction materially changes
-the answer.
+listing source records. For `prepare_quotation`, only the Customer and item
+rows are required from the user. If `valid_till` is not supplied, omit it from
+the tool call so the server applies its configured validity policy from the
+transaction date; show the resulting date in the preview, but do not ask the
+user to select a date or a default period. Ask only when a missing distinction
+materially changes the answer.
 """
 
 try:

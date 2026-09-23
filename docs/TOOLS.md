@@ -286,9 +286,9 @@ Create a prepared Sales Order. Execute only its valid prepared operation after t
 
 ### `prepare_quotation`
 
-Prepare an ERPNext-calculated Quotation preview without writing. Use after required references and inputs are established. Review the returned preview/prepared state, then use the paired confirm tool only through the existing approval flow; do not repeatedly prepare the same payload.
+Prepare an ERPNext-calculated Quotation preview without writing. Only the Customer and item rows are required: when the user does not provide `valid_till`, omit it and let the server apply its configured validity policy from the transaction date; do not ask the user to choose a default period. Use after required references and inputs are established. Review the returned preview/prepared state, then use the paired confirm tool only through the existing approval flow; do not repeatedly prepare the same payload.
 
-- Input: `QuotationPrepareInput` — Required: `customer`, `items`; optional: `valid_till` (when omitted, the server applies `MCP_QUOTATION_VALIDITY_DAYS` from the transaction date)
+- Input: `QuotationPrepareInput` — Required: `customer`, `items`
 - Output: `PrepareQuotationOutput`; published through MCP `outputSchema`.
 - Side effect: `PREPARE`; approval does not perform the final write.
 - MCP annotations: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false`.

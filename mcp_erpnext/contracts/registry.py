@@ -759,7 +759,7 @@ TOOL_CONTRACTS = {
         "Selling",
         ToolOperation.PREPARE,
         SideEffectClass.PREPARE,
-        "Prepare an ERPNext-calculated Quotation preview without writing.",
+        "Prepare an ERPNext-calculated Quotation preview without writing. Only the Customer and item rows are required: when the user does not provide `valid_till`, omit it and let the server apply its configured validity policy from the transaction date; do not ask the user to choose a default period.",
         False,
         QuotationPrepareInput,
         PrepareQuotationOutput,

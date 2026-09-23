@@ -43,6 +43,8 @@ class ToolRoutingTests(unittest.TestCase):
             "`not_found`, ask for clarification",
             "prepare -> preview/approval -> confirm",
             "Respect the selected profile and domain boundary",
+            "only the Customer and item\nrows are required",
+            "do not ask the\nuser to select a date or a default period",
             "RESPONSE PRECISION POLICY",
         ):
             with self.subTest(phrase=phrase):
@@ -109,6 +111,10 @@ class ToolRoutingTests(unittest.TestCase):
         self.assertIn("lifecycle action", TOOL_CONTRACTS["prepare_document_submit"].routing_description())
         self.assertIn("source document", TOOL_CONTRACTS["prepare_quotation_to_sales_order"].routing_description())
         self.assertIn("not a generic create tool", TOOL_CONTRACTS["confirm_quotation_to_sales_order"].routing_description())
+        quotation = TOOL_CONTRACTS["prepare_quotation"].routing_description()
+        self.assertIn("Only the Customer and item rows are required", quotation)
+        self.assertIn("when the user does not provide `valid_till`, omit it", quotation)
+        self.assertIn("do not ask the user to choose a default period", quotation)
         self.assertIn("PDF artifact", TOOL_CONTRACTS["render_document_pdf"].routing_description())
         self.assertIn("does not send email", TOOL_CONTRACTS["prepare_document_email"].routing_description())
         self.assertIn("Queue external email", TOOL_CONTRACTS["confirm_document_email"].routing_description())
