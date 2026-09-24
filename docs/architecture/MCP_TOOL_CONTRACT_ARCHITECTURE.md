@@ -6,7 +6,7 @@ Project-level architecture standard for `mcp_erpnext`.
 
 This document is intentionally **not Quotation-specific**. It defines how every current and future public MCP tool should expose its contract to LibreChat, OpenAI-compatible clients, MCP Inspector, coordinator agents, and any future MCP client.
 
-Quotation is the first migration target because it exposed the current schema weakness in a real LibreChat conversation.
+Quotation is the motivating migration example; the standard applies to the current multi-profile catalog and future tools.
 
 ---
 
@@ -219,8 +219,8 @@ prepare_customer
 prepare_item
 prepare_quotation
 prepare_sales_order
-future: prepare_sales_invoice
-future: prepare_payment_entry
+prepare_sales_invoice
+prepare_sales_invoice_payment
 ```
 
 Prepare tools receive already-resolved references where required.
@@ -249,8 +249,8 @@ confirm_customer
 confirm_item
 confirm_quotation
 confirm_sales_order
-future: confirm_sales_invoice
-future: confirm_payment_entry
+confirm_sales_invoice
+confirm_sales_invoice_payment
 ```
 
 Confirm is the write boundary.

@@ -60,9 +60,10 @@ MIME type, and digest. A mismatch returns
 `PREPARED_STATE_CHANGED` and sends nothing.
 
 `confirm_document_email` accepts only the approval token. It cannot change the
-recipient, content, document, render inputs, or attachment. In the default
-`trusted_human` mode, a server-verified trusted approval is required; a model
-argument such as `confirm=true` is not used.
+recipient, content, document, render inputs, or attachment. In `trusted_human` mode, a server-verified trusted approval is required. The
+default `agent_delegated` mode instead relies on the authenticated client/Agent
+to obtain explicit user approval before confirmation. In neither mode is a
+model argument such as `confirm=true` approval.
 
 ## Frappe queue and attachment
 

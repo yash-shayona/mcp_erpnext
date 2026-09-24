@@ -1,6 +1,6 @@
 # Postman MCP HTTP testing
 
-This guide tests the current mcp_erpnext Streamable HTTP server directly.
+This guide tests the current `trusted_header` mcp_erpnext Streamable HTTP server directly. OAuth Streamable HTTP is implemented but uses an MCP OAuth client flow, not the manual shared-secret/header sequence below.
 Postman is a low-level MCP client: it sends JSON-RPC messages and manually
 follows the workflow. It does not interpret natural language, choose tools,
 display candidate-selection UI, or act as an MCP orchestrator.
@@ -102,9 +102,10 @@ example MCP_HTTP_HOST=0.0.0.0 and an explicit
 MCP_HTTP_ALLOWED_HOSTS=host.docker.internal:8765,... . This is a local
 development bridge, not a public deployment.
 
-MCP_PROFILE is sales by default and may be purchase. A separate process and
-port are needed if both inventories must be available. The REST backend is not
-implemented in this server; use MCP_BACKEND=direct.
+MCP_PROFILE is sales by default and may be purchase or accounts. A separate
+process and port are needed for every inventory that must be available. The
+REST backend is implemented for stdio only and is rejected for Streamable HTTP;
+use MCP_BACKEND=direct here.
 
 For HTTP, MCP_FRAPPE_USER is not a fallback. Every tool call resolves its
 execution user from the authenticated request's X-MCP-User-Email header.
@@ -222,10 +223,9 @@ inputSchema, outputSchema, and annotations or metadata when provided.
 tools/list is the machine-readable contract. The generated [TOOLS.md](../TOOLS.md)
 is a useful static catalog, but it is not a replacement for the live response.
 
-The sales profile currently registers Customer, sales Item, Quotation, Sales
-Order, lifecycle, and existing-document read/search tools. The purchase profile
-registers Supplier, purchase Item, Purchase Order, lifecycle, and existing
-Purchase Order read/search tools. The profile is process configuration, not a
+The Sales, Purchase, and Accounts inventories are source-generated in
+`docs/TOOLS.md`; inspect `tools/list` on the running process rather than
+assuming a manual subset. This guide's examples use Sales. The profile is process configuration, not a
 tool argument.
 
 ## 4. Call a safe read/resolution tool

@@ -26,8 +26,7 @@ Agent ya client user ki baat ko tool call mein badalta hai.
 
 ### mcp_identity
 
-mcp_identity ko security gate samjho. HTTP request mein do important cheezein
-aati hain:
+mcp_identity ko security gate samjho. `trusted_header` HTTP request mein do important cheezein aati hain:
 
 ~~~http
 Authorization: Bearer <server-configured-secret>
@@ -128,8 +127,9 @@ baat kar sakta hai. Current local development flow mein MCP_FRAPPE_USER
 configured service user ke roop mein use ho sakta hai. Postman stdio ko directly
 test nahi karta.
 
-HTTP aur stdio ko mix mat samjho: HTTP caller identity request header se aati
-hai; HTTP kabhi MCP_FRAPPE_USER ko fallback ke roop mein use nahi karta.
+HTTP aur stdio ko mix mat samjho: trusted-header HTTP caller identity request
+header se aati hai; OAuth HTTP mein native token ka Frappe user identity hota
+hai. Dono HTTP modes mein `MCP_FRAPPE_USER` fallback nahi hai.
 
 ## Server kaise start hota hai
 
@@ -150,16 +150,17 @@ cd /home/frappe/frappe-bench/sites
 ../env/bin/python -m mcp_erpnext.mcp_server
 ~~~
 
-MCP_FRAPPE_SITE selected Frappe site hai. MCP_BACKEND=direct current
-implemented backend hai. REST settings source mein future boundary ke liye
-hain; current server unko use nahi karta.
+MCP_FRAPPE_SITE selected Frappe site hai. `MCP_BACKEND=direct` local site ke
+liye current default hai. `MCP_BACKEND=rest` bhi implemented hai, lekin sirf
+stdio ke saath fixed remote bridge aur configured API-key owner ke naam par
+chalta hai; Streamable HTTP request identity REST ko forward nahi hoti.
 
 HTTP endpoint ko public internet par expose mat karo. Plain HTTP local bridge
 development ke liye hai; production deployment ko TLS, firewall, secret
 management, process model aur shared approval storage separately design karna
 chahiye.
 
-## Profiles: Sales aur Purchase
+## Profiles: Sales, Purchase aur Accounts
 
 Ek hi app MCP_PROFILE ke through ek process ka public inventory select karti hai:
 
@@ -167,8 +168,9 @@ Ek hi app MCP_PROFILE ke through ek process ka public inventory select karti hai
 | --- | --- |
 | sales (default) | Customer, sales-enabled Item, Quotation, Sales Order, lifecycle aur existing Sales Order/Quotation reads |
 | purchase | Supplier, purchase-enabled Item, Purchase Order, lifecycle aur existing Purchase Order reads |
+| accounts | Customer payment, receipt, advance, reconciliation, Payment Entry reads/query/aggregate aur lifecycle |
 
-Profile tool argument nahi hai. Yeh process startup configuration hai. Dono
+Profile tool argument nahi hai. Yeh process startup configuration hai. Multiple
 profiles ek saath chahiye to separate processes aur ports use karo. Profile
 boundary ke bahar ka tool server expose nahi karta.
 
@@ -339,7 +341,8 @@ launch kar sakta hai. Postman MCP orchestrator nahi hai.
 
 Yeh explanation in actual implementation areas par based hai:
 
-- mcp_identity/identity.py — Bearer validation, generic email header aur enabled Frappe User lookup.
+- mcp_identity/identity.py — auth-mode parsing, trusted-header validation, stdio user validation aur OAuth resource-server settings.
+- mcp_identity/oauth_resource_server.py — native opaque-token verification aur OAuth token-subject identity.
 - mcp_identity/README.md — identity app responsibility boundary.
 - mcp_erpnext/mcp_server.py — FastMCP construction, profile registration, stdio/HTTP startup.
 - mcp_erpnext/settings.py — environment defaults and validation.

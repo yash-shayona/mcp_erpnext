@@ -1,231 +1,53 @@
 # ERPNext MCP Architecture
 
-This is the primary current architecture reference for `mcp_erpnext`.
+This is the current architecture reference for `mcp_erpnext`. Source code, generated tool registration, and runtime configuration are authoritative when they differ from prose.
 
-`mcp_erpnext` is **one ERPNext MCP server** with multiple controlled domain
-capabilities. It does not provide separate Customer, Item, Quotation, or Sales
-Order MCP servers, and it does not expose unrestricted ERPNext administration,
-SQL, or arbitrary DocType CRUD.
+## Boundaries
 
-```text
-ERPNext MCP Server
-|
-|-- Master Capabilities
-|   |-- Customer
-|   `-- Item
-|
-`-- Selling Capabilities
-    |-- Quotation
-    `-- Sales Order
-```
+`mcp_erpnext` owns the FastMCP server, selected transport/backend, profile-specific registration, tool contracts, services, Frappe runtime scoping, and approval guard. It depends on `erpnext` and `mcp_identity`.
 
-## Request path
+`mcp_identity` owns HTTP auth-mode parsing, trusted-header middleware/user resolution, configured stdio-user validation, Frappe OAuth resource binding, and opaque-token verification. It does not own MCP business tools, profile selection, Frappe lifecycle, or ERPNext permission decisions.
 
 ```text
-MCP Client / Agent
-        |
-        v
-MCP transport (STDIO by default, Streamable HTTP when explicitly configured)
-        |
-        v
-Domain MCP tools
-        |
-        v
-ERPNext services
-        |
-        v
-Frappe runtime and permissions
-        |
-        v
-ERPNext
+Client -> transport -> authentication / execution identity -> selected profile tools
+       -> mcp_erpnext service + scoped Frappe context -> native Frappe / ERPNext
 ```
 
-The FastMCP server in `mcp_server.py` defaults to STDIO and can serve the same
-registry over Streamable HTTP. It calls the central registration function in
-`tools/__init__.py`; only tools registered there are part of the public MCP
-surface, so HTTP does not add duplicate tool implementations.
+Frappe roles, User Permissions, document permissions, controllers, validation, and accounting behavior remain authoritative. Callers cannot select a Frappe user, role, `run_as`, site, SQL, DocType, or method through a tool argument.
 
-## Source-verified tool catalog
+## Runtime matrix
 
-The current registration order in `tools/__init__.py` and the static
-registration test both define this catalog:
+| Backend / transport | Identity and behavior |
+| --- | --- |
+| `direct` + `stdio` | `MCP_FRAPPE_SITE` and `MCP_FRAPPE_USER` are required. `mcp_identity` validates the enabled non-Guest configured user after site initialization; `mcp_erpnext` applies it to Frappe. |
+| `direct` + `streamable-http` + `trusted_header` | Default when `MCP_HTTP_AUTH_MODE` is absent. A 32+ character server-only bearer secret authenticates the request; then `X-MCP-User-Email` resolves to the enabled non-Guest Frappe execution user. No stdio-user fallback exists. |
+| `direct` + `streamable-http` + `oauth` | Implemented resource-server mode. FastMCP verifies native opaque Frappe bearer tokens through `FrappeOAuthTokenVerifier`; the token subject is the only execution user. Trusted-header values and `MCP_FRAPPE_USER` have no authority. |
+| `rest` + `stdio` | Implemented fixed typed bridge to `mcp_erpnext.remote_api.execute_mcp_operation` on a compatible remote site. The remote API-key owner is the execution principal. Streamable HTTP is rejected for this backend. |
 
-| Domain | Capability | Tools |
-| --- | --- | --- |
-| Masters | Customer | `search_customers`, `resolve_customer`, `prepare_customer`, `confirm_customer` |
-| Masters | Item | `search_items`, `resolve_item`, `prepare_item`, `confirm_item` |
-| Selling | Sales Order | `prepare_sales_order`, `confirm_sales_order` |
-| Selling | Quotation | `prepare_quotation`, `confirm_quotation` |
+HTTP tool execution destroys Frappe local state before and after each call. This prevents request identity/session reuse across Streamable HTTP calls.
 
-There are no generic search, SQL, arbitrary document-read, or arbitrary
-document-write MCP tools in this catalog.
+## OAuth resource-server requirements
 
-## Tool categories
+OAuth needs `mcp_identity` installed and migrated on the target Frappe site. Its patch adds the optional `custom_mcp_resource` field to native `OAuth Client`, `OAuth Authorization Code`, and `OAuth Bearer Token`; no parallel token store is created.
 
-### Search and resolution
+The selected pre-registered OAuth Client must permit authorization code and `code`, have a canonical HTTPS public MCP resource (including `/mcp`), and be selected by `MCP_OAUTH_FRAPPE_CLIENT_ID`. OAuth startup also requires canonical `MCP_OAUTH_ISSUER_URL`, `MCP_OAUTH_RESOURCE_SERVER_URL`, at least one `MCP_OAUTH_REQUIRED_SCOPES` value, and `MCP_FRAPPE_SITE`. Resource/client/token equality, active non-expired token status, required scopes, and an enabled non-Guest token user are checked before access is granted. See [`mcp_identity`'s README](../../mcp_identity/README.md) for the authorization-server binding flow.
 
-`search_customers`, `resolve_customer`, `search_items`, and `resolve_item`
-locate permitted active records. The shared resolution code uses
-permission-aware `frappe.get_list` queries and returns structured result,
-candidate, selection, or creation-needed states. Search and resolution tools
-do not create persistent records.
+## Profiles and tools
 
-Customer and Item master capabilities are reusable. A Selling workflow may
-use a resolved Customer or Item reference, but the master capability is not
-owned by Quotation or Sales Order.
+`MCP_PROFILE` accepts `sales` (default), `purchase`, or `accounts` and selects exactly one inventory for one process. Profiles limit MCP exposure but do not grant document permissions.
 
-### Prepare
+- Sales: Customer, Item, Contact, selling documents and conversions, reads/query/aggregate, lifecycle, PDF, and email where registered.
+- Purchase: Supplier/purchase Item and Purchase Order capabilities, lifecycle/read, PDF, and email.
+- Accounts: Payment Entry/payment/receipt/advance/reconciliation capabilities, Payment Entry reads/query/aggregate, and lifecycle.
 
-`prepare_customer`, `prepare_item`, `prepare_sales_order`, and
-`prepare_quotation` form the non-persistent half of the write workflow. They
-validate their narrow inputs, check applicable permission or record access,
-and prepare a structured preview. Transaction services also invoke the
-ERPNext defaulting, calculation, and validation behavior implemented in their
-respective services before issuing an approval token.
+The exact source-derived inventory is [TOOLS.md](TOOLS.md); MCP `tools/list` is the authority for a live connection. Do not duplicate a manually maintained list elsewhere.
 
-Preparing does not insert the final Customer, Item, Draft Sales Order, or Draft
-Quotation.
+## Write and approval boundary
 
-For Customer and Item, `services/common/creation_contract.py` resolves the
-master creation contract from an unsaved `frappe.new_doc()` and the installed
-runtime metadata. Its precedence is explicit input, intentional MCP policy,
-then ERPNext/Frappe defaults. Only an exposed field that runtime metadata still
-marks mandatory and leaves unresolved is returned in `needs_input`. The
-existing `missing` path list is retained alongside structured field metadata;
-this keeps site-specific metadata changes traceable without hard-coding a
-second mandatory-field list in a service.
+Persistent operations use prepare -> preview -> approval -> confirm. `PREPARE` does not make the final write. A `CONFIRM_WRITE` claims a server-held operation atomically and verifies its user, site, action, payload digest, expiry, and single-use state before normal Frappe persistence.
 
-`services/common/field_value_resolver.py` validates every populated exposed
-master field after the creation contract. It dispatches by the runtime
-DocField's type: Link targets and Select options come from metadata, while
-Check and supported scalar values are normalized deterministically. Link
-candidates use normal Frappe permissions and unresolved multiple candidates
-return `needs_selection`; no generic arbitrary-DocType resolver is exposed.
+`MCP_APPROVAL_MODE` is server-only. `agent_delegated` (default) requires the authenticated MCP client/Agent to interpret explicit user approval before confirm; `trusted_human` also requires an independently verified approval recorded through the internal seam. A public `confirm=true` flag never bypasses either guard. Frappe's configured shared Redis cache stores pending operations, so compatible workers may share still-valid state; cache loss or expiry requires a fresh prepare.
 
-### Confirm
+## Deployment boundaries
 
-`confirm_customer`, `confirm_item`, `confirm_sales_order`, and
-`confirm_quotation` require the approval token returned by their corresponding
-prepare operation and an explicit `confirm=true`. They persist only the
-trusted, server-side prepared state through Frappe document APIs with normal
-permission enforcement. The current write capabilities are therefore:
-
-- Customer creation
-- Item creation
-- Draft Sales Order creation
-- Draft Quotation creation
-
-## Conversational interaction contract
-
-The MCP server returns client-neutral semantic interaction guidance when an
-existing typed workflow needs a user continuation. It does not interpret chat
-language or own conversation state. `SELECTION` covers ambiguous candidates,
-`INPUT` covers structured missing business fields, and `APPROVAL` covers a
-prepared preview that must be reviewed. The Agent interprets the user's message
-or UI action and calls the existing structured selection, prepare, or confirm
-tool as appropriate.
-
-An `APPROVE` action is only semantic intent. The existing approval token and
-trusted server-side approval guard remain mandatory before a `CONFIRM_WRITE`
-tool can persist data. See
-[MCP Conversational Interaction Contract](architecture/MCP_CONVERSATIONAL_INTERACTION_CONTRACT.md).
-
-## Shared approval boundary
-
-Every persistent creation path follows this boundary:
-
-```text
-resolve / validate
-        |
-        v
-prepare
-        |
-        v
-preview
-        |
-        v
-explicit approval
-        |
-        v
-confirm
-        |
-        v
-ERPNext write
-```
-
-`approvals.py` keeps the pending approval server-side in the local MCP
-process. A token expires after 15 minutes. Lookup verifies the intended action,
-site, and authenticated Frappe user, and checks a keyed digest of the prepared
-payload before a confirm service can use it. Confirmation can return the
-already-created document for the same still-available approval rather than
-create a second document.
-
-This is a controlled local-process safety boundary, not a remote or
-multi-worker approval system. A future remote or multi-worker design must use
-appropriate persistent approval storage and per-user authentication.
-
-## Code organization
-
-```text
-mcp_erpnext/
-|-- mcp_server.py
-|   MCP server entrypoint and stdio transport startup
-|
-|-- tools/
-|   MCP-facing tool contracts and wrappers
-|   |-- masters/
-|   |   |-- customer.py
-|   |   `-- item.py
-|   `-- selling/
-|       |-- quotation.py
-|       `-- sales_order.py
-|
-|-- services/
-|   ERPNext capability implementation
-|   |-- common/
-|   |   Reusable permission-aware entity resolution
-|   |-- masters/
-|   |   Reusable Customer and Item capabilities
-|   `-- selling/
-|       Quotation and Sales Order capabilities
-|
-|-- approvals.py
-|   Controlled persistent-write approval state
-|
-`-- runtime.py
-    Frappe site and resolved-user runtime context
-```
-
-The tool wrappers call `runtime.ensure_context()` before invoking services.
-`runtime.py` supports only `MCP_BACKEND=direct` and initializes the configured
-Frappe site. Stdio uses `MCP_FRAPPE_USER` for local development/testing. HTTP
-uses `mcp_identity` to resolve the authenticated request's generic email to an
-enabled Frappe User, with no `MCP_FRAPPE_USER` fallback. A tool caller cannot
-supply another user. The resolved identity remains subject to normal Frappe
-permission checks for reads and writes.
-
-## Security and runtime limits
-
-- `MCP_TRANSPORT=stdio` is the default. `MCP_TRANSPORT=streamable-http` is a
-  controlled Docker-to-WSL bridge, not a public endpoint.
-- HTTP requires an explicit non-wildcard allowed Host list, a minimum
-  32-character shared Bearer secret, and `X-MCP-User-Email`. The SDK's
-  transport security validates the Host header before MCP processing.
-- HTTP reads the generic email afresh from the authenticated request context.
-  It never falls back to `MCP_FRAPPE_USER` or a tool argument.
-- Each HTTP tool call initializes and destroys a separate Frappe context.
-  Approval state is shared through the Frappe-configured Redis cache, so a
-  valid confirmation may be handled by another worker using the same site/cache.
-- `MCP_BACKEND=direct` is required; the REST backend is not implemented.
-- `MCP_FRAPPE_SITE` configures the Frappe context. The resolved Frappe User's
-  roles and User Permissions remain authoritative.
-- Persistent writes are protected by the prepare/preview/explicit-confirm
-  boundary.
-- Services use Frappe ORM and document APIs with normal permission checks;
-  they do not provide an arbitrary SQL MCP tool.
-- Approval state is short-lived Redis coordination state, not durable audit
-  history; a lost or expired key requires a fresh prepare.
-
-The original Sales Order-only V1 scope is historical documentation. See
-[`MCP_SALES_ORDER_V1_FROZEN.md`](MCP_SALES_ORDER_V1_FROZEN.md) for that frozen
-baseline, not for the current complete tool catalog.
+Code availability in the Bench does not prove installation on the target site. Both apps must be installed; OAuth resource fields additionally require the `mcp_identity` patch to be migrated. Streamable HTTP `/mcp` is protected stateful MCP JSON-RPC, not a REST health endpoint: authenticate `initialize`, send `notifications/initialized`, retain negotiated session/protocol headers, inspect `tools/list`, then use a safe read. Runtime/site/client deployment verification remains distinct from source and test evidence.

@@ -82,15 +82,16 @@ input to prepare again, and obtains a new preview and approval requirement.
 
 ## Current adoption and future-agent rule
 
-`resolve_customer` and `resolve_item` (and their candidate searches) emit
-`SELECTION` only when their result is ambiguous. `prepare_quotation` emits
-`INPUT` for its existing `needs_input` state and `APPROVAL` for its `ready`
-preview. Its terminal permission/error states do not request interaction.
-
-Sales Order remains a legacy public schema: its prepare output has analogous
-states but no typed output schema, so this task intentionally does not add an
-undocumented interaction field. A focused Sales Order typed-contract migration
-must adopt this directive before it is exposed there.
+Contracts that can require interaction declare their allowed semantic kinds in
+`contracts/registry.py`; the generated [tool catalog](../TOOLS.md) publishes
+that metadata for every selected profile. Current resolvers use `SELECTION`
+when their result is ambiguous. Current prepare tools use `INPUT`, `SELECTION`,
+or `APPROVAL` only for result states their typed contract declares; terminal
+permission and error states do not request interaction. For example,
+`prepare_sales_order` and `prepare_quotation` declare `INPUT` and `APPROVAL`,
+while source-document conversion and payment preparation flows declare their
+applicable `APPROVAL` continuation. Do not infer interaction requirements from
+the tool name; inspect the contract or live `tools/list` output.
 
 Every future conversational MCP tool must decide whether a result requires
 interaction and, if so, declare the shared kind and allowed actions in the

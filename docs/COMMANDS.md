@@ -60,18 +60,19 @@ export MCP_HTTP_ALLOWED_HOSTS='127.0.0.1:8766,localhost:8766,host.docker.interna
 exec python -m mcp_erpnext.mcp_server
 ```
 
-The endpoints are:
+For an Accounts HTTP process, reuse either block with `MCP_PROFILE=accounts`,
+a distinct port (for example `8767`), and matching explicit allowed hosts.
 
-```text
-Sales:    http://127.0.0.1:8765/mcp
-Purchase: http://127.0.0.1:8766/mcp
-```
+The endpoints are profile-specific, for example Sales
+`http://127.0.0.1:8765/mcp`, Purchase `http://127.0.0.1:8766/mcp`, and Accounts
+`http://127.0.0.1:8767/mcp`. Configure clients to connect to those already
+running HTTP endpoints; do not make them launch a second stdio process.
 
-After both processes are running, configure VS Code to connect to these HTTP
-endpoints. VS Code must not start these servers as `stdio` processes.
-
-Use the same shared secret for both entries and send the ERPNext identity in
-the `X-MCP-User-Email` header.
+These commands are for `trusted_header`: use the same 32+-character secret for
+any intended shared entries and send `X-MCP-User-Email` per request. OAuth is a
+separate implemented HTTP mode: omit those trusted-header values and configure
+the migrated resource-bound Frappe OAuth Client plus the OAuth variables in
+`mcp_identity`'s README.
 
 ## Stdio
 
