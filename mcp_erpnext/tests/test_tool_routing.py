@@ -6,7 +6,8 @@ from dataclasses import replace
 
 from mcp_erpnext.contracts.audit import audit_tool_contracts
 from mcp_erpnext.contracts.registry import TOOL_CONTRACTS, ToolRoutingRole
-from mcp_erpnext.mcp_server import MCP_ROUTING_INSTRUCTIONS, create_mcp
+from mcp_erpnext.instructions import get_mcp_instructions
+from mcp_erpnext.mcp_server import create_mcp
 from mcp_erpnext.settings import MCPProfile, MCPSettings
 from mcp_erpnext.tools.registration import tool_registration_kwargs
 
@@ -25,30 +26,22 @@ class ToolRoutingTests(unittest.TestCase):
             for profile in MCPProfile
         }
 
-    def test_initialized_servers_publish_the_cross_profile_routing_policy(self):
+    def test_initialized_servers_compose_common_and_sales_profile_guidance(self):
         for profile in MCPProfile:
             with self.subTest(profile=profile):
                 self.assertEqual(
                     create_mcp(_settings(profile)).instructions,
-                    MCP_ROUTING_INSTRUCTIONS,
+                    get_mcp_instructions(profile),
                 )
-        for phrase in (
-            "exact known reference",
-            "natural-language reference",
-            "explicit\nbrowsing/discovery",
-            "structured listing/filtering",
-            "aggregate questions",
-            "`resolved` is terminal",
-            "`ambiguous`, use returned candidates",
-            "`not_found`, ask for clarification",
-            "prepare -> preview/approval -> confirm",
-            "Respect the selected profile and domain boundary",
-            "only the Customer and item\nrows are required",
-            "do not ask the\nuser to select a date or a default period",
-            "RESPONSE PRECISION POLICY",
-        ):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, MCP_ROUTING_INSTRUCTIONS)
+                self.assertIn("exact known reference", get_mcp_instructions(profile))
+                self.assertIn('recipient_scope="self"', get_mcp_instructions(profile))
+        sales = get_mcp_instructions(MCPProfile.SALES)
+        self.assertIn("only the Customer and item rows are required", sales)
+        self.assertIn("Never guess a Terms", sales)
+        for profile in (MCPProfile.PURCHASE, MCPProfile.ACCOUNTS):
+            with self.subTest(profile=profile):
+                self.assertNotIn("only the Customer and item rows are required", get_mcp_instructions(profile))
+                self.assertNotIn("Never guess a Terms", get_mcp_instructions(profile))
 
     def test_every_registered_tool_uses_its_contract_governed_description(self):
         tools_by_profile = self._tools_by_profile()

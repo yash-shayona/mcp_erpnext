@@ -12,6 +12,7 @@ from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...observability import new_error_reference, public_error
 from ..masters.customer import resolve_customer
 from ..masters.item import resolve_sales_item
+from .terms import apply_selling_terms
 
 _ACTION = "create_sales_order"
 
@@ -114,14 +115,20 @@ def _prepare_items(items: Any) -> dict[str, Any]:
                     "item_name": resolution["candidate"].get("item_name"),
                 }
             )
-        resolved_items.append(
-            {
-                "item_code": resolution["candidate"]["value"],
-                "item_name": resolution["candidate"].get("item_name"),
-                "qty": quantity,
-                "match_type": resolution.get("match_type"),
-            }
-        )
+        prepared_item = {
+            "item_code": resolution["candidate"]["value"],
+            "item_name": resolution["candidate"].get("item_name"),
+            "qty": quantity,
+            "match_type": resolution.get("match_type"),
+        }
+        if "description" in raw_item and raw_item["description"] is not None:
+            if not isinstance(raw_item["description"], str):
+                return public_error(
+                    "INVALID_ORDER_DETAILS",
+                    message=f"Item row {index} description must be text.",
+                )
+            prepared_item["description"] = raw_item["description"]
+        resolved_items.append(prepared_item)
 
     if missing_quantities:
         return {
@@ -154,6 +161,7 @@ def _preview(doc: Any) -> dict[str, Any]:
             {
                 "item_code": row.item_code,
                 "item_name": row.item_name,
+                "description": row.description,
                 "qty": row.qty,
                 "uom": row.uom,
                 "rate": row.rate,
@@ -164,6 +172,9 @@ def _preview(doc: Any) -> dict[str, Any]:
             for row in doc.items
         ],
         "grand_total": doc.grand_total,
+        "tc_name": doc.get("tc_name"),
+        "terms": doc.get("terms"),
+        "custom_remarks": doc.get("custom_remarks"),
     }
 
 
@@ -173,6 +184,8 @@ def prepare_sales_order(
     company: str | None = None,
     delivery_date: str | None = None,
     selling_price_list: str | None = None,
+    tc_name: str | None = None,
+    custom_remarks: str | None = None,
 ) -> dict[str, Any]:
     """Resolve inputs and return a preview without writing a Sales Order."""
     approvals.prune_expired()
@@ -215,9 +228,24 @@ def prepare_sales_order(
     if selling_price_list:
         doc.selling_price_list = selling_price_list
     for item in item_result["items"]:
-        doc.append("items", {"item_code": item["item_code"], "qty": item["qty"]})
+        row = {"item_code": item["item_code"], "qty": item["qty"]}
+        if "description" in item:
+            row["description"] = item["description"]
+        doc.append("items", row)
+    if custom_remarks is not None:
+        if not frappe.get_meta("Sales Order").has_field("custom_remarks"):
+            return public_error(
+                "CUSTOM_REMARKS_UNAVAILABLE",
+                message="custom_remarks is not available on this Sales Order site.",
+            )
+        doc.custom_remarks = custom_remarks
 
     doc.set_missing_values()
+    for prepared_item, row in zip(item_result["items"], doc.items, strict=True):
+        if "description" in prepared_item:
+            row.description = prepared_item["description"]
+    if failure := apply_selling_terms(doc, tc_name, frappe_module=frappe):
+        return failure
     missing_defaults = [
         field
         for field in (

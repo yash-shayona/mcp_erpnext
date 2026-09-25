@@ -47,6 +47,8 @@ def prepare_sales_order(
 	company: NonEmptyString | None = None,
 	delivery_date: date | None = None,
 	selling_price_list: NonEmptyString | None = None,
+	tc_name: NonEmptyString | None = None,
+	custom_remarks: str | None = None,
 ) -> PrepareSalesOrderOutput:
 	"""Resolve inputs and return a Sales Order preview without writing anything."""
 	request = SalesOrderPrepareInput(
@@ -55,6 +57,8 @@ def prepare_sales_order(
 		company=company,
 		delivery_date=delivery_date,
 		selling_price_list=selling_price_list,
+		tc_name=tc_name,
+		custom_remarks=custom_remarks,
 	)
 	result = execute_tool_with_context(
 		ctx,
@@ -65,6 +69,8 @@ def prepare_sales_order(
 			request.company,
 			request.delivery_date.isoformat() if request.delivery_date else None,
 			request.selling_price_list,
+			request.tc_name,
+			request.custom_remarks,
 		),
 		rest_arguments=request.model_dump(mode="json"),
 	)

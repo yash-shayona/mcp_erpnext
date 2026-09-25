@@ -42,6 +42,7 @@ def register_document_email_tools(mcp: Any, profile: str) -> None:
 				request.print_format,
 				request.letterhead,
 				request.language,
+				request.recipient_scope,
 		),
 		rest_arguments=request.model_dump(mode="json"),
 		)

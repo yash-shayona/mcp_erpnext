@@ -200,6 +200,8 @@ def _prepare_sales_order(
         request.company,
         request.delivery_date.isoformat() if request.delivery_date else None,
         request.selling_price_list,
+        request.tc_name,
+        request.custom_remarks,
     )
 
 
@@ -244,6 +246,8 @@ def _prepare_sales_invoice(
         request.customer_address,
         request.shipping_address_name,
         request.contact_person,
+        request.tc_name,
+        request.custom_remarks,
     )
 
 
@@ -258,6 +262,7 @@ def _prepare_email(request: DocumentEmailPrepareInput, profile: str) -> dict[str
         request.print_format,
         request.letterhead,
         request.language,
+        request.recipient_scope,
     )
 
 

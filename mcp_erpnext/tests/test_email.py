@@ -114,12 +114,26 @@ class EmailServiceTests(unittest.TestCase):
 		commit.assert_called_once()
 
 	def test_confirm_requires_trusted_approval_in_default_policy(self):
-		store = ApprovalStore(backend=FakeSharedApprovalBackend())
+		store = ApprovalStore(ApprovalMode.TRUSTED_HUMAN, backend=FakeSharedApprovalBackend())
 		with patch.object(email, "approvals", store):
 			token = store.create(action=email.EMAIL_ACTION, site="test.localhost", user="user@example.com", payload={})
 			result = email.confirm_document_email(token, "sales")
 
 		self.assertEqual(result["code"], "TRUSTED_APPROVAL_UNAVAILABLE")
+
+	def test_self_scope_uses_only_the_authenticated_user_email_and_revalidates(self):
+		with patch.object(email.frappe, "db", SimpleNamespace(get_value=lambda *args: "user@example.com")):
+			prepared = email.prepare_document_email(
+				"Sales Order", "SO-001", "sales", recipient_scope="self"
+			)
+			self.assertEqual(prepared["preview"]["recipient"], "user@example.com")
+			self.assertEqual(prepared["preview"]["recipient_scope"], "self")
+			self.assertEqual(
+				email.prepare_document_email(
+					"Sales Order", "SO-001", "sales", "other@example.com", recipient_scope="self"
+				)["code"],
+				"INVALID_RECIPIENT",
+			)
 
 	def test_confirm_rejects_changed_pdf_without_sending(self):
 		prepared = email.prepare_document_email("Sales Order", "SO-001", "sales")

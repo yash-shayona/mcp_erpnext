@@ -1296,7 +1296,7 @@ TOOL_CONTRACTS["prepare_document_email"] = ToolContract(
     "Existing Documents",
     ToolOperation.PREPARE,
     SideEffectClass.PREPARE,
-    "Prepare an exact email preview with a permission-checked generic PDF attachment.",
+    "Prepare an exact email preview with a permission-checked PDF attachment; use recipient_scope party for the document party or self for the authenticated user's email.",
     False,
     DocumentEmailPrepareInput,
     DocumentEmailPrepareOutput,

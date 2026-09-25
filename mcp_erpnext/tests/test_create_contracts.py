@@ -72,6 +72,15 @@ class CreateContractTests(unittest.TestCase):
 		)
 		self.assertNotIn("item_code", order.items[0].model_dump())
 		self.assertNotIn("quantity", order.items[0].model_dump())
+		self.assertEqual(
+			SalesOrderPrepareInput.model_validate({
+				"customer": {"doctype": "Customer", "name": "CUST-001"},
+				"items": [{"item": {"doctype": "Item", "name": "ITEM-001"}, "qty": 2, "description": "Row text"}],
+				"tc_name": "Standard Terms",
+				"custom_remarks": "Existing site field",
+			}).items[0].to_service_payload()["description"],
+			"Row text",
+		)
 
 	def test_customer_wrapper_converts_nested_public_input_and_adds_input_directive(self):
 		service_result = {"status": "needs_input", "missing": ["customer.customer_type"]}

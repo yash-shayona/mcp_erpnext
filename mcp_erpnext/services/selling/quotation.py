@@ -13,6 +13,7 @@ from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive, input_directive
 from ...observability import new_error_reference
 from ...settings import MCPSettings
+from .terms import apply_selling_terms
 
 _ACTION = "create_quotation"
 _COMMERCIAL_DEFAULTS = (
@@ -192,6 +193,13 @@ def _prepare_items(
             if failure:
                 return None, failure
             row[fieldname] = value
+        if "description" in raw and raw["description"] is not None:
+            if not isinstance(raw["description"], str):
+                return None, _error(
+                    "INVALID_QUOTATION_DETAILS",
+                    f"Item row {index} description must be text.",
+                )
+            row["description"] = raw["description"]
         prepared.append(row)
     return prepared, None
 
@@ -219,6 +227,7 @@ def _preview(doc: Any) -> dict[str, Any]:
             {
                 "item_code": row.item_code,
                 "item_name": row.item_name,
+                "description": getattr(row, "description", None),
                 "qty": row.qty,
                 "uom": row.uom,
                 "rate": row.rate,
@@ -311,11 +320,6 @@ def prepare_quotation(
     )
     if failure:
         return failure
-    resolved_terms, failure = _permitted_link(
-        "Terms and Conditions", tc_name, label="Terms and conditions"
-    )
-    if failure:
-        return failure
     if additional_discount_percentage is not None and discount_amount is not None:
         return _error(
             "INVALID_QUOTATION_DETAILS",
@@ -347,8 +351,6 @@ def prepare_quotation(
         doc.selling_price_list = resolved_price_list
     if resolved_taxes:
         doc.taxes_and_charges = resolved_taxes
-    if resolved_terms:
-        doc.tc_name = resolved_terms
     if additional_discount is not None:
         doc.additional_discount_percentage = additional_discount
     if discount_amount is not None:
@@ -357,6 +359,11 @@ def prepare_quotation(
         doc.append("items", item)
 
     doc.set_missing_values()
+    for prepared_item, row in zip(prepared_items or [], doc.items, strict=True):
+        if "description" in prepared_item:
+            row.description = prepared_item["description"]
+    if failure := apply_selling_terms(doc, tc_name, frappe_module=frappe):
+        return _error("INVALID_QUOTATION_DETAILS", failure["message"])
     missing_defaults = [
         fieldname for fieldname in _COMMERCIAL_DEFAULTS if not doc.get(fieldname)
     ]

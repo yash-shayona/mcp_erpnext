@@ -15,8 +15,9 @@ DocType-specific email tools or direct-send bypasses.
 ## Prepare
 
 `prepare_document_email` accepts an exact `doctype` and `name`, with optional
-`recipient_email`, `subject`, `message`, `print_format`, `letterhead`, and
-`language`. It performs no send.
+`recipient_email`, `recipient_scope`, `subject`, `message`, `print_format`,
+`letterhead`, and `language`. `recipient_scope` defaults to `party`; it performs
+no send.
 
 The active profile allowlist is enforced in the service before document
 lookup. The authenticated Frappe user must have `read`, `email`, and `print`
@@ -25,6 +26,13 @@ permission on the document. The PDF is rendered by
 language, and native PDF behavior remain centralized.
 
 ## Recipient resolution
+
+`recipient_scope="party"` retains the document-business-party rules below.
+`recipient_scope="self"` resolves exactly the authenticated Frappe `User` record's
+own valid email. It rejects `recipient_email`, never enumerates Users, and fails
+safely when that User has no valid email. Confirm re-resolves the same scoped
+recipient and returns `PREPARED_STATE_CHANGED` if it changed.
+
 
 Recipient addresses are restricted to the document's business party:
 
@@ -47,7 +55,7 @@ number, or address is accepted or returned.
 
 The prepare operation stores a shared Frappe-cache approval through the existing
 `ApprovalStore`. Its payload binds the profile, exact document, document
-`modified` and `docstatus` markers, recipient, subject, message, PDF render
+`modified` and `docstatus` markers, recipient scope and recipient, subject, message, PDF render
 inputs and resolved format, attachment filename/MIME type, and SHA-256 digest.
 The store separately binds the authenticated site/user, applies its configured
 TTL/trust policy, and consumes approvals atomically.

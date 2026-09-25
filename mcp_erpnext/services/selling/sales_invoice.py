@@ -15,6 +15,7 @@ from ...contracts.interaction import approval_directive, input_directive
 from ...observability import new_error_reference
 from ..common.fingerprint import stable_fingerprint
 from ..common.entity_resolution import revalidate_exact_candidate
+from .terms import apply_selling_terms
 
 _ACTION = "create_sales_invoice"
 _REQUIRED_DEFAULTS = (
@@ -123,6 +124,8 @@ def _normalise_request(
     customer_address: Any,
     shipping_address_name: Any,
     contact_person: Any,
+    tc_name: Any,
+    custom_remarks: Any,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     customer_name = _reference_name(customer, "Customer")
     if not customer_name:
@@ -150,6 +153,13 @@ def _normalise_request(
         if failure:
             return None, failure
         row: dict[str, Any] = {"item": item_name, "qty": quantity}
+        if "description" in raw_item and raw_item.get("description") is not None:
+            if not isinstance(raw_item["description"], str):
+                return None, _error(
+                    "INVALID_SALES_INVOICE_DETAILS",
+                    f"Item row {index} description must be text.",
+                )
+            row["description"] = raw_item["description"]
         if "rate" in raw_item and raw_item.get("rate") is not None:
             rate, failure = _number(
                 raw_item.get("rate"), field=f"Item row {index} rate"
@@ -170,6 +180,8 @@ def _normalise_request(
         ("customer_address", customer_address),
         ("shipping_address_name", shipping_address_name),
         ("contact_person", contact_person),
+        ("tc_name", tc_name),
+        ("custom_remarks", custom_remarks),
     ):
         if value is not None:
             normalized_value, failure = _optional_name(value, field=fieldname)
@@ -301,6 +313,9 @@ def _preview(doc: Any) -> dict[str, Any]:
         "customer_address": _value(doc, "customer_address"),
         "shipping_address_name": _value(doc, "shipping_address_name"),
         "debit_to": _value(doc, "debit_to"),
+        "tc_name": _value(doc, "tc_name"),
+        "terms": _value(doc, "terms"),
+        "custom_remarks": _value(doc, "custom_remarks"),
         "items": [
             {
                 "item_code": _value(row, "item_code"),
@@ -423,11 +438,30 @@ def _build(
         row = {"item_code": request_row["item"], "qty": request_row["qty"]}
         if "rate" in request_row:
             row["rate"] = request_row["rate"]
+        if "description" in request_row:
+            row["description"] = request_row["description"]
         doc.append("items", row)
+    if request.get("custom_remarks") is not None:
+        if not frappe.get_meta("Sales Invoice").has_field("custom_remarks"):
+            return None, None, _error(
+                "CUSTOM_REMARKS_UNAVAILABLE",
+                "custom_remarks is not available on this Sales Invoice site.",
+            )
+        doc.custom_remarks = request["custom_remarks"]
 
     # These are the audited non-persisting native defaults/calculation seams.
     # Full Sales Invoice validation is intentionally deferred to final insert.
     doc.set_missing_values()
+    for request_row, row in zip(request["items"], _value(doc, "items", []) or [], strict=True):
+        if "description" in request_row:
+            if hasattr(row, "values"):
+                row.values["description"] = request_row["description"]
+            else:
+                row.description = request_row["description"]
+    if failure := apply_selling_terms(
+        doc, request.get("tc_name"), frappe_module=frappe
+    ):
+        return None, None, failure
     doc.calculate_taxes_and_totals()
     try:
         # ERPNext owns the SO/DN prerequisite rule. Calling this narrow native
@@ -473,6 +507,8 @@ def prepare_sales_invoice(
     customer_address: str | None = None,
     shipping_address_name: str | None = None,
     contact_person: str | None = None,
+    tc_name: str | None = None,
+    custom_remarks: str | None = None,
 ) -> dict[str, Any]:
     """Prepare a native Draft Sales Invoice without persisting it."""
     approvals.prune_expired()
@@ -488,6 +524,8 @@ def prepare_sales_invoice(
         customer_address,
         shipping_address_name,
         contact_person,
+        tc_name,
+        custom_remarks,
     )
     if failure:
         return failure

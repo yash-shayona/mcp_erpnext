@@ -62,6 +62,7 @@ class ItemServiceTests(unittest.TestCase):
 		self.meta_fields = [
 			SimpleNamespace(fieldname="item_code", label="Item Code", fieldtype="Data", reqd=1),
 			SimpleNamespace(fieldname="item_name", label="Item Name", fieldtype="Data", reqd=0),
+			SimpleNamespace(fieldname="description", label="Description", fieldtype="Text Editor", reqd=0),
 			SimpleNamespace(fieldname="item_group", label="Item Group", fieldtype="Link", options="Item Group", reqd=1),
 			SimpleNamespace(fieldname="stock_uom", label="Default Unit of Measure", fieldtype="Link", options="UOM", reqd=1),
 			SimpleNamespace(fieldname="is_stock_item", label="Maintain Stock", fieldtype="Check", reqd=0),

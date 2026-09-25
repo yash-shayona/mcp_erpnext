@@ -335,6 +335,7 @@ def _preview(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "item_code": data["item_code"],
         "item_name": data.get("item_name") or data["item_code"],
+        "description": data.get("description"),
         "custom_slug": data.get("custom_slug"),
         "item_group": data["item_group"],
         "stock_uom": data["stock_uom"],

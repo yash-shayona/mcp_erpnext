@@ -20,6 +20,7 @@ MIN_CREDIBLE_AMBIGUITY_SCORE = 0.69
 CREATION_FIELDS = (
     "item_code",
     "item_name",
+    "description",
     "custom_slug",
     "item_group",
     "stock_uom",

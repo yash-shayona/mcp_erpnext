@@ -23,6 +23,7 @@ class SalesInvoiceItemInput(PublicContractModel):
     item: ItemReference
     qty: Annotated[float, Field(gt=0)]
     rate: Annotated[float, Field(ge=0)] | None = None
+    description: str | None = None
 
 
 class SalesInvoicePrepareInput(PublicContractModel):
@@ -36,6 +37,8 @@ class SalesInvoicePrepareInput(PublicContractModel):
     customer_address: NonEmptyString | None = None
     shipping_address_name: NonEmptyString | None = None
     contact_person: NonEmptyString | None = None
+    tc_name: NonEmptyString | None = None
+    custom_remarks: str | None = None
 
 
 class SalesInvoicePreviewItem(PublicContractModel):
@@ -94,6 +97,9 @@ class SalesInvoicePreview(PublicContractModel):
     customer_address: str | None = None
     shipping_address_name: str | None = None
     debit_to: NonEmptyString
+    tc_name: str | None = None
+    terms: str | None = None
+    custom_remarks: str | None = None
     items: list[SalesInvoicePreviewItem]
     taxes: list[SalesInvoicePreviewTax]
     payment_schedule: list[SalesInvoicePreviewPaymentSchedule]

@@ -96,6 +96,10 @@ class FakeDocument:
             detailed_rows.append(FakeRow(**values))
         self.values["items"] = detailed_rows
 
+    def set_missing_terms(self):
+        if self.get("tc_name") and not self.get("terms"):
+            self.values["terms"] = "Native rendered terms"
+
     def calculate_taxes_and_totals(self):
         self.calculate_calls += 1
         total = sum(row.get("amount", 0) for row in self.values["items"])
@@ -135,7 +139,7 @@ class StandaloneSalesInvoiceServiceTests(unittest.TestCase):
             return document
 
         def get_list(doctype, **kwargs):
-            if doctype in {"Company", "Price List", "Address", "Contact"}:
+            if doctype in {"Company", "Price List", "Address", "Contact", "Terms and Conditions"}:
                 return [{"name": kwargs["filters"]["name"]}]
             return []
 
@@ -145,6 +149,8 @@ class StandaloneSalesInvoiceServiceTests(unittest.TestCase):
             defaults=SimpleNamespace(get_user_default=lambda field: "Test Company"),
             has_permission=lambda *_: True,
             get_list=get_list,
+            get_value=lambda doctype, name, fieldname: "Company Terms" if doctype == "Company" else None,
+            get_meta=lambda _: SimpleNamespace(has_field=lambda fieldname: fieldname == "custom_remarks"),
             new_doc=new_doc,
             PermissionError=frappe.PermissionError,
             ValidationError=frappe.ValidationError,
@@ -215,6 +221,19 @@ class StandaloneSalesInvoiceServiceTests(unittest.TestCase):
         self.assertEqual(self.documents[0].calculate_calls, 1)
         self.assertEqual(self.documents[0].so_dn_required_calls, 1)
         self.assertEqual(self.documents[0].insert_calls, [])
+
+    def test_authored_description_terms_and_existing_custom_remarks_are_previewed(self):
+        customer, items = self.request()
+        items[0]["description"] = "Invoice-only description"
+        result = service.prepare_sales_invoice(
+            customer, items, tc_name="Explicit Terms", custom_remarks="Existing custom field"
+        )
+
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["preview"]["items"][0]["description"], "Invoice-only description")
+        self.assertEqual(result["preview"]["tc_name"], "Explicit Terms")
+        self.assertEqual(result["preview"]["terms"], "Native rendered terms")
+        self.assertEqual(result["preview"]["custom_remarks"], "Existing custom field")
 
     def test_user_without_sales_invoice_create_permission_is_rejected(self):
         customer, items = self.request()

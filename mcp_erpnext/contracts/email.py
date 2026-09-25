@@ -11,6 +11,7 @@ from .interaction import InteractionDirective
 
 
 DocumentEmailDoctype = Literal["Quotation", "Sales Order", "Purchase Order", "Sales Invoice", "Delivery Note"]
+DocumentEmailRecipientScope = Literal["party", "self"]
 EmailSubject = Annotated[str, StringConstraints(min_length=1, max_length=255)]
 EmailMessage = Annotated[str, StringConstraints(min_length=1, max_length=10_000)]
 
@@ -21,6 +22,7 @@ class DocumentEmailPrepareInput(PublicContractModel):
 	doctype: DocumentEmailDoctype
 	name: NonEmptyString
 	recipient_email: NonEmptyString | None = None
+	recipient_scope: DocumentEmailRecipientScope = "party"
 	subject: EmailSubject | None = None
 	message: EmailMessage | None = None
 	print_format: NonEmptyString | None = None
@@ -47,6 +49,7 @@ class DocumentEmailPreview(PublicContractModel):
 	doctype: DocumentEmailDoctype
 	name: NonEmptyString
 	recipient: NonEmptyString
+	recipient_scope: DocumentEmailRecipientScope
 	subject: NonEmptyString
 	message: NonEmptyString
 	attachment_filename: NonEmptyString

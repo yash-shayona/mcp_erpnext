@@ -26,10 +26,15 @@ class SalesOrderItemInput(PublicContractModel):
 
 	item: ItemReference
 	qty: PositiveQuantity
+	description: str | None = None
 
 	def to_service_payload(self) -> dict[str, object]:
 		"""Pass only the existing service's name-based row shape downstream."""
-		return {"item": self.item.name, "qty": self.qty}
+		return {
+			"item": self.item.name,
+			"qty": self.qty,
+			**({"description": self.description} if self.description is not None else {}),
+		}
 
 
 class SalesOrderPrepareInput(PublicContractModel):
@@ -40,11 +45,14 @@ class SalesOrderPrepareInput(PublicContractModel):
 	company: NonEmptyString | None = None
 	delivery_date: date | None = None
 	selling_price_list: NonEmptyString | None = None
+	tc_name: NonEmptyString | None = None
+	custom_remarks: str | None = None
 
 
 class SalesOrderPreviewItem(PublicContractModel):
 	item_code: NonEmptyString
 	item_name: NonEmptyString | None = None
+	description: str | None = None
 	qty: float
 	uom: NonEmptyString | None = None
 	rate: float | None = None
@@ -64,6 +72,9 @@ class SalesOrderPreview(PublicContractModel):
 	selling_price_list: NonEmptyString
 	items: list[SalesOrderPreviewItem]
 	grand_total: float
+	tc_name: str | None = None
+	terms: str | None = None
+	custom_remarks: str | None = None
 
 
 class SalesOrderCorrections(PublicContractModel):
@@ -92,6 +103,7 @@ class SalesOrderMissingQuantity(PublicContractModel):
 class SalesOrderResolvedItem(PublicContractModel):
 	item_code: NonEmptyString
 	item_name: NonEmptyString | None = None
+	description: str | None = None
 	qty: float | None = None
 	match_type: NonEmptyString | None = None
 

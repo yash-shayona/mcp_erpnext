@@ -726,7 +726,7 @@ Render one permitted existing transactional document as an ephemeral PDF artifac
 
 ### `prepare_document_email`
 
-Prepare an exact email preview with a permission-checked generic PDF attachment. Use with an exact permitted document to prepare recipients, preview, and attachment state. It does not send email; review the prepared result before the paired confirm approval flow.
+Prepare an exact email preview with a permission-checked PDF attachment; use recipient_scope party for the document party or self for the authenticated user's email. Use with an exact permitted document to prepare recipients, preview, and attachment state. It does not send email; review the prepared result before the paired confirm approval flow.
 
 - Input: `DocumentEmailPrepareInput` — Required: `request`
 - Output: `DocumentEmailPrepareOutput`; resolution states: `ready_for_approval`, `needs_input`, `not_found`, `error`; published through MCP `outputSchema`.
@@ -962,7 +962,7 @@ Render one permitted existing transactional document as an ephemeral PDF artifac
 
 ### `prepare_document_email`
 
-Prepare an exact email preview with a permission-checked generic PDF attachment. Use with an exact permitted document to prepare recipients, preview, and attachment state. It does not send email; review the prepared result before the paired confirm approval flow.
+Prepare an exact email preview with a permission-checked PDF attachment; use recipient_scope party for the document party or self for the authenticated user's email. Use with an exact permitted document to prepare recipients, preview, and attachment state. It does not send email; review the prepared result before the paired confirm approval flow.
 
 - Input: `DocumentEmailPrepareInput` — Required: `request`
 - Output: `DocumentEmailPrepareOutput`; resolution states: `ready_for_approval`, `needs_input`, `not_found`, `error`; published through MCP `outputSchema`.

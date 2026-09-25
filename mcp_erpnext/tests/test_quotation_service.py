@@ -66,6 +66,10 @@ class FakeQuotation:
 		if self.tc_name:
 			self.terms = "Standard terms"
 
+	def set_missing_terms(self):
+		if self.tc_name and not self.terms:
+			self.terms = "Standard terms"
+
 	def calculate_taxes_and_totals(self):
 		self.net_total = sum(row.net_amount for row in self.items)
 		self.total_taxes_and_charges = sum(row.tax_amount for row in self.taxes)
@@ -229,6 +233,13 @@ class QuotationServiceTests(unittest.TestCase):
 			with self.subTest(row=row):
 				result = self.prepare(items=[row])
 				self.assertEqual(result["code"], "INVALID_QUOTATION_DETAILS")
+
+	def test_explicit_description_and_terms_are_in_the_reviewed_payload(self):
+		result = self.prepare(items=[self.item(description="Document-specific")], tc_name="Standard Terms")
+		self.assertEqual(result["status"], "ready")
+		self.assertEqual(result["preview"]["items"][0]["description"], "Document-specific")
+		self.assertEqual(result["preview"]["tc_name"], "Standard Terms")
+		self.assertEqual(result["preview"]["terms"], "Standard terms")
 
 	def test_erpnext_pricing_and_explicit_rate_are_previewed(self):
 		priced = self.prepare()

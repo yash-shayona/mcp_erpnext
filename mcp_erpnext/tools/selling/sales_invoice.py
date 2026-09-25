@@ -48,6 +48,8 @@ def prepare_sales_invoice(
     customer_address: str | None = None,
     shipping_address_name: str | None = None,
     contact_person: str | None = None,
+    tc_name: str | None = None,
+    custom_remarks: str | None = None,
 ) -> PrepareSalesInvoiceOutput:
     """Prepare an ERPNext-calculated standalone Draft Sales Invoice preview."""
     request = SalesInvoicePrepareInput(
@@ -59,6 +61,8 @@ def prepare_sales_invoice(
         customer_address=customer_address,
         shipping_address_name=shipping_address_name,
         contact_person=contact_person,
+        tc_name=tc_name,
+        custom_remarks=custom_remarks,
     )
     result = execute_tool_with_context(
         ctx,
@@ -72,6 +76,8 @@ def prepare_sales_invoice(
             request.customer_address,
             request.shipping_address_name,
             request.contact_person,
+            request.tc_name,
+            request.custom_remarks,
 		),
 		rest_arguments=request.model_dump(mode="json"),
     )

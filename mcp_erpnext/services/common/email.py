@@ -173,7 +173,7 @@ def _contact_candidates(
     return _unique(result)
 
 
-def _resolve_recipient(
+def _resolve_party_recipient(
     doc: Any, requested: str | None
 ) -> tuple[dict[str, str] | None, list[dict[str, str]], dict[str, Any] | None]:
     """Resolve only native document/party contacts and reject unrelated addresses."""
@@ -269,6 +269,36 @@ def _resolve_recipient(
     )
 
 
+def _resolve_self_recipient(
+    requested: str | None,
+) -> tuple[dict[str, str] | None, list[dict[str, str]], dict[str, Any] | None]:
+    """Resolve only the authenticated User's own email address."""
+    if requested is not None:
+        return None, [], _error(
+            "INVALID_RECIPIENT",
+            "recipient_email cannot be used when recipient_scope is self.",
+        )
+    recipient = _candidate(frappe.db.get_value("User", _user(), "email"))
+    if not recipient:
+        return None, [], _error(
+            "SELF_RECIPIENT_UNAVAILABLE",
+            "The authenticated user does not have a valid email address.",
+        )
+    return recipient, [recipient], None
+
+
+def _resolve_recipient(
+    doc: Any, requested: str | None, recipient_scope: str
+) -> tuple[dict[str, str] | None, list[dict[str, str]], dict[str, Any] | None]:
+    if recipient_scope == "self":
+        return _resolve_self_recipient(requested)
+    if recipient_scope == "party":
+        return _resolve_party_recipient(doc, requested)
+    return None, [], _error(
+        "INVALID_RECIPIENT_SCOPE", "recipient_scope must be party or self."
+    )
+
+
 def _recipient_input(doc: Any, candidates: list[dict[str, str]]) -> dict[str, Any]:
     return {
         "status": "needs_input",
@@ -347,11 +377,14 @@ def prepare_document_email(
     print_format: str | None = None,
     letterhead: str | None = None,
     language: str | None = None,
+    recipient_scope: str = "party",
 ) -> dict[str, Any]:
     doc, failure = _load(doctype, name, profile)
     if failure:
         return failure
-    recipient, candidates, recipient_failure = _resolve_recipient(doc, recipient_email)
+    recipient, candidates, recipient_failure = _resolve_recipient(
+        doc, recipient_email, recipient_scope
+    )
     if recipient_failure:
         return recipient_failure
     if recipient is None:
@@ -384,6 +417,7 @@ def prepare_document_email(
         "modified": str(doc.modified),
         "docstatus": int(doc.docstatus),
         "recipient_email": recipient["email"],
+        "recipient_scope": recipient_scope,
         "subject": subject,
         "message": message,
         "print_format": print_format,
@@ -403,6 +437,7 @@ def prepare_document_email(
             "doctype": doctype,
             "name": name,
             "recipient": recipient["email"],
+            "recipient_scope": recipient_scope,
             "subject": subject,
             "message": message,
             "attachment_filename": pdf["filename"],
@@ -443,8 +478,11 @@ def confirm_document_email(approval_token: str, profile: str) -> dict[str, Any]:
             "PREPARED_STATE_CHANGED",
             "The document changed after the email preview. Prepare it again.",
         )
+    recipient_scope = payload.get("recipient_scope", "party")
     recipient, _, recipient_failure = _resolve_recipient(
-        doc, payload["recipient_email"]
+        doc,
+        None if recipient_scope == "self" else payload["recipient_email"],
+        recipient_scope,
     )
     if (
         recipient_failure

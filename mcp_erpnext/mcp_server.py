@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .approvals import approvals
 from .http_transport import create_http_app
+from .instructions import get_mcp_instructions
 from .settings import MCPSettings
 from .tools import register_tools
 from mcp_identity.identity import HTTPAuthMode, get_http_auth_mode_from_environment
@@ -11,32 +12,6 @@ from mcp_identity.oauth_resource_server import (
     FrappeOAuthTokenVerifier,
     validate_oauth_resource_server_startup,
 )
-
-MCP_ROUTING_INSTRUCTIONS = """\
-MCP ROUTING POLICY: Use `get_*` for an exact known reference, `resolve_*` for
-a natural-language reference needed by a workflow, `search_*` for explicit
-browsing/discovery, `query_*` for structured listing/filtering, and
-`aggregate_*` for supported aggregate questions. A `resolve_*` result of
-`resolved` is terminal for lookup: reuse it rather than calling an equivalent
-search/query to verify. For `ambiguous`, use returned candidates and the
-selection flow; for `not_found`, ask for clarification and search only when
-the user explicitly requests alternatives. Consequential operations follow
-prepare -> preview/approval -> confirm. Do not duplicate semantically
-equivalent calls merely for verification; reuse identifiers and results already
-obtained in the workflow. Respect the selected profile and domain boundary.
-
-RESPONSE PRECISION POLICY: Answer only the information the user asked for.
-Do not dump unrelated fields or internal tool metadata. For a Sales Order
-status, date, or total request, return only that value (and currency for a
-total). For a request for Sales Order IDs without requested columns, return
-only IDs. For counts, totals, and averages, return the computed result without
-listing source records. For `prepare_quotation`, only the Customer and item
-rows are required from the user. If `valid_till` is not supplied, omit it from
-the tool call so the server applies its configured validity policy from the
-transaction date; show the resulting date in the preview, but do not ask the
-user to select a date or a default period. Ask only when a missing distinction
-materially changes the answer.
-"""
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -72,7 +47,7 @@ def create_mcp(settings: MCPSettings | None = None):
     approvals.configure_approval_mode(settings.approval_mode)
     mcp = FastMCP(
         f"mcp_erpnext_{settings.profile.value}",
-        instructions=MCP_ROUTING_INSTRUCTIONS,
+        instructions=get_mcp_instructions(settings.profile),
         host=settings.http_host,
         port=settings.http_port_number(),
         streamable_http_path=settings.http_path,

@@ -31,6 +31,7 @@ class QuotationItemInput(PublicContractModel):
 	rate: NonNegativeNumber | None = None
 	discount_percentage: NonNegativeNumber | None = None
 	discount_amount: NonNegativeNumber | None = None
+	description: str | None = None
 
 	def to_service_payload(self) -> dict[str, object]:
 		"""Preserve the existing service's internal row shape."""
@@ -44,6 +45,7 @@ class QuotationItemInput(PublicContractModel):
 				else {}
 			),
 			**({"discount_amount": self.discount_amount} if self.discount_amount is not None else {}),
+			**({"description": self.description} if self.description is not None else {}),
 		}
 
 
@@ -74,6 +76,7 @@ class QuotationPreviewCustomer(PublicContractModel):
 class QuotationPreviewItem(PublicContractModel):
 	item_code: NonEmptyString
 	item_name: str | None = None
+	description: str | None = None
 	qty: float
 	uom: str | None = None
 	rate: float | None = None
