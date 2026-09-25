@@ -249,7 +249,7 @@ class ToolContractTests(unittest.TestCase):
 
 	def test_resolver_schemas_expose_terminal_states_and_explicit_selection(self):
 		tools = {tool.name: tool for tool in self.registered_tools()}
-		for name in ("search_customers", "resolve_customer", "search_items", "resolve_item"):
+		for name in ("search_customers", "resolve_customer", "search_items", "resolve_item", "resolve_terms_and_conditions"):
 			with self.subTest(name=name):
 				self.assertEqual(tools[name].outputSchema["type"], "object")
 				self.assertEqual(
@@ -262,7 +262,10 @@ class ToolContractTests(unittest.TestCase):
 				)
 		selection = tools["select_resolved_candidate"]
 		self.assertEqual(selection.outputSchema["type"], "object")
-		self.assertEqual(selection.inputSchema["properties"]["doctype"]["enum"], ["Customer", "Item"])
+		self.assertEqual(
+			selection.inputSchema["properties"]["doctype"]["enum"],
+			["Customer", "Item", "Terms and Conditions"],
+		)
 		self.assertEqual(selection.inputSchema["required"], ["doctype", "name"])
 		self.assertEqual(
 			set(selection.outputSchema["discriminator"]["mapping"]),

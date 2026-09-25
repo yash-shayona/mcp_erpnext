@@ -42,6 +42,7 @@ def register_sales_tools(mcp: Any) -> None:
     from .masters.item import register_item_tools
     from .masters.selection import register_selection_tools
     from .selling.quotation import register_quotation_tools
+    from .selling.terms import register_terms_tools
     from .selling.quotation_to_sales_order import (
         register_quotation_to_sales_order_tools,
     )
@@ -63,6 +64,7 @@ def register_sales_tools(mcp: Any) -> None:
     register_contact_tools(mcp)
     register_item_tools(mcp)
     register_selection_tools(mcp)
+    register_terms_tools(mcp)
     register_sales_order_tools(mcp)
     register_quotation_tools(mcp)
     register_quotation_to_sales_order_tools(mcp)

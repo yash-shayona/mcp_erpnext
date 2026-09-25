@@ -20,7 +20,7 @@ _selection_adapter = TypeAdapter(SelectResolvedCandidateResult)
 def select_resolved_candidate(
 	doctype: ResolvableDoctype, name: NonEmptyString, ctx: Context
 ) -> SelectResolvedCandidateOutput:
-	"""Revalidate a user-selected Customer or Item reference without writing."""
+	"""Revalidate a selected Customer, Item, or Selling Terms reference."""
 	result = execute_tool_with_context(
 		ctx, "select_resolved_candidate", lambda: _select_resolved_candidate(doctype, name), rest_arguments={"doctype": doctype, "name": name}
 	)

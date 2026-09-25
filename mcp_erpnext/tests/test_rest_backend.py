@@ -105,6 +105,25 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                     {"customer": {"doctype": "Customer", "name": "CUST-1"}, "mode": "create", "new_contact": {"first_name": "A"}},
                 )
 
+    @patch("mcp_erpnext.remote_operations.terms.resolve_terms_and_conditions")
+    def test_sales_terms_resolver_uses_the_same_typed_service(self, resolve_terms):
+        resolve_terms.return_value = {
+            "status": "resolved",
+            "doctype": "Terms and Conditions",
+            "reference": {"doctype": "Terms and Conditions", "name": "Sales Order Terms"},
+            "match_type": "exact",
+        }
+        result = remote_operations.execute_remote_operation(
+            "resolve_terms_and_conditions", "sales", {"query": "sales order terms"}
+        )
+        self.assertEqual(result["reference"]["name"], "Sales Order Terms")
+        resolve_terms.assert_called_once_with("sales order terms")
+        for profile in ("purchase", "accounts"):
+            with self.subTest(profile=profile), self.assertRaises(remote_operations.RemoteOperationError):
+                remote_operations.execute_remote_operation(
+                    "resolve_terms_and_conditions", profile, {"query": "sales order terms"}
+                )
+
     @patch("mcp_erpnext.remote_operations.customer.search_customers")
     def test_sales_operation_uses_fixed_handler(self, search_customers):
         search_customers.return_value = {"status": "resolved", "results": []}

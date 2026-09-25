@@ -49,6 +49,7 @@ class ToolRegistrationTests(unittest.TestCase):
 				"prepare_item",
 				"confirm_item",
 				"select_resolved_candidate",
+				"resolve_terms_and_conditions",
 				"prepare_sales_order",
 				"confirm_sales_order",
 				"prepare_quotation",

@@ -37,11 +37,13 @@ class ToolRoutingTests(unittest.TestCase):
                 self.assertIn('recipient_scope="self"', get_mcp_instructions(profile))
         sales = get_mcp_instructions(MCPProfile.SALES)
         self.assertIn("only the Customer and item rows are required", sales)
-        self.assertIn("Never guess a Terms", sales)
+        self.assertIn("resolve_terms_and_conditions", sales)
+        self.assertIn("Never infer a Terms", sales)
+        self.assertIn("did not request a Terms template, do not call the resolver", sales)
         for profile in (MCPProfile.PURCHASE, MCPProfile.ACCOUNTS):
             with self.subTest(profile=profile):
                 self.assertNotIn("only the Customer and item rows are required", get_mcp_instructions(profile))
-                self.assertNotIn("Never guess a Terms", get_mcp_instructions(profile))
+                self.assertNotIn("resolve_terms_and_conditions", get_mcp_instructions(profile))
 
     def test_every_registered_tool_uses_its_contract_governed_description(self):
         tools_by_profile = self._tools_by_profile()
@@ -81,15 +83,20 @@ class ToolRoutingTests(unittest.TestCase):
         self.assertIn("structured filtering", descriptions["query_customers"])
         self.assertIn("server-side count", descriptions["aggregate_customers"])
 
-    def test_resolver_terminal_states_and_selection_apply_to_customer_item_and_supplier(self):
-        for name in ("resolve_customer", "resolve_item", "resolve_supplier"):
+    def test_resolver_terminal_states_and_selection_apply_to_supported_entities(self):
+        for name in (
+            "resolve_customer",
+            "resolve_item",
+            "resolve_supplier",
+            "resolve_terms_and_conditions",
+        ):
             description = TOOL_CONTRACTS[name].routing_description()
             with self.subTest(name=name):
                 self.assertIn("`resolved` is terminal", description)
                 self.assertIn("`ambiguous`, use the returned candidates", description)
                 self.assertIn("`not_found`, ask for clarification", description)
         selection = TOOL_CONTRACTS["select_resolved_candidate"].routing_description()
-        self.assertIn("`ambiguous` Customer or Item", selection)
+        self.assertIn("`ambiguous` Customer, Item, or Terms", selection)
         self.assertIn("returned by that result", selection)
 
     def test_prepare_confirm_and_specialized_workflows_encode_existing_sequence(self):

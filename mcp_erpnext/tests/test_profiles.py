@@ -30,6 +30,7 @@ class ProfileRegistrationTests(unittest.TestCase):
     def test_sales_profile_preserves_sales_inventory_without_purchase_tools(self):
         names = self._tool_names(MCPProfile.SALES)
         self.assertIn("prepare_quotation", names)
+        self.assertIn("resolve_terms_and_conditions", names)
         self.assertIn("prepare_quotation_to_sales_order", names)
         self.assertIn("confirm_quotation_to_sales_order", names)
         self.assertIn("prepare_sales_order_to_sales_invoice", names)
@@ -107,6 +108,7 @@ class ProfileRegistrationTests(unittest.TestCase):
 			],
         )
         self.assertNotIn("prepare_quotation", names)
+        self.assertNotIn("resolve_terms_and_conditions", names)
         self.assertNotIn("prepare_quotation_to_sales_order", names)
         self.assertNotIn("confirm_quotation_to_sales_order", names)
         self.assertNotIn("prepare_sales_order_to_sales_invoice", names)
@@ -166,6 +168,7 @@ class ProfileRegistrationTests(unittest.TestCase):
                 ],
             )
             self.assertNotIn("prepare_sales_invoice", names)
+            self.assertNotIn("resolve_terms_and_conditions", names)
             self.assertNotIn("search_contacts", names)
             self.assertNotIn("prepare_customer_contact", names)
             self.assertNotIn("confirm_customer_contact", names)

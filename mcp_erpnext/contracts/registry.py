@@ -28,6 +28,7 @@ from .masters.resolution import (
     SupplierResolutionOutput,
     SupplierSearchOutput,
 )
+from .selling.terms import TermsResolutionOutput
 from .masters.customer_read import (
     CustomerAggregateInput,
     CustomerAggregateOutput,
@@ -301,7 +302,7 @@ ROUTING_GUIDANCE: dict[ToolRoutingRole, str] = {
         "use discovery only when the user explicitly requests alternatives."
     ),
     ToolRoutingRole.SELECT_RESOLVED_CANDIDATE: (
-        "Use only after an `ambiguous` Customer or Item resolution, with a "
+        "Use only after an `ambiguous` Customer, Item, or Terms resolution, with a "
         "candidate reference returned by that result. Do not use it for general "
         "get/search, or restart discovery when the candidate set is sufficient."
     ),
@@ -680,6 +681,18 @@ TOOL_CONTRACTS = {
         resolution_states=("resolved", "ambiguous", "not_found", "error"),
         interaction_kinds=(InteractionKind.SELECTION,),
     ),
+    "resolve_terms_and_conditions": ToolContract(
+        "resolve_terms_and_conditions",
+        "Selling",
+        ToolOperation.RESOLVE,
+        SideEffectClass.RESOLVE,
+        "Resolve one enabled, permission-visible Selling Terms template.",
+        False,
+        EntityResolveInput,
+        TermsResolutionOutput,
+        resolution_states=("resolved", "ambiguous", "not_found", "error"),
+        interaction_kinds=(InteractionKind.SELECTION,),
+    ),
     "search_suppliers": ToolContract(
         "search_suppliers",
         "Masters",
@@ -943,7 +956,7 @@ TOOL_CONTRACTS = {
         "Masters",
         ToolOperation.RESOLVE,
         SideEffectClass.RESOLVE,
-        "Revalidate a user-selected Customer or Item reference without writing.",
+        "Revalidate a selected Customer, Item, or Selling Terms reference without writing.",
         False,
         SelectedCandidateInput,
         SelectResolvedCandidateOutput,

@@ -147,6 +147,7 @@ from .services.selling import (
     sales_order,
     sales_order_read,
     sales_order_to_sales_invoice,
+    terms,
 )
 from .services.selling import (
     sales_order_to_delivery_note,
@@ -408,6 +409,10 @@ _SALES_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
 	),
     "search_items": (EntityResolveInput, _sales_search_items),
     "resolve_item": (EntityResolveInput, _sales_resolve_items),
+    "resolve_terms_and_conditions": (
+        EntityResolveInput,
+        lambda request, _profile: terms.resolve_terms_and_conditions(request.query),
+    ),
     "prepare_item": (
         ItemPrepareInput,
         lambda request, _profile: item.prepare_item(request.to_service_payload()),

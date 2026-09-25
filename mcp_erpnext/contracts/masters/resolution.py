@@ -13,6 +13,7 @@ from ..common import (
 	PublicContractModel,
 	ResolvableDoctype,
 	SupplierReference,
+	TermsAndConditionsReference,
 	ToolError,
 )
 from ..interaction import InteractionDirective
@@ -238,7 +239,7 @@ class SelectedCandidateInput(PublicContractModel):
 class SelectedCandidateResolved(PublicContractModel):
 	status: Literal["resolved"]
 	doctype: ResolvableDoctype
-	reference: CustomerReference | ItemReference
+	reference: CustomerReference | ItemReference | TermsAndConditionsReference
 	match_type: Literal["exact"]
 
 

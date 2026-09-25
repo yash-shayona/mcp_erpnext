@@ -56,6 +56,33 @@ class EntitySelectionTests(unittest.TestCase):
 		self.assertEqual(calls[0][1]["filters"]["is_sales_item"], 1)
 		self.assertFalse(calls[0][1]["ignore_permissions"])
 
+	def test_selected_terms_candidate_rechecks_sales_eligibility_and_permissions(self):
+		calls = []
+
+		def get_list(doctype, **kwargs):
+			calls.append((doctype, kwargs))
+			return [{"name": "Sales Order Terms", "title": "Sales Order Terms"}]
+
+		result = select_resolved_candidate(
+			"Terms and Conditions", "Sales Order Terms", get_list=get_list
+		)
+		self.assertEqual(
+			result["reference"],
+			{"doctype": "Terms and Conditions", "name": "Sales Order Terms"},
+		)
+		self.assertEqual(
+			calls[0][1]["filters"],
+			{"name": "Sales Order Terms", "selling": 1, "disabled": 0},
+		)
+		self.assertFalse(calls[0][1]["ignore_permissions"])
+
+	def test_selected_terms_candidate_that_is_no_longer_eligible_fails_closed(self):
+		result = select_resolved_candidate(
+			"Terms and Conditions", "Disabled Terms", get_list=lambda *_args, **_kwargs: []
+		)
+		self.assertEqual(result["status"], "not_found")
+		self.assertEqual(result["candidates"], [])
+
 	def test_unknown_or_unpermitted_selection_has_no_fallback(self):
 		result = select_resolved_candidate(
 			"Customer", "CUST-PRIVATE", get_list=lambda *_args, **_kwargs: []

@@ -36,7 +36,14 @@ class SupplierReference(PublicContractModel):
     name: NonEmptyString
 
 
-ResolvableDoctype = Literal["Customer", "Item"]
+class TermsAndConditionsReference(PublicContractModel):
+    """A previously resolved ERPNext Selling Terms template."""
+
+    doctype: Literal["Terms and Conditions"]
+    name: NonEmptyString
+
+
+ResolvableDoctype = Literal["Customer", "Item", "Terms and Conditions"]
 
 
 class ToolError(PublicContractModel):

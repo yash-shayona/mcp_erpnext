@@ -7,10 +7,15 @@ from typing import Any
 from ...config.masters import customer as customer_config
 from ...config.masters import item as item_config
 from ..common.entity_resolution import revalidate_exact_candidate
+from ..selling import terms as terms_service
 
 _SELECTABLE_ENTITIES = {
     "Customer": (customer_config.SEARCH_FILTERS, customer_config.DISPLAY_FIELDS),
     "Item": (item_config.SEARCH_FILTERS, item_config.DISPLAY_FIELDS),
+    "Terms and Conditions": (
+        terms_service.TERMS_SEARCH_FILTERS,
+        terms_service.TERMS_DISPLAY_FIELDS,
+    ),
 }
 
 

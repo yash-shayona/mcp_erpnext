@@ -35,6 +35,7 @@ The generic PDF capability is documented in [MCP_DOCUMENT_PDF.md](architecture/M
 | `prepare_item` | Masters | Prepare | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | INPUT, SELECTION, APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_item` | Masters | Confirm | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `select_resolved_candidate` | Masters | Resolve | Select Resolved Candidate | RESOLVE | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | None | Not a final write | Explicit typed contract |
+| `resolve_terms_and_conditions` | Selling | Resolve | Resolve | RESOLVE | `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false` | SELECTION | Not a final write | Explicit typed contract |
 | `prepare_sales_order` | Selling | Prepare | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | INPUT, APPROVAL | Not a final write | Explicit typed contract |
 | `confirm_sales_order` | Selling | Confirm | Confirm | CONFIRM_WRITE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | None | Explicit approval required; server policy enforced | Explicit typed contract |
 | `prepare_quotation` | Selling | Prepare | Prepare | PREPARE | `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, `openWorldHint=false` | INPUT, APPROVAL | Not a final write | Explicit typed contract |
@@ -256,13 +257,23 @@ Create a prepared Item. Execute only its valid prepared operation after the exis
 
 ### `select_resolved_candidate`
 
-Revalidate a user-selected Customer or Item reference without writing. Use only after an `ambiguous` Customer or Item resolution, with a candidate reference returned by that result. Do not use it for general get/search, or restart discovery when the candidate set is sufficient.
+Revalidate a selected Customer, Item, or Selling Terms reference without writing. Use only after an `ambiguous` Customer, Item, or Terms resolution, with a candidate reference returned by that result. Do not use it for general get/search, or restart discovery when the candidate set is sufficient.
 
 - Input: `SelectedCandidateInput` — Required: `doctype`, `name`
 - Output: `SelectResolvedCandidateOutput`; resolution states: `resolved`, `not_found`, `error`; published through MCP `outputSchema`.
 - Side effect: `RESOLVE`; approval does not perform the final write.
 - MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
 - Interaction: none declared.
+
+### `resolve_terms_and_conditions`
+
+Resolve one enabled, permission-visible Selling Terms template. Use for one natural-language business reference needed by a workflow. `resolved` is terminal for lookup: reuse its reference; do not call search/query merely to verify. For `ambiguous`, use the returned candidates and selection flow. For `not_found`, ask for clarification; use discovery only when the user explicitly requests alternatives.
+
+- Input: `EntityResolveInput` — Required: `query`
+- Output: `TermsResolutionOutput`; resolution states: `resolved`, `ambiguous`, `not_found`, `error`; published through MCP `outputSchema`.
+- Side effect: `RESOLVE`; approval does not perform the final write.
+- MCP annotations: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`.
+- Interaction: `SELECTION`; emitted only for the documented result states.
 
 ### `prepare_sales_order`
 

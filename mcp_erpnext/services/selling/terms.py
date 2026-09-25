@@ -7,6 +7,18 @@ from typing import Any
 import frappe
 
 from ...observability import new_error_reference
+from ..common.entity_resolution import (
+    find_candidates,
+    rank_candidates,
+    resolve_ranked_candidates,
+)
+
+TERMS_SEARCH_FILTERS = {"selling": 1, "disabled": 0}
+TERMS_SEARCH_FIELDS = ("name", "title")
+TERMS_DISPLAY_FIELDS = ("title",)
+# The typo fallback is deliberately bounded: it ranks at most this many
+# permission-visible Selling templates when token/LIKE discovery finds none.
+TERMS_TYPO_FALLBACK_SCAN_LIMIT = 100
 
 
 def _error(code: str, message: str) -> dict[str, Any]:
@@ -20,6 +32,82 @@ def _permitted_terms(name: str, frappe_module: Any) -> bool:
             limit_page_length=1, ignore_permissions=False,
         )
     )
+
+
+def _reference(candidate: dict[str, Any]) -> dict[str, str | None]:
+    return {
+        "doctype": "Terms and Conditions",
+        "name": candidate.get("value"),
+        "title": candidate.get("title") or candidate.get("label"),
+    }
+
+
+def _candidate(candidate: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "reference": _reference(candidate),
+        "label": candidate.get("label") or candidate.get("value"),
+        "score": candidate.get("score", 0.0),
+    }
+
+
+def _fallback_candidates(query: str, get_list: Any) -> list[dict[str, Any]]:
+    """Rank a bounded safe scan after all normal search tokens miss."""
+    rows = get_list(
+        "Terms and Conditions",
+        filters=TERMS_SEARCH_FILTERS,
+        fields=["name", "title"],
+        order_by="name asc",
+        limit_page_length=TERMS_TYPO_FALLBACK_SCAN_LIMIT,
+        ignore_permissions=False,
+    )
+    displayed = [
+        {
+            "value": row.get("name"),
+            "label": row.get("title") or row.get("name"),
+            **({"title": row.get("title")} if row.get("title") else {}),
+        }
+        for row in rows
+    ]
+    return rank_candidates(query, displayed, ("value", "title"))
+
+
+def resolve_terms_and_conditions(query: str, *, get_list: Any = None) -> dict[str, Any]:
+    """Resolve one enabled, permission-visible Selling Terms template."""
+    permitted_get_list = get_list or frappe.get_list
+    candidates = find_candidates(
+        "Terms and Conditions",
+        query,
+        TERMS_SEARCH_FILTERS,
+        TERMS_SEARCH_FIELDS,
+        TERMS_DISPLAY_FIELDS,
+        get_list=permitted_get_list,
+    )
+    if not candidates:
+        candidates = _fallback_candidates(query, permitted_get_list)
+
+    resolution = resolve_ranked_candidates(query, candidates)
+    if resolution["status"] == "resolved":
+        return {
+            "status": "resolved",
+            "doctype": "Terms and Conditions",
+            "reference": _reference(resolution["candidate"]),
+            "match_type": resolution["match_type"],
+        }
+    if resolution["status"] == "ambiguous":
+        return {
+            "status": "ambiguous",
+            "doctype": "Terms and Conditions",
+            "query": query,
+            "candidates": [
+                _candidate(candidate) for candidate in resolution.get("candidates", [])
+            ],
+        }
+    return {
+        "status": "not_found",
+        "doctype": "Terms and Conditions",
+        "query": query,
+        "candidates": [],
+    }
 
 
 def apply_selling_terms(
