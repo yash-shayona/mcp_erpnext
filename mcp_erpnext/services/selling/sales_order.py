@@ -215,7 +215,6 @@ def prepare_sales_order(
     transaction_date = getdate(nowdate())
 
     doc = frappe.new_doc("Sales Order")
-    doc.naming_series = "SAL-ORD-.YYYY.-"
     doc.customer = customer_resolution["candidate"]["value"]
     doc.company = resolved_company
     doc.order_type = "Sales"
