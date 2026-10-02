@@ -213,6 +213,8 @@ from .pdf import RenderDocumentPdfInput, RenderDocumentPdfOutput
 from .email import (
     DocumentEmailConfirmInput,
     DocumentEmailConfirmOutput,
+    DocumentEmailExecuteInput,
+    DocumentEmailExecuteOutput,
     DocumentEmailPrepareInput,
     DocumentEmailPrepareOutput,
 )
@@ -269,6 +271,8 @@ from .shayona.credentials import (
 from .shayona.credential_email import (
     CredentialEmailConfirmInput,
     CredentialEmailConfirmOutput,
+    CredentialEmailExecuteInput,
+    CredentialEmailExecuteOutput,
     CredentialEmailPrepareInput,
     CredentialEmailPrepareOutput,
 )
@@ -318,6 +322,7 @@ class ToolRoutingRole(StrEnum):
     RENDER = "RENDER"
     EMAIL_PREPARE = "EMAIL_PREPARE"
     EMAIL_CONFIRM = "EMAIL_CONFIRM"
+    EMAIL_EXECUTE = "EMAIL_EXECUTE"
 
 
 def routing_role_for_tool_name(
@@ -332,6 +337,8 @@ def routing_role_for_tool_name(
         return ToolRoutingRole.EMAIL_PREPARE
     if name == "confirm_document_email":
         return ToolRoutingRole.EMAIL_CONFIRM
+    if name in {"execute_document_email", "execute_customer_service_credential_email"}:
+        return ToolRoutingRole.EMAIL_EXECUTE
     if name.startswith("get_"):
         return ToolRoutingRole.GET
     if name.startswith("search_"):
@@ -451,6 +458,10 @@ ROUTING_GUIDANCE: dict[ToolRoutingRole, str] = {
     ToolRoutingRole.EMAIL_CONFIRM: (
         "Queue external email only from its valid prepared email state after the "
         "existing approval guard succeeds. It is not a document lookup or preview tool."
+    ),
+    ToolRoutingRole.EMAIL_EXECUTE: (
+        "Use only when server Email policy is direct. It rebuilds a fresh bounded "
+        "request and queues external email; it accepts no approval token or policy override."
     ),
 }
 
@@ -684,10 +695,14 @@ TOOL_CONTRACTS = {
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "execute_customer_contact": ToolContract(
-        "execute_customer_contact", "Masters", ToolOperation.EXECUTE,
+        "execute_customer_contact",
+        "Masters",
+        ToolOperation.EXECUTE,
         SideEffectClass.CONFIRM_WRITE,
-        "Create a new Customer-linked Contact through direct server policy.", False,
-        CustomerContactPrepareInput, ConfirmCustomerContactOutput,
+        "Create a new Customer-linked Contact through direct server policy.",
+        False,
+        CustomerContactPrepareInput,
+        ConfirmCustomerContactOutput,
         routing_role=ToolRoutingRole.CREATE_EXECUTE,
     ),
     "prepare_customer_primary_contact": ToolContract(
@@ -918,10 +933,14 @@ TOOL_CONTRACTS = {
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "execute_sales_order": ToolContract(
-        "execute_sales_order", "Selling", ToolOperation.EXECUTE,
+        "execute_sales_order",
+        "Selling",
+        ToolOperation.EXECUTE,
         SideEffectClass.CONFIRM_WRITE,
-        "Create a Sales Order from a fresh bounded request.", False,
-        SalesOrderPrepareInput, ConfirmSalesOrderOutput,
+        "Create a Sales Order from a fresh bounded request.",
+        False,
+        SalesOrderPrepareInput,
+        ConfirmSalesOrderOutput,
         routing_role=ToolRoutingRole.CREATE_EXECUTE,
     ),
     "prepare_quotation": ToolContract(
@@ -1050,10 +1069,14 @@ TOOL_CONTRACTS = {
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "execute_sales_invoice": ToolContract(
-        "execute_sales_invoice", "Selling", ToolOperation.EXECUTE,
+        "execute_sales_invoice",
+        "Selling",
+        ToolOperation.EXECUTE,
         SideEffectClass.CONFIRM_WRITE,
-        "Create a Sales Invoice from a fresh bounded request.", False,
-        SalesInvoicePrepareInput, ConfirmSalesInvoiceOutput,
+        "Create a Sales Invoice from a fresh bounded request.",
+        False,
+        SalesInvoicePrepareInput,
+        ConfirmSalesInvoiceOutput,
         routing_role=ToolRoutingRole.CREATE_EXECUTE,
     ),
     "prepare_sales_order_to_delivery_note": ToolContract(
@@ -1182,10 +1205,14 @@ TOOL_CONTRACTS = {
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "execute_purchase_order": ToolContract(
-        "execute_purchase_order", "Buying", ToolOperation.EXECUTE,
+        "execute_purchase_order",
+        "Buying",
+        ToolOperation.EXECUTE,
         SideEffectClass.CONFIRM_WRITE,
-        "Create a Purchase Order from a fresh bounded request.", False,
-        PurchaseOrderPrepareInput, ConfirmPurchaseOrderOutput,
+        "Create a Purchase Order from a fresh bounded request.",
+        False,
+        PurchaseOrderPrepareInput,
+        ConfirmPurchaseOrderOutput,
         routing_role=ToolRoutingRole.CREATE_EXECUTE,
     ),
     "prepare_purchase_order_to_purchase_receipt": ToolContract(
@@ -1212,10 +1239,14 @@ TOOL_CONTRACTS = {
         approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     ),
     "execute_purchase_order_to_purchase_receipt": ToolContract(
-        "execute_purchase_order_to_purchase_receipt", "Buying", ToolOperation.EXECUTE,
+        "execute_purchase_order_to_purchase_receipt",
+        "Buying",
+        ToolOperation.EXECUTE,
         SideEffectClass.CONFIRM_WRITE,
-        "Create a Purchase Receipt from a fresh bounded Purchase Order mapping.", False,
-        PurchaseReceiptPrepareInput, ConfirmPurchaseReceiptOutput,
+        "Create a Purchase Receipt from a fresh bounded Purchase Order mapping.",
+        False,
+        PurchaseReceiptPrepareInput,
+        ConfirmPurchaseReceiptOutput,
         routing_role=ToolRoutingRole.CREATE_EXECUTE,
     ),
     "get_purchase_receipt": ToolContract(
@@ -1765,6 +1796,18 @@ TOOL_CONTRACTS["confirm_document_email"] = ToolContract(
     approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     annotation_overrides=MCPAnnotationOverrides(open_world_hint=True),
 )
+TOOL_CONTRACTS["execute_document_email"] = ToolContract(
+    "execute_document_email",
+    "Existing Documents",
+    ToolOperation.EXECUTE,
+    SideEffectClass.CONFIRM_WRITE,
+    "Queue a freshly validated document email through Frappe's native Email Queue.",
+    False,
+    DocumentEmailExecuteInput,
+    DocumentEmailExecuteOutput,
+    annotation_overrides=MCPAnnotationOverrides(open_world_hint=True),
+    routing_role=ToolRoutingRole.EMAIL_EXECUTE,
+)
 
 TOOL_CONTRACTS["prepare_sales_invoice_payment"] = ToolContract(
     "prepare_sales_invoice_payment",
@@ -1956,44 +1999,74 @@ TOOL_CONTRACTS["aggregate_customer_service_credentials"] = ToolContract(
     CredentialAggregateOutput,
 )
 TOOL_CONTRACTS["prepare_tea_entry"] = ToolContract(
-    "prepare_tea_entry", "Shayona", ToolOperation.PREPARE, SideEffectClass.PREPARE,
+    "prepare_tea_entry",
+    "Shayona",
+    ToolOperation.PREPARE,
+    SideEffectClass.PREPARE,
     "Prepare a native Tea Entry preview under the server create policy.",
-    False, TeaEntryCreateInput, TeaEntryPrepareOutput,
+    False,
+    TeaEntryCreateInput,
+    TeaEntryPrepareOutput,
     interaction_kinds=(InteractionKind.APPROVAL,),
     approval_confirm_tool="confirm_tea_entry",
 )
 TOOL_CONTRACTS["confirm_tea_entry"] = ToolContract(
-    "confirm_tea_entry", "Shayona", ToolOperation.CONFIRM, SideEffectClass.CONFIRM_WRITE,
+    "confirm_tea_entry",
+    "Shayona",
+    ToolOperation.CONFIRM,
+    SideEffectClass.CONFIRM_WRITE,
     "Revalidate and create the approved Tea Entry through native permissions.",
-    True, TeaEntryConfirmInput, TeaEntryCreateOutput,
+    True,
+    TeaEntryConfirmInput,
+    TeaEntryCreateOutput,
     approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
 )
 TOOL_CONTRACTS["execute_tea_entry"] = ToolContract(
-    "execute_tea_entry", "Shayona", ToolOperation.EXECUTE, SideEffectClass.CONFIRM_WRITE,
+    "execute_tea_entry",
+    "Shayona",
+    ToolOperation.EXECUTE,
+    SideEffectClass.CONFIRM_WRITE,
     "Create a Tea Entry from a fresh bounded request under direct create policy.",
-    False, TeaEntryCreateInput, TeaEntryCreateOutput,
+    False,
+    TeaEntryCreateInput,
+    TeaEntryCreateOutput,
     routing_role=ToolRoutingRole.CREATE_EXECUTE,
 )
 TOOL_CONTRACTS["prepare_tea_entry_update"] = ToolContract(
-    "prepare_tea_entry_update", "Shayona", ToolOperation.PREPARE, SideEffectClass.PREPARE,
+    "prepare_tea_entry_update",
+    "Shayona",
+    ToolOperation.PREPARE,
+    SideEffectClass.PREPARE,
     "Prepare a bounded Tea Entry update preview under the server update policy.",
-    False, TeaEntryUpdateInput, TeaEntryUpdatePrepareOutput,
+    False,
+    TeaEntryUpdateInput,
+    TeaEntryUpdatePrepareOutput,
     interaction_kinds=(InteractionKind.APPROVAL,),
     approval_confirm_tool="confirm_tea_entry_update",
     routing_role=ToolRoutingRole.LIFECYCLE_PREPARE,
 )
 TOOL_CONTRACTS["confirm_tea_entry_update"] = ToolContract(
-    "confirm_tea_entry_update", "Shayona", ToolOperation.CONFIRM, SideEffectClass.CONFIRM_WRITE,
+    "confirm_tea_entry_update",
+    "Shayona",
+    ToolOperation.CONFIRM,
+    SideEffectClass.CONFIRM_WRITE,
     "Revalidate and save an approved bounded Tea Entry update through native permissions.",
-    True, TeaEntryUpdateConfirmInput, TeaEntryUpdateOutput,
+    True,
+    TeaEntryUpdateConfirmInput,
+    TeaEntryUpdateOutput,
     approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     annotation_overrides=MCPAnnotationOverrides(destructive_hint=True),
     routing_role=ToolRoutingRole.LIFECYCLE_CONFIRM,
 )
 TOOL_CONTRACTS["execute_tea_entry_update"] = ToolContract(
-    "execute_tea_entry_update", "Shayona", ToolOperation.EXECUTE, SideEffectClass.CONFIRM_WRITE,
+    "execute_tea_entry_update",
+    "Shayona",
+    ToolOperation.EXECUTE,
+    SideEffectClass.CONFIRM_WRITE,
     "Update a Tea Entry from a fresh bounded request under direct update policy.",
-    False, TeaEntryUpdateInput, TeaEntryUpdateOutput,
+    False,
+    TeaEntryUpdateInput,
+    TeaEntryUpdateOutput,
     annotation_overrides=MCPAnnotationOverrides(destructive_hint=True),
     routing_role=ToolRoutingRole.LIFECYCLE_EXECUTE,
 )
@@ -2053,6 +2126,18 @@ TOOL_CONTRACTS["confirm_customer_service_credential_email"] = ToolContract(
     approval_guard=TRUSTED_PENDING_OPERATION_GUARD,
     annotation_overrides=MCPAnnotationOverrides(open_world_hint=True),
     routing_role=ToolRoutingRole.EMAIL_CONFIRM,
+)
+TOOL_CONTRACTS["execute_customer_service_credential_email"] = ToolContract(
+    "execute_customer_service_credential_email",
+    "Shayona",
+    ToolOperation.EXECUTE,
+    SideEffectClass.CONFIRM_WRITE,
+    "Queue a freshly validated Customer Service Credential email through Frappe's native Email Queue.",
+    False,
+    CredentialEmailExecuteInput,
+    CredentialEmailExecuteOutput,
+    annotation_overrides=MCPAnnotationOverrides(open_world_hint=True),
+    routing_role=ToolRoutingRole.EMAIL_EXECUTE,
 )
 
 

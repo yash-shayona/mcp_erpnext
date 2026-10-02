@@ -12,6 +12,8 @@ from ..contracts.email import (
     DocumentEmailConfirmOutput,
     DocumentEmailPrepareInput,
     DocumentEmailPrepareOutput,
+    DocumentEmailExecuteInput,
+    DocumentEmailExecuteOutput,
 )
 from ..contracts.registry import tool_meta
 from ..runtime import execute_tool_with_context
@@ -21,6 +23,7 @@ from ..services.common import email as email_service
 def register_document_email_tools(mcp: Any, profile: str) -> None:
     prepare_adapter = TypeAdapter(DocumentEmailPrepareOutput)
     confirm_adapter = TypeAdapter(DocumentEmailConfirmOutput)
+    execute_adapter = TypeAdapter(DocumentEmailExecuteOutput)
 
     @mcp.tool(
         name="prepare_document_email",
@@ -68,3 +71,31 @@ def register_document_email_tools(mcp: Any, profile: str) -> None:
             rest_arguments=request.model_dump(mode="json"),
         )
         return confirm_adapter.validate_python(result)
+
+    @mcp.tool(
+        name="execute_document_email",
+        description="Queue a freshly validated document email under direct Email policy.",
+        meta=tool_meta("execute_document_email"),
+        structured_output=True,
+    )
+    def execute_document_email(
+        request: DocumentEmailExecuteInput, ctx: Context
+    ) -> DocumentEmailExecuteOutput:
+        result = execute_tool_with_context(
+            ctx,
+            "execute_document_email",
+            lambda: email_service.execute_document_email(
+                request.doctype,
+                request.name,
+                profile,
+                request.recipient_email,
+                request.subject,
+                request.message,
+                request.print_format,
+                request.letterhead,
+                request.language,
+                request.recipient_scope,
+            ),
+            rest_arguments=request.model_dump(mode="json"),
+        )
+        return execute_adapter.validate_python(result)

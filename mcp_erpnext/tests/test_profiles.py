@@ -155,6 +155,7 @@ class ProfileRegistrationTests(unittest.TestCase):
                 "render_document_pdf",
                 "prepare_document_email",
                 "confirm_document_email",
+                "execute_document_email",
             ],
         )
         self.assertNotIn("prepare_quotation", names)
@@ -223,6 +224,7 @@ class ProfileRegistrationTests(unittest.TestCase):
                 "aggregate_customer_service_credentials",
                 "prepare_customer_service_credential_email",
                 "confirm_customer_service_credential_email",
+                "execute_customer_service_credential_email",
                 *tea_names,
             },
         )
@@ -237,12 +239,26 @@ class ProfileRegistrationTests(unittest.TestCase):
     def test_tea_write_inventory_is_static_across_modes(self):
         inventories = []
         for mode in LifecycleActionMode:
-            settings = replace(_settings(MCPProfile.ALL), create_mode=mode, update_mode=mode)
+            settings = replace(
+                _settings(MCPProfile.ALL), create_mode=mode, update_mode=mode
+            )
             tools = asyncio.run(create_mcp(settings).list_tools())
             self.assertEqual(audit_tool_contracts(tools), [])
             names = {tool.name for tool in tools}
-            self.assertTrue({"prepare_tea_entry", "confirm_tea_entry", "execute_tea_entry"}.issubset(names))
-            self.assertTrue({"prepare_tea_entry_update", "confirm_tea_entry_update", "execute_tea_entry_update"}.issubset(names))
+            self.assertTrue(
+                {
+                    "prepare_tea_entry",
+                    "confirm_tea_entry",
+                    "execute_tea_entry",
+                }.issubset(names)
+            )
+            self.assertTrue(
+                {
+                    "prepare_tea_entry_update",
+                    "confirm_tea_entry_update",
+                    "execute_tea_entry_update",
+                }.issubset(names)
+            )
             self.assertTrue({"create_tea_entry", "update_tea_entry"}.isdisjoint(names))
             inventories.append(names)
         self.assertTrue(all(names == inventories[0] for names in inventories))
@@ -280,7 +296,12 @@ class ProfileRegistrationTests(unittest.TestCase):
     def test_create_tools_remain_static_across_policy_modes(self):
         base = _settings(MCPProfile.SALES)
         inventories = [
-            [tool.name for tool in asyncio.run(create_mcp(replace(base, create_mode=mode)).list_tools())]
+            [
+                tool.name
+                for tool in asyncio.run(
+                    create_mcp(replace(base, create_mode=mode)).list_tools()
+                )
+            ]
             for mode in (
                 LifecycleActionMode.DISABLED,
                 LifecycleActionMode.DIRECT,
@@ -292,13 +313,30 @@ class ProfileRegistrationTests(unittest.TestCase):
         self.assertIn("execute_customer", inventories[0])
         self.assertIn("execute_item", inventories[0])
 
+    def test_email_tool_inventory_is_static_across_email_policy_modes(self):
+        base = _settings(MCPProfile.SALES)
+        inventories = [
+            [
+                tool.name
+                for tool in asyncio.run(
+                    create_mcp(replace(base, email_mode=mode)).list_tools()
+                )
+            ]
+            for mode in LifecycleActionMode
+        ]
+        self.assertEqual(inventories[0], inventories[1])
+        self.assertEqual(inventories[1], inventories[2])
+        self.assertIn("execute_document_email", inventories[0])
+
     def test_create_mcp_rejects_manual_invalid_lifecycle_mode(self):
         with self.assertRaisesRegex(RuntimeError, "MCP_UPDATE_MODE"):
             create_mcp(replace(_settings(MCPProfile.SALES), update_mode="unsafe"))
 
     def test_create_mode_defaults_to_disabled_and_normalizes_allowed_values(self):
         with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(MCPSettings.from_environment().create_mode.value, "disabled")
+            self.assertEqual(
+                MCPSettings.from_environment().create_mode.value, "disabled"
+            )
         with patch.dict(os.environ, {"MCP_CREATE_MODE": "  DiReCt  "}, clear=True):
             self.assertEqual(MCPSettings.from_environment().create_mode.value, "direct")
         with patch.dict(
@@ -311,6 +349,17 @@ class ProfileRegistrationTests(unittest.TestCase):
     def test_create_mode_rejects_unknown_configuration(self):
         with patch.dict(os.environ, {"MCP_CREATE_MODE": "unsafe"}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "MCP_CREATE_MODE"):
+                MCPSettings.from_environment()
+
+    def test_email_mode_defaults_normalizes_and_rejects_unknown_values(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(
+                MCPSettings.from_environment().email_mode.value, "disabled"
+            )
+        with patch.dict(os.environ, {"MCP_EMAIL_MODE": " Direct "}, clear=True):
+            self.assertEqual(MCPSettings.from_environment().email_mode.value, "direct")
+        with patch.dict(os.environ, {"MCP_EMAIL_MODE": "unsafe"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "MCP_EMAIL_MODE"):
                 MCPSettings.from_environment()
 
     def test_unknown_profile_fails_at_configuration_load(self):

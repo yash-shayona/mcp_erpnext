@@ -13,6 +13,13 @@ from frappe.utils import validate_email_address
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
 from ...observability import logged_public_error, new_error_reference
+from ..common.write_policy import (
+    WriteMode,
+    approval_entry_failure,
+    direct_entry_failure,
+    disabled_failure,
+    exact_mode_failure,
+)
 from . import credentials
 from .config import BusinessConfigError, load_business_defaults
 
@@ -22,6 +29,9 @@ _USERNAME_SENTINEL = "__MCP_CREDENTIAL_SECRET_USERNAME__"
 _PASSWORD_SENTINEL = "__MCP_CREDENTIAL_SECRET_PASSWORD__"
 
 _MESSAGES = {
+    "EMAIL_DISABLED": "Email sending is disabled by server policy.",
+    "APPROVAL_REQUIRED": "This operation requires prepare and confirm with an approval token.",
+    "DIRECT_EXECUTION_REQUIRED": "This operation is configured for direct execution; use the execute operation.",
     "CREDENTIAL_SCHEMA_UNAVAILABLE": "The Customer Service Credential schema is unavailable.",
     "CREDENTIAL_NOT_FOUND": "The requested credential was not found.",
     "CREDENTIAL_INACTIVE": "The requested credential is inactive.",
@@ -279,12 +289,12 @@ def _queue_reference(queue: Any, payload: dict[str, Any]) -> str | None:
     )
 
 
-def _prepare(
+def _plan(
     credential_name: str,
     recipient_email: str,
     subject: str | None = None,
     additional_note: str | None = None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     doc = _load_credential(credential_name)
     snapshot = _snapshot(doc)
     if not snapshot["is_active"]:
@@ -329,44 +339,52 @@ def _prepare(
         "subject_override": subject is not None,
         "additional_note": additional_note,
     }
-    token = approvals.create(
-        action=CREDENTIAL_EMAIL_ACTION,
-        site=str(frappe.local.site),
-        user=user,
-        payload=payload,
-    )
-    return {
-        "status": "ready_for_approval",
-        "preview": {
-            **{
-                key: snapshot[key]
-                for key in (
-                    "credential_name",
-                    "customer",
-                    "domain_name",
-                    "credential_type",
-                    "account_name",
-                    "account_identity",
-                    "control_panel_url",
-                    "is_active",
-                )
-            },
-            "to": recipient,
-            "cc": cc,
-            "reply_to": operator_email,
-            "subject": approved_subject,
-            "additional_note": additional_note,
-            "email_template": template_name,
+    preview = {
+        **{
+            key: snapshot[key]
+            for key in (
+                "credential_name",
+                "customer",
+                "domain_name",
+                "credential_type",
+                "account_name",
+                "account_identity",
+                "control_panel_url",
+                "is_active",
+            )
         },
-        "approval_token": token,
-        "expires_in_seconds": APPROVAL_TTL_SECONDS,
-        "interaction": approval_directive().model_dump(mode="json"),
+        "to": recipient,
+        "cc": cc,
+        "reply_to": operator_email,
+        "subject": approved_subject,
+        "additional_note": additional_note,
+        "email_template": template_name,
     }
+    return payload, preview
 
 
 def prepare_customer_service_credential_email(**kwargs: Any) -> dict[str, Any]:
     try:
-        return _prepare(**kwargs)
+        if failure := disabled_failure("email"):
+            return _error(failure.code)
+        payload, preview = _plan(**kwargs)
+        if direct_entry_failure("email") is None:
+            return {"status": "preview", "preview": preview}
+        if failure := approval_entry_failure("email"):
+            return _error(failure.code)
+        token = approvals.create(
+            action=CREDENTIAL_EMAIL_ACTION,
+            site=str(frappe.local.site),
+            user=_current_user(),
+            payload=payload,
+        )
+        return {
+            "status": "ready_for_approval",
+            "preview": preview,
+            "approval_token": token,
+            "expires_in_seconds": APPROVAL_TTL_SECONDS,
+            "interaction": approval_directive().model_dump(mode="json"),
+        }
     except CredentialEmailError as error:
         return logged_public_error(
             "prepare_customer_service_credential_email",
@@ -432,25 +450,10 @@ def _revalidate(payload: dict[str, Any]) -> tuple[Any, dict[str, Any], Any, str]
     return doc, snapshot, template, operator
 
 
-def _confirm(approval_token: str) -> dict[str, Any]:
-    user = _current_user()
-    approval, state = approvals.claim_for_confirm_write(
-        approval_token,
-        action=CREDENTIAL_EMAIL_ACTION,
-        site=str(frappe.local.site),
-        user=user,
-    )
-    if state != "available" or approval is None:
-        code, message, retryable = confirmation_failure(state, "credential email")
-        return {
-            "status": "error",
-            "code": code,
-            "message": message,
-            "reference": new_error_reference(),
-            "retryable": retryable,
-        }
-    payload = approval.payload
+def _apply(payload: dict[str, Any], expected_mode: WriteMode) -> dict[str, Any]:
     doc, snapshot, template, operator = _revalidate(payload)
+    if failure := exact_mode_failure("email", expected_mode):
+        return _error(failure.code)
     try:
         username = _value(doc, "username")
         password = doc.get_password("password")
@@ -481,6 +484,9 @@ def _confirm(approval_token: str) -> dict[str, Any]:
         or not message
     ):
         _fail("PREPARED_STATE_CHANGED")
+    if failure := exact_mode_failure("email", expected_mode):
+        frappe.db.rollback()
+        return _error(failure.code)
     try:
         queue = frappe.sendmail(
             recipients=[payload["recipient_email"]],
@@ -512,6 +518,42 @@ def _confirm(approval_token: str) -> dict[str, Any]:
         "queue_reference": reference,
         "message": "Credential email accepted by Frappe's Email Queue.",
     }
+
+
+def _confirm(approval_token: str) -> dict[str, Any]:
+    if failure := approval_entry_failure("email"):
+        return _error(failure.code)
+    user = _current_user()
+    approval, state = approvals.claim_for_confirm_write(
+        approval_token,
+        action=CREDENTIAL_EMAIL_ACTION,
+        site=str(frappe.local.site),
+        user=user,
+    )
+    if state != "available" or approval is None:
+        code, message, retryable = confirmation_failure(state, "credential email")
+        return {
+            "status": "error",
+            "code": code,
+            "message": message,
+            "reference": new_error_reference(),
+            "retryable": retryable,
+        }
+    return _apply(approval.payload, WriteMode.APPROVAL_REQUIRED)
+
+
+def execute_customer_service_credential_email(**kwargs: Any) -> dict[str, Any]:
+    try:
+        if failure := direct_entry_failure("email"):
+            return _error(failure.code)
+        payload, _preview = _plan(**kwargs)
+        return _apply(payload, WriteMode.DIRECT)
+    except CredentialEmailError as error:
+        return logged_public_error(
+            "execute_customer_service_credential_email",
+            error.public_code,
+            message=_MESSAGES.get(error.public_code),
+        )
 
 
 def confirm_customer_service_credential_email(approval_token: str) -> dict[str, Any]:

@@ -31,10 +31,15 @@ from .contracts.buying.purchase_order import (
     PurchaseOrderConfirmInput,
     PurchaseOrderPrepareInput,
 )
-from .contracts.email import DocumentEmailConfirmInput, DocumentEmailPrepareInput
+from .contracts.email import (
+    DocumentEmailConfirmInput,
+    DocumentEmailPrepareInput,
+    DocumentEmailExecuteInput,
+)
 from .contracts.shayona.credential_email import (
     CredentialEmailConfirmInput,
     CredentialEmailPrepareInput,
+    CredentialEmailExecuteInput,
 )
 from .contracts.accounts.sales_invoice_payment import (
     SalesInvoicePaymentConfirmInput,
@@ -326,6 +331,21 @@ def _prepare_email(request: DocumentEmailPrepareInput, profile: str) -> dict[str
     )
 
 
+def _execute_email(request: DocumentEmailExecuteInput, profile: str) -> dict[str, Any]:
+    return email.execute_document_email(
+        request.doctype,
+        request.name,
+        profile,
+        request.recipient_email,
+        request.subject,
+        request.message,
+        request.print_format,
+        request.letterhead,
+        request.language,
+        request.recipient_scope,
+    )
+
+
 def _render_pdf(request: RenderDocumentPdfInput, profile: str) -> dict[str, Any]:
     return pdf.render_document_pdf(
         request.doctype,
@@ -439,6 +459,7 @@ _SHARED_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
     "execute_document_delete": (PrepareActionInput, _execute_lifecycle("delete")),
     "render_document_pdf": (RenderDocumentPdfInput, _render_pdf),
     "prepare_document_email": (DocumentEmailPrepareInput, _prepare_email),
+    "execute_document_email": (DocumentEmailExecuteInput, _execute_email),
     "confirm_document_email": (
         DocumentEmailConfirmInput,
         lambda request, profile: email.confirm_document_email(
@@ -585,7 +606,9 @@ _SALES_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
             customer=request.customer.name,
             items=[row.to_service_payload() for row in request.items],
             company=request.company,
-            delivery_date=request.delivery_date.isoformat() if request.delivery_date else None,
+            delivery_date=(
+                request.delivery_date.isoformat() if request.delivery_date else None
+            ),
             selling_price_list=request.selling_price_list,
             tc_name=request.tc_name,
             payment_terms_template=request.payment_terms_template,
@@ -661,10 +684,16 @@ _SALES_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
     "execute_sales_invoice": (
         SalesInvoicePrepareInput,
         lambda request, _profile: sales_invoice.execute_sales_invoice(
-            request.customer.model_dump(), [row.model_dump() for row in request.items],
-            request.company, request.posting_date.isoformat() if request.posting_date else None,
-            request.selling_price_list, request.customer_address, request.shipping_address_name,
-            request.contact_person, request.tc_name, request.payment_terms_template,
+            request.customer.model_dump(),
+            [row.model_dump() for row in request.items],
+            request.company,
+            request.posting_date.isoformat() if request.posting_date else None,
+            request.selling_price_list,
+            request.customer_address,
+            request.shipping_address_name,
+            request.contact_person,
+            request.tc_name,
+            request.payment_terms_template,
             request.custom_remarks,
         ),
     ),
@@ -852,10 +881,14 @@ _PURCHASE_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
     "execute_purchase_order": (
         PurchaseOrderPrepareInput,
         lambda request, _profile: purchase_order.execute_purchase_order(
-            request.supplier.model_dump(), [row.to_service_payload() for row in request.items],
-            request.company, request.transaction_date.isoformat() if request.transaction_date else None,
+            request.supplier.model_dump(),
+            [row.to_service_payload() for row in request.items],
+            request.company,
+            request.transaction_date.isoformat() if request.transaction_date else None,
             request.schedule_date.isoformat() if request.schedule_date else None,
-            request.buying_price_list, request.taxes_and_charges, request.tc_name,
+            request.buying_price_list,
+            request.taxes_and_charges,
+            request.tc_name,
             request.payment_terms_template,
         ),
     ),
@@ -877,7 +910,8 @@ _PURCHASE_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
     "execute_purchase_order_to_purchase_receipt": (
         PurchaseReceiptPrepareInput,
         lambda request, _profile: purchase_order_to_purchase_receipt.execute_purchase_order_to_purchase_receipt(
-            request.purchase_order, [row.model_dump() for row in request.lines],
+            request.purchase_order,
+            [row.model_dump() for row in request.lines],
             request.posting_date.isoformat() if request.posting_date else None,
             request.supplier_delivery_note,
         ),
@@ -1041,15 +1075,21 @@ _SHAYONA_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
     ),
     "prepare_tea_entry": (
         TeaEntryCreateInput,
-        lambda request, _profile: shayona_tea_entries.prepare_tea_entry(request.model_dump()),
+        lambda request, _profile: shayona_tea_entries.prepare_tea_entry(
+            request.model_dump()
+        ),
     ),
     "confirm_tea_entry": (
         TeaEntryConfirmInput,
-        lambda request, _profile: shayona_tea_entries.confirm_tea_entry(request.approval_token, request.confirm),
+        lambda request, _profile: shayona_tea_entries.confirm_tea_entry(
+            request.approval_token, request.confirm
+        ),
     ),
     "execute_tea_entry": (
         TeaEntryCreateInput,
-        lambda request, _profile: shayona_tea_entries.execute_tea_entry(request.model_dump()),
+        lambda request, _profile: shayona_tea_entries.execute_tea_entry(
+            request.model_dump()
+        ),
     ),
     "prepare_tea_entry_update": (
         TeaEntryUpdateInput,
@@ -1097,6 +1137,12 @@ _SHAYONA_HANDLERS: dict[str, tuple[type[Any], RemoteHandler]] = {
         CredentialEmailConfirmInput,
         lambda request, _profile: shayona_credential_email.confirm_customer_service_credential_email(
             request.approval_token
+        ),
+    ),
+    "execute_customer_service_credential_email": (
+        CredentialEmailExecuteInput,
+        lambda request, _profile: shayona_credential_email.execute_customer_service_credential_email(
+            **request.model_dump()
         ),
     ),
 }

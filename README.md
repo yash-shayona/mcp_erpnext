@@ -45,6 +45,11 @@ prepared-operation approval, or native Frappe permissions and hooks. Deleting a
 Submitted document uses the governed `cancel_delete` plan and therefore requires
 both modes to be `approval_required`.
 
+Generic document and Customer Service Credential email use the independent,
+server-only `MCP_EMAIL_MODE` gate. It defaults to `disabled`; `direct` enables
+fresh-request execute tools, and `approval_required` enables prepare/confirm.
+The Frappe Email Queue remains the send boundary in both modes.
+
 The six Update/Cancel/Delete tools remain discoverable while disabled; the shared
 service returns `UPDATE_DISABLED`, `CANCEL_DISABLED`, or `DELETE_DISABLED` before
 target loading or approval creation. These modes are process environment

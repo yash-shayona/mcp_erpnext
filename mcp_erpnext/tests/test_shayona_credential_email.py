@@ -14,9 +14,126 @@ from mcp_erpnext.services.shayona.config import load_business_defaults
 
 
 class ShayonaCredentialEmailTests(unittest.TestCase):
+    def setUp(self):
+        self.email_mode = patch.dict(
+            os.environ, {"MCP_EMAIL_MODE": "approval_required"}
+        )
+        self.email_mode.start()
+
+    def tearDown(self):
+        self.email_mode.stop()
+
+    def test_disabled_email_blocks_all_credential_entry_paths_without_store_access(
+        self,
+    ):
+        with (
+            patch.dict(os.environ, {"MCP_EMAIL_MODE": "disabled"}),
+            patch.object(credential_email.approvals, "create") as create,
+            patch.object(
+                credential_email.approvals, "claim_for_confirm_write"
+            ) as claim,
+            patch.object(credential_email, "_plan") as plan,
+            patch.object(credential_email.frappe, "sendmail") as sendmail,
+        ):
+            prepared = credential_email.prepare_customer_service_credential_email()
+            executed = credential_email.execute_customer_service_credential_email()
+            confirmed = credential_email.confirm_customer_service_credential_email(
+                "unused"
+            )
+        self.assertEqual(
+            [prepared["code"], executed["code"], confirmed["code"]],
+            ["EMAIL_DISABLED"] * 3,
+        )
+        plan.assert_not_called()
+        create.assert_not_called()
+        claim.assert_not_called()
+        sendmail.assert_not_called()
+
+    def test_direct_credential_prepare_is_redacted_preview_without_approval(self):
+        doc, password = self._credential_doc()
+        with patch.dict(os.environ, {"MCP_EMAIL_MODE": "direct"}):
+            result, create, _outgoing = self._prepare_with_dependencies(doc=doc)
+        self.assertEqual(result["status"], "preview")
+        self.assertNotIn("approval_token", result)
+        self.assertNotIn("username", str(result["preview"]).lower())
+        self.assertNotIn("password", str(result["preview"]).lower())
+        create.assert_not_called()
+        password.assert_not_called()
+
+    def test_wrong_credential_confirm_mode_is_checked_before_claim(self):
+        with patch.dict(os.environ, {"MCP_EMAIL_MODE": "direct"}), patch.object(
+            credential_email.approvals, "claim_for_confirm_write"
+        ) as claim:
+            result = credential_email.confirm_customer_service_credential_email("opaque")
+        self.assertEqual(result["code"], "DIRECT_EXECUTION_REQUIRED")
+        claim.assert_not_called()
+
+    def test_credential_apply_checks_mode_before_secret_access(self):
+        username = Mock(side_effect=AssertionError("username accessed before mode check"))
+        password = Mock(side_effect=AssertionError("password accessed before mode check"))
+        doc = SimpleNamespace(get=username, get_password=password)
+        with patch.dict(os.environ, {"MCP_EMAIL_MODE": "approval_required"}), patch.object(
+            credential_email, "_revalidate",
+            return_value=(doc, {}, SimpleNamespace(), "operator@example.com"),
+        ), patch.object(credential_email.frappe, "sendmail") as sendmail:
+            result = credential_email._apply({}, credential_email.WriteMode.DIRECT)
+        self.assertEqual(result["code"], "APPROVAL_REQUIRED")
+        username.assert_not_called()
+        password.assert_not_called()
+        sendmail.assert_not_called()
+
+    def test_credential_final_mode_guard_blocks_send_after_secret_render(self):
+        doc = SimpleNamespace(
+            get=lambda field: "user" if field == "username" else None,
+            get_password=lambda _field: "pass",
+        )
+        snapshot = {
+            "credential_name": "CSC-1",
+            "customer": "Customer 1",
+            "domain_name": "example.com",
+            "credential_type": "cPanel",
+            "account_name": "Main",
+            "account_identity": "main",
+            "control_panel_url": "https://panel.example.com",
+        }
+
+        def render(_context):
+            os.environ["MCP_EMAIL_MODE"] = "disabled"
+            return {"subject": "Approved subject", "message": "body"}
+
+        template = SimpleNamespace(get_formatted_email=render)
+        payload = {
+            "credential_name": "CSC-1",
+            "recipient_email": "recipient@example.com",
+            "cc": ["operator@example.com"],
+            "approved_subject": "Approved subject",
+            "subject_override": False,
+            "additional_note_variable": "additional_note",
+            "additional_note": None,
+        }
+        db = SimpleNamespace(commit=Mock(), rollback=Mock())
+        with (
+            patch.dict(os.environ, {"MCP_EMAIL_MODE": "direct"}),
+            patch.object(
+                credential_email,
+                "_revalidate",
+                return_value=(doc, snapshot, template, "operator@example.com"),
+            ),
+            patch.object(credential_email.frappe, "db", db),
+            patch.object(credential_email.frappe, "sendmail") as sendmail,
+        ):
+            result = credential_email._apply(payload, credential_email.WriteMode.DIRECT)
+        self.assertEqual(result["code"], "EMAIL_DISABLED")
+        sendmail.assert_not_called()
+        db.commit.assert_not_called()
+        db.rollback.assert_called_once()
+
     def test_credential_email_approval_is_independent_of_create_mode(self):
         for mode in ("disabled", "direct"):
-            with self.subTest(mode=mode), patch.dict(os.environ, {"MCP_CREATE_MODE": mode}):
+            with (
+                self.subTest(mode=mode),
+                patch.dict(os.environ, {"MCP_CREATE_MODE": mode}),
+            ):
                 doc, password = self._credential_doc()
                 result, create, _outgoing = self._prepare_with_dependencies(doc=doc)
                 self.assertEqual(result["status"], "ready_for_approval")
@@ -292,7 +409,7 @@ class ShayonaCredentialEmailTests(unittest.TestCase):
             ):
                 with patch.object(
                     credential_email,
-                    "_prepare",
+                    "_plan",
                     side_effect=credential_email.CredentialEmailError(code),
                 ):
                     credential_email.prepare_customer_service_credential_email()
@@ -307,7 +424,7 @@ class ShayonaCredentialEmailTests(unittest.TestCase):
         ) as logged:
             with patch.object(
                 credential_email,
-                "_prepare",
+                "_plan",
                 side_effect=credential_email.CredentialEmailError("UNKNOWN"),
             ):
                 credential_email.prepare_customer_service_credential_email()

@@ -137,29 +137,55 @@ class RemoteOperationRegistryTests(unittest.TestCase):
             (
                 "execute_customer_contact",
                 "customer_contact",
-                {"customer": {"doctype": "Customer", "name": "CUST-1"}, "mode": "create", "new_contact": {"first_name": "A"}},
+                {
+                    "customer": {"doctype": "Customer", "name": "CUST-1"},
+                    "mode": "create",
+                    "new_contact": {"first_name": "A"},
+                },
             ),
             (
                 "execute_sales_order",
                 "sales_order",
-                {"customer": {"doctype": "Customer", "name": "CUST-1"}, "items": [{"item": {"doctype": "Item", "name": "ITEM-1"}, "qty": 1}]},
+                {
+                    "customer": {"doctype": "Customer", "name": "CUST-1"},
+                    "items": [
+                        {"item": {"doctype": "Item", "name": "ITEM-1"}, "qty": 1}
+                    ],
+                },
             ),
             (
                 "execute_quotation",
                 "quotation",
-                {"customer": {"doctype": "Customer", "name": "CUST-1"}, "items": [{"item": {"doctype": "Item", "name": "ITEM-1"}, "qty": 1}]},
+                {
+                    "customer": {"doctype": "Customer", "name": "CUST-1"},
+                    "items": [
+                        {"item": {"doctype": "Item", "name": "ITEM-1"}, "qty": 1}
+                    ],
+                },
             ),
             (
                 "execute_sales_invoice",
                 "sales_invoice",
-                {"customer": {"doctype": "Customer", "name": "CUST-1"}, "items": [{"item": {"doctype": "Item", "name": "ITEM-1"}, "qty": 1, "rate": 1}]},
+                {
+                    "customer": {"doctype": "Customer", "name": "CUST-1"},
+                    "items": [
+                        {
+                            "item": {"doctype": "Item", "name": "ITEM-1"},
+                            "qty": 1,
+                            "rate": 1,
+                        }
+                    ],
+                },
             ),
         )
         for operation, service_name, arguments in cases:
             service = getattr(remote_operations, service_name)
-            with self.subTest(operation=operation), patch.object(
-                service, operation, return_value={"status": "created"}
-            ) as execute:
+            with (
+                self.subTest(operation=operation),
+                patch.object(
+                    service, operation, return_value={"status": "created"}
+                ) as execute,
+            ):
                 result = remote_operations.execute_remote_operation(
                     operation, "sales", arguments
                 )
@@ -174,23 +200,40 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                             {**arguments, override: "approval_required"},
                         )
 
-    def test_purchase_create_execute_handlers_are_static_and_reject_policy_overrides(self):
+    def test_purchase_create_execute_handlers_are_static_and_reject_policy_overrides(
+        self,
+    ):
         cases = (
             (
-                "execute_purchase_order", "purchase_order",
-                {"supplier": {"doctype": "Supplier", "name": "SUP-1"}, "items": [{"item": {"doctype": "Item", "name": "ITEM-1"}, "qty": 1}]},
+                "execute_purchase_order",
+                "purchase_order",
+                {
+                    "supplier": {"doctype": "Supplier", "name": "SUP-1"},
+                    "items": [
+                        {"item": {"doctype": "Item", "name": "ITEM-1"}, "qty": 1}
+                    ],
+                },
             ),
             (
-                "execute_purchase_order_to_purchase_receipt", "purchase_order_to_purchase_receipt",
-                {"purchase_order": "PO-1", "lines": [{"purchase_order_item": "PO-ITEM-1", "accepted_qty": 1}]},
+                "execute_purchase_order_to_purchase_receipt",
+                "purchase_order_to_purchase_receipt",
+                {
+                    "purchase_order": "PO-1",
+                    "lines": [{"purchase_order_item": "PO-ITEM-1", "accepted_qty": 1}],
+                },
             ),
         )
         for operation, service_name, arguments in cases:
             service = getattr(remote_operations, service_name)
-            with self.subTest(operation=operation), patch.object(
-                service, operation, return_value={"status": "created"}
-            ) as execute:
-                result = remote_operations.execute_remote_operation(operation, "purchase", arguments)
+            with (
+                self.subTest(operation=operation),
+                patch.object(
+                    service, operation, return_value={"status": "created"}
+                ) as execute,
+            ):
+                result = remote_operations.execute_remote_operation(
+                    operation, "purchase", arguments
+                )
             self.assertEqual(result, {"status": "created"})
             execute.assert_called_once()
             for override in ("create_mode", "MCP_CREATE_MODE"):
@@ -202,15 +245,29 @@ class RemoteOperationRegistryTests(unittest.TestCase):
 
     def test_shayona_tea_create_is_all_only_typed_and_uses_shared_service(self):
         operations = {
-            "prepare_tea_entry": {"no_of_cups": 2, "rate_per_cup": "15", "date": "2026-10-02"},
+            "prepare_tea_entry": {
+                "no_of_cups": 2,
+                "rate_per_cup": "15",
+                "date": "2026-10-02",
+            },
             "execute_tea_entry": {"no_of_cups": 2, "rate_per_cup": "15"},
             "confirm_tea_entry": {"approval_token": "token", "confirm": True},
         }
         for operation, arguments in operations.items():
-            with self.subTest(operation=operation), patch.object(
-                remote_operations.shayona_tea_entries, operation, return_value={"status": "created"}
-            ) as service:
-                self.assertEqual(remote_operations.execute_remote_operation(operation, "all", arguments), {"status": "created"})
+            with (
+                self.subTest(operation=operation),
+                patch.object(
+                    remote_operations.shayona_tea_entries,
+                    operation,
+                    return_value={"status": "created"},
+                ) as service,
+            ):
+                self.assertEqual(
+                    remote_operations.execute_remote_operation(
+                        operation, "all", arguments
+                    ),
+                    {"status": "created"},
+                )
                 service.assert_called_once()
                 if operation == "confirm_tea_entry":
                     service.assert_called_once_with("token", True)
@@ -218,10 +275,25 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                     self.assertEqual(service.call_args.args[0]["no_of_cups"], 2)
                 for profile in ("sales", "purchase", "accounts"):
                     with self.assertRaises(remote_operations.RemoteOperationError):
-                        remote_operations.execute_remote_operation(operation, profile, arguments)
-                for key in ("total_amount", "ignore_permissions", "create_mode", "MCP_CREATE_MODE", "unknown", "approved", "owner"):
-                    with self.subTest(key=key), self.assertRaises(remote_operations.RemoteOperationError):
-                        remote_operations.execute_remote_operation(operation, "all", arguments | {key: True})
+                        remote_operations.execute_remote_operation(
+                            operation, profile, arguments
+                        )
+                for key in (
+                    "total_amount",
+                    "ignore_permissions",
+                    "create_mode",
+                    "MCP_CREATE_MODE",
+                    "unknown",
+                    "approved",
+                    "owner",
+                ):
+                    with (
+                        self.subTest(key=key),
+                        self.assertRaises(remote_operations.RemoteOperationError),
+                    ):
+                        remote_operations.execute_remote_operation(
+                            operation, "all", arguments | {key: True}
+                        )
                 self.assertEqual(service.call_count, 1)
         for operation in ("create_tea_entry", "update_tea_entry"):
             with self.assertRaises(remote_operations.RemoteOperationError):
@@ -230,41 +302,66 @@ class RemoteOperationRegistryTests(unittest.TestCase):
     def test_shayona_tea_update_is_all_only_typed_and_rejects_bypass_fields(self):
         cases = {
             "prepare_tea_entry_update": {
-                "tea_entry_name": "TEA-1", "changes": {"no_of_cups": 12},
+                "tea_entry_name": "TEA-1",
+                "changes": {"no_of_cups": 12},
             },
             "execute_tea_entry_update": {
-                "tea_entry_name": "TEA-1", "changes": {"vendor": "Vendor B"},
+                "tea_entry_name": "TEA-1",
+                "changes": {"vendor": "Vendor B"},
             },
             "confirm_tea_entry_update": {"approval_token": "token", "confirm": True},
         }
         for operation, arguments in cases.items():
-            with self.subTest(operation=operation), patch.object(
-                remote_operations.shayona_tea_entries,
-                operation,
-                return_value={"status": "updated"},
-            ) as service:
+            with (
+                self.subTest(operation=operation),
+                patch.object(
+                    remote_operations.shayona_tea_entries,
+                    operation,
+                    return_value={"status": "updated"},
+                ) as service,
+            ):
                 self.assertEqual(
-                    remote_operations.execute_remote_operation(operation, "all", arguments),
+                    remote_operations.execute_remote_operation(
+                        operation, "all", arguments
+                    ),
                     {"status": "updated"},
                 )
                 service.assert_called_once()
                 if operation == "confirm_tea_entry_update":
                     service.assert_called_once_with("token", True)
                 else:
-                    self.assertEqual(service.call_args.args[0]["tea_entry_name"], "TEA-1")
+                    self.assertEqual(
+                        service.call_args.args[0]["tea_entry_name"], "TEA-1"
+                    )
                 for profile in ("sales", "purchase", "accounts"):
                     with self.assertRaises(remote_operations.RemoteOperationError):
-                        remote_operations.execute_remote_operation(operation, profile, arguments)
+                        remote_operations.execute_remote_operation(
+                            operation, profile, arguments
+                        )
                 for field in (
-                    "total_amount", "ignore_permissions", "update_mode", "MCP_UPDATE_MODE",
-                    "approved", "owner", "modified", "docstatus", "unknown",
+                    "total_amount",
+                    "ignore_permissions",
+                    "update_mode",
+                    "MCP_UPDATE_MODE",
+                    "approved",
+                    "owner",
+                    "modified",
+                    "docstatus",
+                    "unknown",
                 ):
-                    with self.subTest(field=field), self.assertRaises(remote_operations.RemoteOperationError):
+                    with (
+                        self.subTest(field=field),
+                        self.assertRaises(remote_operations.RemoteOperationError),
+                    ):
                         if "changes" in arguments:
-                            invalid = arguments | {"changes": arguments["changes"] | {field: 1}}
+                            invalid = arguments | {
+                                "changes": arguments["changes"] | {field: 1}
+                            }
                         else:
                             invalid = arguments | {field: 1}
-                        remote_operations.execute_remote_operation(operation, "all", invalid)
+                        remote_operations.execute_remote_operation(
+                            operation, "all", invalid
+                        )
                 self.assertEqual(service.call_count, 1)
 
     def test_shayona_tea_entry_reads_are_all_only_and_typed(self):
@@ -362,6 +459,9 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                 "confirm_customer_service_credential_email": Mock(
                     return_value={"status": "queued"}
                 ),
+                "execute_customer_service_credential_email": Mock(
+                    return_value={"status": "queued"}
+                ),
             },
         ):
             self.assertEqual(
@@ -380,6 +480,14 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                 )["status"],
                 "queued",
             )
+            self.assertEqual(
+                remote_operations.execute_remote_operation(
+                    "execute_customer_service_credential_email",
+                    "all",
+                    {"credential_name": "CSC-1", "recipient_email": "a@example.com"},
+                )["status"],
+                "queued",
+            )
             for profile in ("sales", "purchase", "accounts"):
                 for operation, arguments in (
                     (
@@ -392,6 +500,10 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                     (
                         "confirm_customer_service_credential_email",
                         {"approval_token": "opaque"},
+                    ),
+                    (
+                        "execute_customer_service_credential_email",
+                        {"credential_name": "CSC-1", "recipient_email": "a@example.com"},
                     ),
                 ):
                     with (
@@ -419,6 +531,37 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                 "all",
                 {"approval_token": "opaque", "password": "secret"},
             )
+
+        with self.assertRaises(remote_operations.RemoteOperationError):
+            remote_operations.execute_remote_operation(
+                "execute_customer_service_credential_email",
+                "all",
+                {"credential_name": "CSC-1", "recipient_email": "a@example.com", "mode": "direct"},
+            )
+
+    def test_document_email_execute_is_a_fixed_profile_aware_remote_operation(self):
+        with patch.object(
+            remote_operations.email,
+            "execute_document_email",
+            return_value={"status": "queued"},
+        ) as execute:
+            result = remote_operations.execute_remote_operation(
+                "execute_document_email",
+                "purchase",
+                {
+                    "doctype": "Purchase Order",
+                    "name": "PO-001",
+                    "recipient_scope": "party",
+                },
+            )
+        self.assertEqual(result["status"], "queued")
+        self.assertEqual(execute.call_args.args[:3], ("Purchase Order", "PO-001", "purchase"))
+        for invalid in (
+            {"doctype": "Purchase Order", "name": "PO-001", "policy": "direct"},
+            {"doctype": "Purchase Order", "name": "PO-001", "approval_token": "opaque"},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(remote_operations.RemoteOperationError):
+                remote_operations.execute_remote_operation("execute_document_email", "purchase", invalid)
 
     def test_remote_prepare_enforces_executor_update_policy_before_load(self):
         with (
@@ -860,14 +1003,14 @@ class RemoteOperationRegistryTests(unittest.TestCase):
 
 
 class RemoteErrorTests(unittest.TestCase):
-    @patch("mcp_erpnext.remote_api.logged_public_error")
+    @patch("mcp_erpnext.remote_api.logged_defined_error")
     def test_remote_safe_error_keeps_the_required_reference_contract(
         self, logged_error
     ):
         logged_error.return_value = {
             "status": "error",
             "code": "ERP_PERMISSION_DENIED",
-            "message": "The remote ERPNext request could not be completed.",
+            "message": "The configured ERPNext user does not have permission for that request. Please contact your administrator.",
             "reference": "MCP-ERR-97C4A07F",
             "retryable": False,
         }
@@ -876,11 +1019,7 @@ class RemoteErrorTests(unittest.TestCase):
 
         self.assertEqual(ToolError.model_validate(result).reference, "MCP-ERR-97C4A07F")
         logged_error.assert_called_once_with(
-            "remote_api",
-            "ERP_PERMISSION_DENIED",
-            message="The remote ERPNext request could not be completed.",
-            retryable=False,
-            level="warning",
+            "remote_api", "ERP_PERMISSION_DENIED", level="warning"
         )
 
 

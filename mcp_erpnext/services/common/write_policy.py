@@ -4,16 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ...public_errors import definition_for
 from ...settings import MCPSettings, WriteMode
 
-_DISABLED_RESULTS = {
-    "create": ("CREATE_DISABLED", "Document creation is disabled by server policy."),
-    "update": ("UPDATE_DISABLED", "Document update is disabled by server policy."),
-    "cancel": (
-        "CANCEL_DISABLED",
-        "Document cancellation is disabled by server policy.",
-    ),
-    "delete": ("DELETE_DISABLED", "Document deletion is disabled by server policy."),
+_DISABLED_CODES = {
+    "create": "CREATE_DISABLED",
+    "update": "UPDATE_DISABLED",
+    "cancel": "CANCEL_DISABLED",
+    "delete": "DELETE_DISABLED",
+    "email": "EMAIL_DISABLED",
 }
 
 
@@ -35,6 +34,7 @@ def current_mode(action: str) -> WriteMode:
         "update": settings.update_mode,
         "cancel": settings.cancel_mode,
         "delete": settings.delete_mode,
+        "email": settings.email_mode,
     }
     action = _family(action)
     try:
@@ -50,17 +50,13 @@ def policy_failure(action: str, expected: WriteMode) -> PolicyFailure | None:
     if mode is expected:
         return None
     if mode is WriteMode.DISABLED:
-        code, message = _DISABLED_RESULTS[action]
-        return PolicyFailure(code, message)
+        code = _DISABLED_CODES[action]
+        return PolicyFailure(code, definition_for(code).message)
     if expected is WriteMode.DIRECT:
-        return PolicyFailure(
-            "APPROVAL_REQUIRED",
-            "This operation requires prepare and confirm with an approval token.",
-        )
-    return PolicyFailure(
-        "DIRECT_EXECUTION_REQUIRED",
-        "This operation is configured for direct execution; use the execute operation.",
-    )
+        code = "APPROVAL_REQUIRED"
+        return PolicyFailure(code, definition_for(code).message)
+    code = "DIRECT_EXECUTION_REQUIRED"
+    return PolicyFailure(code, definition_for(code).message)
 
 
 def disabled_failure(action: str) -> PolicyFailure | None:
@@ -68,8 +64,8 @@ def disabled_failure(action: str) -> PolicyFailure | None:
     action = _family(action)
     if current_mode(action) is not WriteMode.DISABLED:
         return None
-    code, message = _DISABLED_RESULTS[action]
-    return PolicyFailure(code, message)
+    code = _DISABLED_CODES[action]
+    return PolicyFailure(code, definition_for(code).message)
 
 
 def direct_entry_failure(action: str) -> PolicyFailure | None:

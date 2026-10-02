@@ -66,6 +66,11 @@ class DocumentEmailReady(PublicContractModel):
     interaction: InteractionDirective
 
 
+class DocumentEmailPreviewOnly(PublicContractModel):
+    status: Literal["preview"]
+    preview: DocumentEmailPreview
+
+
 class DocumentEmailNeedsInput(PublicContractModel):
     status: Literal["needs_input"]
     doctype: DocumentEmailDoctype
@@ -82,7 +87,11 @@ class DocumentEmailNotFound(PublicContractModel):
 
 
 DocumentEmailPrepareResult = Annotated[
-    DocumentEmailReady | DocumentEmailNeedsInput | DocumentEmailNotFound | ToolError,
+    DocumentEmailReady
+    | DocumentEmailPreviewOnly
+    | DocumentEmailNeedsInput
+    | DocumentEmailNotFound
+    | ToolError,
     Field(discriminator="status"),
 ]
 
@@ -112,3 +121,7 @@ class DocumentEmailConfirmOutput(RootModel[DocumentEmailConfirmResult]):
     """Structured confirmation result; queued is not delivery confirmation."""
 
     model_config = {"json_schema_extra": {"type": "object"}}
+
+
+DocumentEmailExecuteInput = DocumentEmailPrepareInput
+DocumentEmailExecuteOutput = DocumentEmailConfirmOutput

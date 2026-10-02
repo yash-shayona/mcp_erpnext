@@ -16,7 +16,14 @@ from ...contracts.interaction import (
     InteractionKind,
     approval_directive,
 )
-from ...observability import new_error_reference
+from ...public_errors import defined_error
+from .write_policy import (
+    WriteMode,
+    approval_entry_failure,
+    direct_entry_failure,
+    disabled_failure,
+    exact_mode_failure,
+)
 from . import pdf as pdf_service
 from .read import _DOCUMENTS, _profile_doctypes
 
@@ -26,13 +33,7 @@ _MAX_CONTACTS = 50
 
 
 def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+    return defined_error(code, retryable=retryable)
 
 
 def _user() -> str:
@@ -274,15 +275,23 @@ def _resolve_self_recipient(
 ) -> tuple[dict[str, str] | None, list[dict[str, str]], dict[str, Any] | None]:
     """Resolve only the authenticated User's own email address."""
     if requested is not None:
-        return None, [], _error(
-            "INVALID_RECIPIENT",
-            "recipient_email cannot be used when recipient_scope is self.",
+        return (
+            None,
+            [],
+            _error(
+                "INVALID_RECIPIENT",
+                "recipient_email cannot be used when recipient_scope is self.",
+            ),
         )
     recipient = _candidate(frappe.db.get_value("User", _user(), "email"))
     if not recipient:
-        return None, [], _error(
-            "SELF_RECIPIENT_UNAVAILABLE",
-            "The authenticated user does not have a valid email address.",
+        return (
+            None,
+            [],
+            _error(
+                "SELF_RECIPIENT_UNAVAILABLE",
+                "The authenticated user does not have a valid email address.",
+            ),
         )
     return recipient, [recipient], None
 
@@ -294,8 +303,10 @@ def _resolve_recipient(
         return _resolve_self_recipient(requested)
     if recipient_scope == "party":
         return _resolve_party_recipient(doc, requested)
-    return None, [], _error(
-        "INVALID_RECIPIENT_SCOPE", "recipient_scope must be party or self."
+    return (
+        None,
+        [],
+        _error("INVALID_RECIPIENT_SCOPE", "recipient_scope must be party or self."),
     )
 
 
@@ -367,7 +378,7 @@ def _render(
     return result, None
 
 
-def prepare_document_email(
+def _plan_document_email(
     doctype: str,
     name: str,
     profile: str,
@@ -378,38 +389,38 @@ def prepare_document_email(
     letterhead: str | None = None,
     language: str | None = None,
     recipient_scope: str = "party",
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     doc, failure = _load(doctype, name, profile)
     if failure:
-        return failure
+        return None, failure
     recipient, candidates, recipient_failure = _resolve_recipient(
         doc, recipient_email, recipient_scope
     )
     if recipient_failure:
-        return recipient_failure
+        return None, recipient_failure
     if recipient is None:
-        return _recipient_input(doc, candidates)
+        return None, _recipient_input(doc, candidates)
     if (
         subject is not None and (not isinstance(subject, str) or not subject.strip())
     ) or (
         message is not None and (not isinstance(message, str) or not message.strip())
     ):
-        return _error(
+        return None, _error(
             "INVALID_EMAIL", "Subject and message must be non-empty text when provided."
         )
     subject = subject or _default_subject(doctype, name)
     message = message or _default_message(doctype, name)
     if len(subject) > 255 or len(message) > 10_000:
-        return _error(
+        return None, _error(
             "INVALID_EMAIL", "Subject or message exceeds the supported length."
         )
     if account_failure := _check_email_account(doctype):
-        return account_failure
+        return None, account_failure
     pdf, pdf_failure = _render(
         doctype, name, profile, print_format, letterhead, language
     )
     if pdf_failure:
-        return pdf_failure
+        return None, pdf_failure
     payload = {
         "profile": profile,
         "doctype": doctype,
@@ -428,11 +439,8 @@ def prepare_document_email(
         "attachment_mime_type": pdf["mime_type"],
         "attachment_sha256": sha256(pdf["_pdf"]).hexdigest(),
     }
-    token = approvals.create(
-        action=EMAIL_ACTION, site=frappe.local.site, user=_user(), payload=payload
-    )
     return {
-        "status": "ready_for_approval",
+        "payload": payload,
         "preview": {
             "doctype": doctype,
             "name": name,
@@ -444,25 +452,63 @@ def prepare_document_email(
             "print_format_used": pdf["print_format_used"],
             "mime_type": PDF_MIME_TYPE,
         },
+    }, None
+
+
+def _preview_result(preview: dict[str, Any]) -> dict[str, Any]:
+    return {"status": "preview", "preview": preview}
+
+
+def prepare_document_email(
+    doctype: str,
+    name: str,
+    profile: str,
+    recipient_email: str | None = None,
+    subject: str | None = None,
+    message: str | None = None,
+    print_format: str | None = None,
+    letterhead: str | None = None,
+    language: str | None = None,
+    recipient_scope: str = "party",
+) -> dict[str, Any]:
+    if failure := disabled_failure("email"):
+        return _error(failure.code, failure.message)
+    planned, failure = _plan_document_email(
+        doctype,
+        name,
+        profile,
+        recipient_email,
+        subject,
+        message,
+        print_format,
+        letterhead,
+        language,
+        recipient_scope,
+    )
+    if failure:
+        return failure
+    mode_failure = direct_entry_failure("email")
+    if mode_failure is None:
+        return _preview_result(planned["preview"])
+    approval_failure = approval_entry_failure("email")
+    if approval_failure:
+        return _error(approval_failure.code, approval_failure.message)
+    payload, preview = planned["payload"], planned["preview"]
+    token = approvals.create(
+        action=EMAIL_ACTION, site=frappe.local.site, user=_user(), payload=payload
+    )
+    return {
+        "status": "ready_for_approval",
+        "preview": preview,
         "approval_token": token,
         "expires_in_seconds": APPROVAL_TTL_SECONDS,
         "interaction": approval_directive().model_dump(mode="json"),
     }
 
 
-def _confirm_error(state: str) -> dict[str, Any]:
-    code, message, retryable = confirmation_failure(state, "document email")
-    return _error(code, message, retryable=retryable)
-
-
-def confirm_document_email(approval_token: str, profile: str) -> dict[str, Any]:
-    user = _user()
-    approval, state = approvals.claim_for_confirm_write(
-        approval_token, action=EMAIL_ACTION, site=frappe.local.site, user=user
-    )
-    if state != "available" or approval is None:
-        return _confirm_error(state)
-    payload = approval.payload
+def _apply_document_email(
+    payload: dict[str, Any], profile: str, expected_mode: WriteMode
+) -> dict[str, Any]:
     if payload.get("profile") != profile:
         return _error(
             "PROFILE_MISMATCH", "The prepared email belongs to another MCP profile."
@@ -515,6 +561,8 @@ def confirm_document_email(approval_token: str, profile: str) -> dict[str, Any]:
         )
     if account_failure := _check_email_account(payload["doctype"]):
         return account_failure
+    if failure := exact_mode_failure("email", expected_mode):
+        return _error(failure.code, failure.message)
     try:
         queue = frappe.sendmail(
             recipients=[payload["recipient_email"]],
@@ -530,8 +578,6 @@ def confirm_document_email(approval_token: str, profile: str) -> dict[str, Any]:
             doctype=payload["doctype"],
             name=payload["name"],
         )
-        # Frappe v16 creates the Email Queue row but does not commit this
-        # transaction. Match the existing confirm-write boundary here.
         frappe.db.commit()
     except frappe.PermissionError:
         frappe.db.rollback()
@@ -551,3 +597,51 @@ def confirm_document_email(approval_token: str, profile: str) -> dict[str, Any]:
         "queue_reference": getattr(queue, "name", None),
         "message": "Email accepted by Frappe's Email Queue.",
     }
+
+
+def execute_document_email(
+    doctype: str,
+    name: str,
+    profile: str,
+    recipient_email: str | None = None,
+    subject: str | None = None,
+    message: str | None = None,
+    print_format: str | None = None,
+    letterhead: str | None = None,
+    language: str | None = None,
+    recipient_scope: str = "party",
+) -> dict[str, Any]:
+    if failure := direct_entry_failure("email"):
+        return _error(failure.code, failure.message)
+    payload, failure = _plan_document_email(
+        doctype,
+        name,
+        profile,
+        recipient_email,
+        subject,
+        message,
+        print_format,
+        letterhead,
+        language,
+        recipient_scope,
+    )
+    if failure:
+        return failure
+    return _apply_document_email(payload["payload"], profile, WriteMode.DIRECT)
+
+
+def _confirm_error(state: str) -> dict[str, Any]:
+    code, message, retryable = confirmation_failure(state, "document email")
+    return _error(code, message, retryable=retryable)
+
+
+def confirm_document_email(approval_token: str, profile: str) -> dict[str, Any]:
+    if failure := approval_entry_failure("email"):
+        return _error(failure.code, failure.message)
+    user = _user()
+    approval, state = approvals.claim_for_confirm_write(
+        approval_token, action=EMAIL_ACTION, site=frappe.local.site, user=user
+    )
+    if state != "available" or approval is None:
+        return _confirm_error(state)
+    return _apply_document_email(approval.payload, profile, WriteMode.APPROVAL_REQUIRED)

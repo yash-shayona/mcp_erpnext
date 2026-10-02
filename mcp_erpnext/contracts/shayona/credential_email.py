@@ -51,9 +51,17 @@ class CredentialEmailReady(PublicContractModel):
     interaction: InteractionDirective
 
 
+class CredentialEmailPreviewOnly(PublicContractModel):
+    status: Literal["preview"]
+    preview: CredentialEmailPreview
+
+
 class CredentialEmailPrepareOutput(
     RootModel[
-        Annotated[CredentialEmailReady | ToolError, Field(discriminator="status")]
+        Annotated[
+            CredentialEmailReady | CredentialEmailPreviewOnly | ToolError,
+            Field(discriminator="status"),
+        ]
     ]
 ):
     model_config = {"json_schema_extra": {"type": "object"}}
@@ -73,3 +81,7 @@ class CredentialEmailConfirmOutput(
     ]
 ):
     model_config = {"json_schema_extra": {"type": "object"}}
+
+
+CredentialEmailExecuteInput = CredentialEmailPrepareInput
+CredentialEmailExecuteOutput = CredentialEmailConfirmOutput

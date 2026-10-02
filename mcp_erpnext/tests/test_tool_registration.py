@@ -7,125 +7,126 @@ from mcp_erpnext.tools.registration import tool_registration_kwargs
 
 
 class RecordingMCP:
-	"""Minimal FastMCP-compatible recorder for static registration verification."""
+    """Minimal FastMCP-compatible recorder for static registration verification."""
 
-	def __init__(self):
-		self.tool_names: list[str] = []
-		self.tool_kwargs: dict[str, dict] = {}
+    def __init__(self):
+        self.tool_names: list[str] = []
+        self.tool_kwargs: dict[str, dict] = {}
 
-	def tool(self, **kwargs):
-		def decorator(function):
-			name = kwargs.get("name", function.__name__)
-			self.tool_names.append(name)
-			self.tool_kwargs[name] = kwargs
-			return function
+    def tool(self, **kwargs):
+        def decorator(function):
+            name = kwargs.get("name", function.__name__)
+            self.tool_names.append(name)
+            self.tool_kwargs[name] = kwargs
+            return function
 
-		return decorator
+        return decorator
 
 
 class ToolRegistrationTests(unittest.TestCase):
-	def test_only_the_controlled_workflow_tools_are_registered(self):
-		mcp = RecordingMCP()
-		register_tools(mcp)
+    def test_only_the_controlled_workflow_tools_are_registered(self):
+        mcp = RecordingMCP()
+        register_tools(mcp)
 
-		self.assertEqual(
-			mcp.tool_names,
-			[
-				"search_customers",
-				"resolve_customer",
-				"prepare_customer",
-				"confirm_customer",
-				"execute_customer",
-				"search_contacts",
-				"prepare_customer_contact",
-				"confirm_customer_contact",
-				"execute_customer_contact",
-				"prepare_customer_primary_contact",
-				"confirm_customer_primary_contact",
-				"prepare_contact",
-				"confirm_contact",
-				"execute_contact",
-				"prepare_contact_update",
-				"confirm_contact_update",
-				"search_items",
-				"resolve_item",
-				"prepare_item",
-				"confirm_item",
-				"execute_item",
-				"select_resolved_candidate",
-				"resolve_terms_and_conditions",
-				"resolve_payment_terms_template",
-				"prepare_sales_order",
-				"confirm_sales_order",
-				"execute_sales_order",
-				"prepare_quotation",
-				"confirm_quotation",
-				"execute_quotation",
-				"prepare_quotation_to_sales_order",
-				"confirm_quotation_to_sales_order",
-				"execute_quotation_to_sales_order",
-				"prepare_sales_order_to_sales_invoice",
-				"confirm_sales_order_to_sales_invoice",
-				"execute_sales_order_to_sales_invoice",
-				"prepare_sales_invoice",
-				"confirm_sales_invoice",
-				"execute_sales_invoice",
-				"prepare_sales_order_to_delivery_note",
-				"confirm_sales_order_to_delivery_note",
-				"execute_sales_order_to_delivery_note",
-				"prepare_sales_invoice_to_delivery_note",
-				"confirm_sales_invoice_to_delivery_note",
-				"execute_sales_invoice_to_delivery_note",
-				"prepare_delivery_note_to_sales_invoice",
-				"confirm_delivery_note_to_sales_invoice",
-				"execute_delivery_note_to_sales_invoice",
-				"prepare_document_update",
-				"confirm_document_update",
-				"execute_document_update",
-				"prepare_document_child_add",
-				"confirm_document_child_add",
-				"execute_document_child_add",
-				"prepare_document_child_remove",
-				"confirm_document_child_remove",
-				"execute_document_child_remove",
-				"prepare_document_submit",
-				"confirm_document_submit",
-				"prepare_document_cancel",
-				"confirm_document_cancel",
-				"execute_document_cancel",
-				"prepare_document_delete",
-				"confirm_document_delete",
-				"execute_document_delete",
-				"get_sales_order",
-				"query_sales_orders",
-				"aggregate_sales_orders",
-				"query_sales_order_items",
-				"get_customer",
-				"query_customers",
-				"aggregate_customers",
-				"get_item",
-				"query_items",
-				"aggregate_items",
-				"get_quotation",
-				"query_quotations",
-				"aggregate_quotations",
-				"get_sales_invoice",
-				"query_sales_invoices",
-				"aggregate_sales_invoices",
-				"get_delivery_note",
-				"query_delivery_notes",
-				"aggregate_delivery_notes",
-				"render_document_pdf",
-				"prepare_document_email",
-				"confirm_document_email",
-			],
-		)
-		self.assertNotIn("search_sales_orders", mcp.tool_names)
-		for name, kwargs in mcp.tool_kwargs.items():
-			with self.subTest(name=name):
-				self.assertIn("mcp_erpnext", kwargs["meta"])
-				self.assertIsNotNone(kwargs["annotations"])
+        self.assertEqual(
+            mcp.tool_names,
+            [
+                "search_customers",
+                "resolve_customer",
+                "prepare_customer",
+                "confirm_customer",
+                "execute_customer",
+                "search_contacts",
+                "prepare_customer_contact",
+                "confirm_customer_contact",
+                "execute_customer_contact",
+                "prepare_customer_primary_contact",
+                "confirm_customer_primary_contact",
+                "prepare_contact",
+                "confirm_contact",
+                "execute_contact",
+                "prepare_contact_update",
+                "confirm_contact_update",
+                "search_items",
+                "resolve_item",
+                "prepare_item",
+                "confirm_item",
+                "execute_item",
+                "select_resolved_candidate",
+                "resolve_terms_and_conditions",
+                "resolve_payment_terms_template",
+                "prepare_sales_order",
+                "confirm_sales_order",
+                "execute_sales_order",
+                "prepare_quotation",
+                "confirm_quotation",
+                "execute_quotation",
+                "prepare_quotation_to_sales_order",
+                "confirm_quotation_to_sales_order",
+                "execute_quotation_to_sales_order",
+                "prepare_sales_order_to_sales_invoice",
+                "confirm_sales_order_to_sales_invoice",
+                "execute_sales_order_to_sales_invoice",
+                "prepare_sales_invoice",
+                "confirm_sales_invoice",
+                "execute_sales_invoice",
+                "prepare_sales_order_to_delivery_note",
+                "confirm_sales_order_to_delivery_note",
+                "execute_sales_order_to_delivery_note",
+                "prepare_sales_invoice_to_delivery_note",
+                "confirm_sales_invoice_to_delivery_note",
+                "execute_sales_invoice_to_delivery_note",
+                "prepare_delivery_note_to_sales_invoice",
+                "confirm_delivery_note_to_sales_invoice",
+                "execute_delivery_note_to_sales_invoice",
+                "prepare_document_update",
+                "confirm_document_update",
+                "execute_document_update",
+                "prepare_document_child_add",
+                "confirm_document_child_add",
+                "execute_document_child_add",
+                "prepare_document_child_remove",
+                "confirm_document_child_remove",
+                "execute_document_child_remove",
+                "prepare_document_submit",
+                "confirm_document_submit",
+                "prepare_document_cancel",
+                "confirm_document_cancel",
+                "execute_document_cancel",
+                "prepare_document_delete",
+                "confirm_document_delete",
+                "execute_document_delete",
+                "get_sales_order",
+                "query_sales_orders",
+                "aggregate_sales_orders",
+                "query_sales_order_items",
+                "get_customer",
+                "query_customers",
+                "aggregate_customers",
+                "get_item",
+                "query_items",
+                "aggregate_items",
+                "get_quotation",
+                "query_quotations",
+                "aggregate_quotations",
+                "get_sales_invoice",
+                "query_sales_invoices",
+                "aggregate_sales_invoices",
+                "get_delivery_note",
+                "query_delivery_notes",
+                "aggregate_delivery_notes",
+                "render_document_pdf",
+                "prepare_document_email",
+                "confirm_document_email",
+                "execute_document_email",
+            ],
+        )
+        self.assertNotIn("search_sales_orders", mcp.tool_names)
+        for name, kwargs in mcp.tool_kwargs.items():
+            with self.subTest(name=name):
+                self.assertIn("mcp_erpnext", kwargs["meta"])
+                self.assertIsNotNone(kwargs["annotations"])
 
-	def test_uncontracted_tool_cannot_receive_governed_registration_kwargs(self):
-		with self.assertRaisesRegex(RuntimeError, "must declare a ToolContract"):
-			tool_registration_kwargs("ungoverned_public_tool", {})
+    def test_uncontracted_tool_cannot_receive_governed_registration_kwargs(self):
+        with self.assertRaisesRegex(RuntimeError, "must declare a ToolContract"):
+            tool_registration_kwargs("ungoverned_public_tool", {})

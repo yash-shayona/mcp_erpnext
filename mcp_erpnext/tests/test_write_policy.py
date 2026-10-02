@@ -8,19 +8,37 @@ from mcp_erpnext.services.common.write_policy import (
     current_mode,
     direct_entry_failure,
     exact_mode_failure,
+    disabled_failure,
 )
 from mcp_erpnext.settings import WriteMode
 
 
 class SharedWritePolicyTests(unittest.TestCase):
+    def test_email_policy_is_independent_and_defaults_disabled(self):
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(current_mode("email"), WriteMode.DISABLED)
+            self.assertEqual(disabled_failure("email").code, "EMAIL_DISABLED")
+        for mode in ("direct", "approval_required"):
+            with (
+                self.subTest(mode=mode),
+                patch.dict("os.environ", {"MCP_EMAIL_MODE": mode}, clear=True),
+            ):
+                self.assertEqual(current_mode("email"), WriteMode(mode))
+        with patch.dict("os.environ", {"MCP_EMAIL_MODE": "direct"}, clear=True):
+            self.assertIsNone(direct_entry_failure("email"))
+            self.assertEqual(
+                approval_entry_failure("email").code, "DIRECT_EXECUTION_REQUIRED"
+            )
+        with patch.dict(
+            "os.environ", {"MCP_EMAIL_MODE": "approval_required"}, clear=True
+        ):
+            self.assertIsNone(approval_entry_failure("email"))
+            self.assertEqual(direct_entry_failure("email").code, "APPROVAL_REQUIRED")
+
     def test_create_policy_failures_are_stable_for_each_entry_path(self):
         with patch.dict("os.environ", {"MCP_CREATE_MODE": "disabled"}, clear=True):
-            self.assertEqual(
-                direct_entry_failure("create").code, "CREATE_DISABLED"
-            )
-            self.assertEqual(
-                approval_entry_failure("create").code, "CREATE_DISABLED"
-            )
+            self.assertEqual(direct_entry_failure("create").code, "CREATE_DISABLED")
+            self.assertEqual(approval_entry_failure("create").code, "CREATE_DISABLED")
         with patch.dict("os.environ", {"MCP_CREATE_MODE": "direct"}, clear=True):
             self.assertIsNone(direct_entry_failure("create"))
             self.assertEqual(
@@ -31,9 +49,7 @@ class SharedWritePolicyTests(unittest.TestCase):
             "os.environ", {"MCP_CREATE_MODE": "approval_required"}, clear=True
         ):
             self.assertIsNone(approval_entry_failure("create"))
-            self.assertEqual(
-                direct_entry_failure("create").code, "APPROVAL_REQUIRED"
-            )
+            self.assertEqual(direct_entry_failure("create").code, "APPROVAL_REQUIRED")
 
     def test_final_boundary_requires_exact_current_mode(self):
         with patch.dict("os.environ", {"MCP_CREATE_MODE": "direct"}, clear=True):

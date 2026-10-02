@@ -63,6 +63,7 @@ class MCPSettings:
     update_mode: WriteMode = WriteMode.DISABLED
     cancel_mode: WriteMode = WriteMode.DISABLED
     delete_mode: WriteMode = WriteMode.DISABLED
+    email_mode: WriteMode = WriteMode.DISABLED
     profile: MCPProfile = MCPProfile.SALES
 
     @classmethod
@@ -94,6 +95,7 @@ class MCPSettings:
             update_mode=cls._write_mode_from_environment("MCP_UPDATE_MODE"),
             cancel_mode=cls._write_mode_from_environment("MCP_CANCEL_MODE"),
             delete_mode=cls._write_mode_from_environment("MCP_DELETE_MODE"),
+            email_mode=cls._write_mode_from_environment("MCP_EMAIL_MODE"),
             profile=cls._profile_from_environment(),
         )
 
@@ -220,6 +222,7 @@ class MCPSettings:
             ("MCP_UPDATE_MODE", self.update_mode),
             ("MCP_CANCEL_MODE", self.cancel_mode),
             ("MCP_DELETE_MODE", self.delete_mode),
+            ("MCP_EMAIL_MODE", self.email_mode),
         ):
             try:
                 WriteMode(mode)

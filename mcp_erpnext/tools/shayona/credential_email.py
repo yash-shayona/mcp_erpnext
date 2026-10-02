@@ -12,6 +12,8 @@ from ...contracts.shayona.credential_email import (
     CredentialEmailConfirmOutput,
     CredentialEmailPrepareInput,
     CredentialEmailPrepareOutput,
+    CredentialEmailExecuteInput,
+    CredentialEmailExecuteOutput,
     EmailNote,
     EmailSubject,
 )
@@ -58,6 +60,31 @@ def confirm_customer_service_credential_email(
     return CredentialEmailConfirmOutput.model_validate(result)
 
 
+def execute_customer_service_credential_email(
+    credential_name: NonEmptyString,
+    recipient_email: NonEmptyString,
+    subject: EmailSubject | None = None,
+    additional_note: EmailNote | None = None,
+    ctx: Context = None,
+) -> CredentialEmailExecuteOutput:
+    request = CredentialEmailExecuteInput(
+        credential_name=credential_name,
+        recipient_email=recipient_email,
+        subject=subject,
+        additional_note=additional_note,
+    )
+    result = execute_tool_with_context(
+        ctx,
+        "execute_customer_service_credential_email",
+        lambda: service.execute_customer_service_credential_email(
+            **request.model_dump()
+        ),
+        rest_arguments=request.model_dump(mode="json"),
+    )
+    return CredentialEmailExecuteOutput.model_validate(result)
+
+
 def register_shayona_credential_email_tools(mcp: Any) -> None:
     mcp.tool()(prepare_customer_service_credential_email)
     mcp.tool()(confirm_customer_service_credential_email)
+    mcp.tool()(execute_customer_service_credential_email)
