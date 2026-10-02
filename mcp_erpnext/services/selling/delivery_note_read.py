@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 import frappe
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.aggregate import (
     build_aggregate_field,
     build_aggregate_fields,
@@ -32,14 +32,8 @@ _METRICS = {
 }
 
 
-def _error(code, message):
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": False,
-    }
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _fields(fields):
@@ -112,7 +106,6 @@ def get_delivery_note(delivery_note, fields):
     if not doc.has_permission("read"):
         return _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot read that Delivery Note.",
         )
     return {"status": "ok", "document": _project(doc, fields)}
 

@@ -11,21 +11,15 @@ from frappe.utils import flt, getdate
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 
 _ACTION = "create_sales_invoice_payment"
 _MAX_REMARKS = 1000
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _user() -> str:
@@ -67,7 +61,6 @@ def _resolve_bank_account(
             None,
             _error(
                 "INVALID_BANK_ACCOUNT",
-                "The Bank Account is not available to the authenticated user.",
             ),
         )
     if _value(account_doc, "company") not in (None, "", _value(invoice, "company")):
@@ -76,7 +69,6 @@ def _resolve_bank_account(
             None,
             _error(
                 "INVALID_BANK_ACCOUNT",
-                "The Bank Account does not belong to the Sales Invoice Company.",
             ),
         )
     account = _value(account_doc, "account")
@@ -85,7 +77,7 @@ def _resolve_bank_account(
             None,
             None,
             _error(
-                "INVALID_BANK_ACCOUNT", "The Bank Account has no usable native account."
+                "INVALID_BANK_ACCOUNT"
             ),
         )
     return str(account), str(requested), None
@@ -112,7 +104,6 @@ def _resolve_mode_account(
             return str(resolved.account), None
     return None, _error(
         "MODE_OF_PAYMENT_ACCOUNT_MISSING",
-        "The Mode of Payment has no usable Company bank or cash account.",
     )
 
 
@@ -180,7 +171,7 @@ def _build(
         return (
             None,
             None,
-            _error("INVALID_SALES_INVOICE", "An exact Sales Invoice name is required."),
+            _error("INVALID_SALES_INVOICE"),
             None,
         )
     try:
@@ -190,7 +181,7 @@ def _build(
         return (
             None,
             None,
-            _error("SALES_INVOICE_NOT_FOUND", "The Sales Invoice was not found."),
+            _error("SALES_INVOICE_NOT_FOUND"),
             None,
         )
     except frappe.PermissionError:
@@ -199,7 +190,6 @@ def _build(
             None,
             _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot read the Sales Invoice.",
             ),
             None,
         )
@@ -210,7 +200,6 @@ def _build(
             None,
             _error(
                 "SALES_INVOICE_NOT_SUBMITTED",
-                "Customer payment V1 requires a submitted Sales Invoice.",
             ),
             None,
         )
@@ -221,7 +210,6 @@ def _build(
             None,
             _error(
                 "SALES_INVOICE_NOT_OUTSTANDING",
-                "The Sales Invoice has no outstanding amount to receive.",
             ),
             None,
         )
@@ -235,7 +223,7 @@ def _build(
             None,
             None,
             _error(
-                "INVALID_PAYMENT_AMOUNT", "Payment amount must be greater than zero."
+                "INVALID_PAYMENT_AMOUNT"
             ),
             None,
         )
@@ -245,7 +233,6 @@ def _build(
             None,
             _error(
                 "AMOUNT_EXCEEDS_OUTSTANDING",
-                "Overpayment or advance receipt is outside this V1 Sales Invoice payment capability.",
             ),
             None,
         )
@@ -255,7 +242,6 @@ def _build(
             None,
             _error(
                 "CONTRADICTORY_DESTINATION",
-                "Provide either Mode of Payment or Bank Account, not both.",
             ),
             None,
         )
@@ -309,7 +295,6 @@ def _build(
             None,
             _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot create a Payment Entry.",
             ),
             None,
         )
@@ -319,7 +304,6 @@ def _build(
             None,
             _error(
                 "NATIVE_PAYMENT_VALIDATION_FAILED",
-                "ERPNext could not prepare this native Payment Entry.",
             ),
             None,
         )
@@ -329,7 +313,6 @@ def _build(
             None,
             _error(
                 "NATIVE_PAYMENT_VALIDATION_FAILED",
-                "ERPNext did not return a Draft Payment Entry.",
             ),
             None,
         )
@@ -374,14 +357,13 @@ def confirm_sales_invoice_payment(approval_token: str, confirm: bool) -> dict[st
         approvals.cancel(approval_token, action=_ACTION, site=site, user=user)
         return _error(
             "CONFIRMATION_REQUIRED",
-            "Review the Payment Entry Draft preview before confirming it.",
         )
     approval, state = approvals.claim_for_confirm_write(
         approval_token, action=_ACTION, site=site, user=user
     )
     if state != "available" or approval is None:
         code, message, retryable = confirmation_failure(state, "Sales Invoice payment")
-        return _error(code, message, retryable=retryable)
+        return _error(code, retryable=retryable)
     request = approval.payload.get("request")
     approved_preview = approval.payload.get("preview")
     approved_fingerprint = approval.payload.get("fingerprint")
@@ -392,13 +374,11 @@ def confirm_sales_invoice_payment(approval_token: str, confirm: bool) -> dict[st
     ):
         return _error(
             "CONFIRMATION_UNAVAILABLE",
-            "This Payment Entry confirmation is unavailable.",
         )
     doc, invoice, failure, native_account = _build(request)
     if failure:
         return _error(
             "STALE_CONFIRMATION",
-            "The native payment preview changed after preparation. Please prepare it again.",
         )
     preview = _preview(
         doc, invoice, request.get("mode_of_payment") or request.get("bank_account")
@@ -406,7 +386,6 @@ def confirm_sales_invoice_payment(approval_token: str, confirm: bool) -> dict[st
     if _fingerprint(request, preview, native_account) != approved_fingerprint:
         return _error(
             "STALE_CONFIRMATION",
-            "The native payment preview changed after preparation. Please prepare it again.",
         )
     try:
         doc.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
@@ -414,13 +393,12 @@ def confirm_sales_invoice_payment(approval_token: str, confirm: bool) -> dict[st
     except frappe.PermissionError:
         frappe.db.rollback()
         return _error(
-            "PERMISSION_DENIED", "The authenticated user cannot create a Payment Entry."
+            "PERMISSION_DENIED"
         )
     except Exception:
         frappe.db.rollback()
         return _error(
             "PAYMENT_ENTRY_CREATION_FAILED",
-            "ERPNext could not create the Draft Payment Entry.",
         )
     return {
         "status": "created",

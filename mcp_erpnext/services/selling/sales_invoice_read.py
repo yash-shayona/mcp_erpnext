@@ -7,7 +7,7 @@ from typing import Any
 
 import frappe
 
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.aggregate import (
 	build_aggregate_field,
 	build_aggregate_fields,
@@ -115,14 +115,8 @@ _MONETARY_METRICS = frozenset(
 )
 
 
-def _error(code: str, message: str) -> dict[str, Any]:
-	return {
-		"status": "error",
-		"code": code,
-		"message": message,
-		"reference": new_error_reference(),
-		"retryable": False,
-	}
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _date(value: date | None) -> str | None:
@@ -221,7 +215,7 @@ def get_sales_invoice(sales_invoice: str, fields: list[str]) -> dict[str, Any]:
 	except frappe.DoesNotExistError:
 		return {"status": "not_found", "sales_invoice": sales_invoice}
 	if not doc.has_permission("read"):
-		return _error("PERMISSION_DENIED", "The authenticated user cannot read that Sales Invoice.")
+		return _error("PERMISSION_DENIED")
 	return {"status": "ok", "document": _project(doc, fields)}
 
 

@@ -12,7 +12,7 @@ from ...config.business_defaults import (
     get_document_business_default,
 )
 from ...contracts.interaction import input_directive
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..selling.payment_terms import apply_payment_terms_template
 from .terms import BUYING_TERMS_FILTERS
 
@@ -23,9 +23,8 @@ SCHEDULE_PREVIEW_FIELDS = (
 )
 
 
-def _error(code: str, message: str) -> dict[str, Any]:
-    return {"status": "error", "code": code, "message": message,
-            "reference": new_error_reference(), "retryable": False}
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _needs_template(field: str) -> dict[str, Any]:
@@ -41,7 +40,7 @@ def validate_choice(field: str, value: Any, *, frappe_module: Any) -> dict[str, 
     if value is None or value == "":
         return None
     if not isinstance(value, str) or not value.strip() or len(value) > 140:
-        return _error("INVALID_COMMERCIAL_TEMPLATE", "Use an exact template name (at most 140 characters), or null to clear it.")
+        return _error("INVALID_COMMERCIAL_TEMPLATE")
     doctype = "Terms and Conditions" if field == "tc_name" else "Payment Terms Template"
     filters = BUYING_TERMS_FILTERS if field == "tc_name" else {}
     if not frappe_module.get_list(
@@ -62,14 +61,14 @@ def apply_creation_choices(doc: Any, tc_name: str | None, payment_template: str 
                 doc.company, frappe_module=frappe_module,
             )
         except BusinessDefaultsConfigurationError:
-            return _error("INVALID_BUSINESS_DEFAULTS", "The site's document business-default configuration is invalid.")
+            return _error("INVALID_BUSINESS_DEFAULTS")
         if selected is None:
             selected = doc.get("tc_name") or getattr(frappe_module, "get_value", lambda *_: None)(
                 "Company", doc.company, "default_buying_terms"
             ) or None
     if selected is not None:
         if selected == "":
-            return _error("INVALID_COMMERCIAL_TEMPLATE", "Creation requires a non-empty template name when supplied.")
+            return _error("INVALID_COMMERCIAL_TEMPLATE")
         failure = validate_choice("tc_name", selected, frappe_module=frappe_module)
         if failure:
             return failure
@@ -78,7 +77,7 @@ def apply_creation_choices(doc: Any, tc_name: str | None, payment_template: str 
         doc.terms = ""
     if payment_template is not None:
         if not isinstance(payment_template, str) or not payment_template.strip() or len(payment_template) > 140:
-            return _error("INVALID_COMMERCIAL_TEMPLATE", "Payment Terms Template must be an exact non-empty name of at most 140 characters.")
+            return _error("INVALID_COMMERCIAL_TEMPLATE")
     # This existing helper has no Selling policy: only site/DocType config and read permission.
     failure = apply_payment_terms_template(doc, payment_template, frappe_module=frappe_module)
     if failure and failure.get("code") == "INVALID_PAYMENT_TERMS_TEMPLATE":
@@ -146,4 +145,4 @@ def refresh_commercial(doc: Any, *, terms_changed: bool, payment_changed: bool) 
 
 
 def stale_commercial() -> dict[str, Any]:
-    return _error("STALE_CONFIRMATION", "Purchase Order commercial terms changed or became unavailable. Prepare and review the action again.")
+    return _error("STALE_CONFIRMATION")

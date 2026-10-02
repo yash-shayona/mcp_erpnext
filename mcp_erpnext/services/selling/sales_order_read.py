@@ -8,7 +8,7 @@ from typing import Any
 import frappe
 from frappe.query_builder.functions import Count
 
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.aggregate import (
 	build_aggregate_field,
 	build_aggregate_fields,
@@ -46,8 +46,8 @@ _ITEM_METRICS = {
 }
 
 
-def _error(code: str, message: str) -> dict[str, Any]:
-	return {"status": "error", "code": code, "message": message, "reference": new_error_reference(), "retryable": False}
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _date(value: date | None) -> str | None:
@@ -97,7 +97,7 @@ def get_sales_order(sales_order: str, fields: list[str], include_items: bool, it
 	except frappe.DoesNotExistError:
 		return {"status": "not_found", "sales_order": sales_order}
 	if not doc.has_permission("read"):
-		return _error("PERMISSION_DENIED", "The authenticated user cannot read that Sales Order.")
+		return _error("PERMISSION_DENIED")
 	result: dict[str, Any] = {"status": "ok", "document": _project(doc, fields, _HEADER_FIELDS)}
 	if include_items:
 		result["items"] = [_project(row, item_fields, _ITEM_FIELDS) for row in (doc.get("items") or [])]

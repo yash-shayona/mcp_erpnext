@@ -11,7 +11,7 @@ from frappe.utils import flt, getdate, nowdate
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from .multi_invoice_customer_receipt import _destination
 
@@ -22,14 +22,8 @@ _MAX_REFERENCES = 50
 _MAX_REMARKS = 1000
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _value(doc: Any, field: str, default: Any = None) -> Any:
@@ -82,46 +76,41 @@ def _valid_amount(value: Any) -> bool:
 def _load_source(name: str | None) -> tuple[Any | None, dict[str, Any] | None]:
     if not name:
         return None, _error(
-            "INVALID_SALES_ORDER", "An exact Sales Order name is required."
+            "INVALID_SALES_ORDER"
         )
     try:
         source = frappe.get_doc(_SOURCE, name)
     except frappe.DoesNotExistError:
-        return None, _error("SALES_ORDER_NOT_FOUND", "The Sales Order was not found.")
+        return None, _error("SALES_ORDER_NOT_FOUND")
     except frappe.PermissionError:
         return None, _error(
-            "PERMISSION_DENIED", "The authenticated user cannot read the Sales Order."
+            "PERMISSION_DENIED"
         )
 
     if not source.has_permission("read"):
         return None, _error(
-            "PERMISSION_DENIED", "The authenticated user cannot read the Sales Order."
+            "PERMISSION_DENIED"
         )
     if int(_value(source, "docstatus", 0) or 0) != 1:
         return None, _error(
             "SALES_ORDER_NOT_SUBMITTED",
-            "Customer advance V1 requires a submitted Sales Order.",
         )
     if str(_value(source, "status", "")) in {"Closed", "Cancelled"}:
         return None, _error(
             "SALES_ORDER_NOT_ELIGIBLE",
-            "The Sales Order is no longer eligible for a Customer advance.",
         )
     if not _value(source, "customer") or not _value(source, "company"):
         return None, _error(
             "SALES_ORDER_NOT_ELIGIBLE",
-            "The Sales Order does not have a valid Customer and Company.",
         )
     try:
         if not frappe.has_permission(_TARGET, "create"):
             return None, _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot create a Payment Entry.",
             )
     except frappe.PermissionError:
         return None, _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot create a Payment Entry.",
         )
     return source, None
 
@@ -273,7 +262,6 @@ def _build(
             None,
             _error(
                 "INVALID_PAYMENT_AMOUNT",
-                "Payment amount must be a positive finite number.",
             ),
         )
     if request.get("mode_of_payment") and request.get("bank_account"):
@@ -283,7 +271,6 @@ def _build(
             None,
             _error(
                 "CONTRADICTORY_DESTINATION",
-                "Provide either Mode of Payment or Bank Account, not both.",
             ),
         )
     if not request.get("mode_of_payment") and not request.get("bank_account"):
@@ -292,7 +279,7 @@ def _build(
             None,
             None,
             _error(
-                "DESTINATION_REQUIRED", "Provide one Mode of Payment or Bank Account."
+                "DESTINATION_REQUIRED"
             ),
         )
     if request.get("bank_amount") is not None and not _valid_amount(
@@ -303,7 +290,7 @@ def _build(
             None,
             None,
             _error(
-                "INVALID_BANK_AMOUNT", "bank_amount must be a positive finite number."
+                "INVALID_BANK_AMOUNT"
             ),
         )
 
@@ -322,7 +309,6 @@ def _build(
             None,
             _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot use the selected payment destination.",
             ),
         )
     except Exception:
@@ -332,7 +318,6 @@ def _build(
             None,
             _error(
                 "INVALID_PAYMENT_DESTINATION",
-                "ERPNext could not validate the selected payment destination.",
             ),
         )
     if failure:
@@ -346,7 +331,6 @@ def _build(
             None,
             _error(
                 "TRANSACTION_REFERENCE_REQUIRED",
-                "Reference number and reference date are required for a Bank destination.",
             ),
         )
 
@@ -384,7 +368,6 @@ def _build(
             None,
             _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot create a Payment Entry.",
             ),
         )
     except frappe.ValidationError:
@@ -394,7 +377,6 @@ def _build(
             None,
             _error(
                 "NATIVE_VALIDATION_FAILED",
-                "ERPNext rejected the Sales Order advance Payment Entry.",
             ),
         )
     except Exception:
@@ -404,7 +386,6 @@ def _build(
             None,
             _error(
                 "NATIVE_PAYMENT_VALIDATION_FAILED",
-                "ERPNext could not prepare this native Payment Entry.",
             ),
         )
 
@@ -415,7 +396,6 @@ def _build(
             None,
             _error(
                 "NATIVE_PAYMENT_STATE_INVALID",
-                "Native preparation did not produce a Draft Payment Entry.",
             ),
         )
     references = _value(doc, "references", []) or []
@@ -426,7 +406,6 @@ def _build(
             None,
             _error(
                 "PAYMENT_TERMS_UNSUPPORTED",
-                "Native Payment Entry references cannot be represented safely by V1.",
             ),
         )
     if any(
@@ -440,7 +419,6 @@ def _build(
             None,
             _error(
                 "UNEXPECTED_REFERENCE_STATE",
-                "Native preparation produced an unsupported Payment Entry reference.",
             ),
         )
     if any(
@@ -453,7 +431,6 @@ def _build(
             None,
             _error(
                 "UNSUPPORTED_NATIVE_PAYMENT_STATE",
-                "Native preparation produced tax, withholding, or deduction state outside this V1 capability.",
             ),
         )
     if (
@@ -466,7 +443,6 @@ def _build(
             None,
             _error(
                 "BANK_AMOUNT_REQUIRED",
-                "bank_amount is required when destination currency differs from the Customer account currency.",
             ),
         )
     return doc, source, destination, None
@@ -508,7 +484,6 @@ def confirm_sales_order_advance_payment(
         approvals.cancel(approval_token, action=_ACTION, site=site, user=user)
         return _error(
             "CONFIRMATION_REQUIRED",
-            "Review the Draft Payment Entry preview before confirming it.",
         )
     approval, state = approvals.claim_for_confirm_write(
         approval_token, action=_ACTION, site=site, user=user
@@ -517,7 +492,7 @@ def confirm_sales_order_advance_payment(
         code, message, retryable = confirmation_failure(
             state, "Sales Order Customer advance payment"
         )
-        return _error(code, message, retryable=retryable)
+        return _error(code, retryable=retryable)
 
     request = approval.payload.get("request")
     approved_preview = approval.payload.get("preview")
@@ -529,19 +504,16 @@ def confirm_sales_order_advance_payment(
     ):
         return _error(
             "CONFIRMATION_UNAVAILABLE",
-            "This Payment Entry confirmation is unavailable.",
         )
     doc, source, destination, failure = _build(deepcopy(request))
     if failure:
         return _error(
             "STALE_CONFIRMATION",
-            "The native payment preview changed after preparation. Please prepare it again.",
         )
     preview = _preview(doc, source, destination)
     if _fingerprint(request, source, doc, destination, preview) != approved_fingerprint:
         return _error(
             "STALE_CONFIRMATION",
-            "The native payment preview changed after preparation. Please prepare it again.",
         )
     try:
         doc.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
@@ -549,19 +521,17 @@ def confirm_sales_order_advance_payment(
     except frappe.PermissionError:
         frappe.db.rollback()
         return _error(
-            "PERMISSION_DENIED", "The authenticated user cannot create a Payment Entry."
+            "PERMISSION_DENIED"
         )
     except frappe.ValidationError:
         frappe.db.rollback()
         return _error(
             "NATIVE_VALIDATION_FAILED",
-            "ERPNext rejected the Draft Payment Entry during final validation.",
         )
     except Exception:
         frappe.db.rollback()
         return _error(
             "PAYMENT_ENTRY_CREATION_FAILED",
-            "ERPNext could not create the Draft Payment Entry.",
         )
     return {
         "status": "created",

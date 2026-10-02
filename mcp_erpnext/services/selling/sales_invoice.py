@@ -12,7 +12,7 @@ from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...config.masters import customer as customer_config
 from ...config.masters import item as item_config
 from ...contracts.interaction import approval_directive, input_directive
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from ..common.write_policy import approval_entry_failure, current_mode, direct_entry_failure, disabled_failure, exact_mode_failure
 from ...settings import WriteMode
@@ -45,14 +45,8 @@ def _current_user() -> str:
     return user
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _needs_input(missing: list[str], message: str | None = None) -> dict[str, Any]:
@@ -65,13 +59,7 @@ def _needs_input(missing: list[str], message: str | None = None) -> dict[str, An
 
 
 def _permission_denied() -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": "PERMISSION_DENIED",
-        "message": "The authenticated user cannot create Sales Invoices.",
-        "reference": new_error_reference(),
-        "retryable": False,
-    }
+    return defined_error("PERMISSION_DENIED")
 
 
 def _reference_name(reference: Any, doctype: str) -> str | None:
@@ -86,13 +74,13 @@ def _number(
 ) -> tuple[float | None, dict[str, Any] | None]:
     if isinstance(value, bool) or value in (None, ""):
         return None, _error(
-            "INVALID_SALES_INVOICE_DETAILS", f"{field} must be a number."
+            "INVALID_SALES_INVOICE_DETAILS"
         )
     try:
         number = float(value)
     except (TypeError, ValueError):
         return None, _error(
-            "INVALID_SALES_INVOICE_DETAILS", f"{field} must be a number."
+            "INVALID_SALES_INVOICE_DETAILS"
         )
     if (
         not math.isfinite(number)
@@ -101,7 +89,7 @@ def _number(
     ):
         constraint = "greater than zero" if positive else "zero or greater"
         return None, _error(
-            "INVALID_SALES_INVOICE_DETAILS", f"{field} must be {constraint}."
+            "INVALID_SALES_INVOICE_DETAILS"
         )
     return number, None
 
@@ -113,7 +101,7 @@ def _optional_name(
         return None, None
     if not isinstance(value, str) or not value.strip():
         return None, _error(
-            "INVALID_SALES_INVOICE_DETAILS", f"{field} must be a non-empty name."
+            "INVALID_SALES_INVOICE_DETAILS"
         )
     return value.strip(), None
 
@@ -141,13 +129,12 @@ def _normalise_request(
     for index, raw_item in enumerate(items, start=1):
         if not isinstance(raw_item, dict):
             return None, _error(
-                "INVALID_SALES_INVOICE_DETAILS", f"Item row {index} must be an object."
+                "INVALID_SALES_INVOICE_DETAILS"
             )
         item_name = _reference_name(raw_item.get("item"), "Item")
         if not item_name:
             return None, _error(
                 "INVALID_SALES_INVOICE_DETAILS",
-                f"Item row {index} requires a resolved Item reference.",
             )
         if "qty" not in raw_item:
             return None, _needs_input([f"items[{index}].qty"])
@@ -161,7 +148,6 @@ def _normalise_request(
             if not isinstance(raw_item["description"], str):
                 return None, _error(
                     "INVALID_SALES_INVOICE_DETAILS",
-                    f"Item row {index} description must be text.",
                 )
             row["description"] = raw_item["description"]
         if "rate" in raw_item and raw_item.get("rate") is not None:
@@ -241,7 +227,6 @@ def _resolve_company(
     if not _permitted_link("Company", resolved):
         return None, _error(
             "INVALID_SALES_INVOICE_DETAILS",
-            "Company is not available to the authenticated user.",
         )
     return resolved, None
 
@@ -257,7 +242,6 @@ def _resolve_optional_links(
         if not _permitted_link(doctype, value):
             return {}, _error(
                 "INVALID_SALES_INVOICE_DETAILS",
-                f"{label} is not available to the authenticated user.",
             )
         resolved[fieldname] = value
     return resolved, None
@@ -387,7 +371,6 @@ def _build(
             None,
             _error(
                 "INVALID_CUSTOMER",
-                "Customer is not available to the authenticated user.",
             ),
         )
 
@@ -399,7 +382,6 @@ def _build(
                 None,
                 _error(
                     "INVALID_ITEM",
-                    f"Item row {index} is not available to the authenticated user.",
                 ),
             )
     resolved_company, failure = _resolve_company(request)
@@ -425,7 +407,6 @@ def _build(
                 None,
                 _error(
                     "INVALID_SALES_INVOICE_DETAILS",
-                    "posting_date must be a valid date.",
                 ),
             )
     if request.get("selling_price_list"):
@@ -435,7 +416,6 @@ def _build(
                 None,
                 _error(
                     "INVALID_SALES_INVOICE_DETAILS",
-                    "Selling price list is not available to the authenticated user.",
                 ),
             )
         doc.selling_price_list = request["selling_price_list"]
@@ -452,7 +432,6 @@ def _build(
         if not frappe.get_meta("Sales Invoice").has_field("custom_remarks"):
             return None, None, _error(
                 "CUSTOM_REMARKS_UNAVAILABLE",
-                "custom_remarks is not available on this Sales Invoice site.",
             )
         doc.custom_remarks = request["custom_remarks"]
 
@@ -493,7 +472,6 @@ def _build(
             None,
             _error(
                 "NATIVE_VALIDATION_FAILED",
-                "ERPNext rejected the Sales Invoice during preparation.",
             ),
         )
     preview = _preview(doc)
@@ -527,7 +505,7 @@ def prepare_sales_invoice(
 ) -> dict[str, Any]:
     """Prepare a native Draft Sales Invoice without persisting it."""
     if failure := disabled_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     user = _current_user()
     if not frappe.has_permission("Sales Invoice", "create"):
         return _permission_denied()
@@ -577,21 +555,19 @@ def prepare_sales_invoice(
 def _stale() -> dict[str, Any]:
     return _error(
         "STALE_CONFIRMATION",
-        "The effective Sales Invoice changed after the preview was prepared. Please prepare it again.",
     )
 
 
 def confirm_sales_invoice(approval_token: str, confirm: bool) -> dict[str, Any]:
     """Rebuild and insert the reviewed Draft Sales Invoice after approval."""
     if failure := approval_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     user = _current_user()
     site = getattr(frappe.local, "site", "")
     if not confirm:
         approvals.cancel(approval_token, action=_ACTION, site=site, user=user)
         return _error(
             "CONFIRMATION_REQUIRED",
-            "Review the Sales Invoice preview before confirming it.",
         )
 
     approval, state = approvals.claim_for_confirm_write(
@@ -599,7 +575,7 @@ def confirm_sales_invoice(approval_token: str, confirm: bool) -> dict[str, Any]:
     )
     if state != "available" or approval is None:
         code, message, retryable = confirmation_failure(state, "Sales Invoice")
-        return _error(code, message, retryable=retryable)
+        return _error(code, retryable=retryable)
     if not frappe.has_permission("Sales Invoice", "create"):
         return _permission_denied()
 
@@ -615,7 +591,6 @@ def confirm_sales_invoice(approval_token: str, confirm: bool) -> dict[str, Any]:
     ):
         return _error(
             "CONFIRMATION_UNAVAILABLE",
-            "This Sales Invoice confirmation is not available in the current session.",
         )
 
     doc, preview, failure = _build(request)
@@ -629,7 +604,7 @@ def confirm_sales_invoice(approval_token: str, confirm: bool) -> dict[str, Any]:
 
     try:
         if failure := exact_mode_failure("create", WriteMode.APPROVAL_REQUIRED):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         doc.insert(
             ignore_permissions=False,
             ignore_links=False,
@@ -643,13 +618,11 @@ def confirm_sales_invoice(approval_token: str, confirm: bool) -> dict[str, Any]:
         frappe.db.rollback()
         return _error(
             "NATIVE_VALIDATION_FAILED",
-            "ERPNext rejected the Sales Invoice during final validation.",
         )
     except Exception:
         frappe.db.rollback()
         return _error(
             "SALES_INVOICE_CREATION_FAILED",
-            "ERPNext could not create the Sales Invoice.",
         )
 
     return {
@@ -680,7 +653,7 @@ def execute_sales_invoice(
 ) -> dict[str, Any]:
     """Create a Sales Invoice with fresh validation under direct policy."""
     if failure := direct_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     request, failure = _normalise_request(
         customer, items, company, posting_date, selling_price_list,
         customer_address, shipping_address_name, contact_person, tc_name,
@@ -697,7 +670,7 @@ def execute_sales_invoice(
     assert doc is not None
     try:
         if failure := exact_mode_failure("create", WriteMode.DIRECT):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         doc.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
         frappe.db.commit()
     except frappe.PermissionError:

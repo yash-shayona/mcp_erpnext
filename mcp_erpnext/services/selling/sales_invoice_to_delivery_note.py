@@ -9,7 +9,7 @@ import frappe
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import public_error
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from ..common.write_policy import (
     approval_entry_failure,
@@ -25,8 +25,8 @@ _SOURCE = "Sales Invoice"
 _TARGET = "Delivery Note"
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return public_error(code, message=message, retryable=retryable)
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _user() -> str:
@@ -54,37 +54,31 @@ def _load(name: str) -> tuple[Any | None, dict[str, Any] | None]:
     try:
         source = frappe.get_doc(_SOURCE, name)
     except frappe.DoesNotExistError:
-        return None, _error("SOURCE_NOT_FOUND", "The requested Sales Invoice was not found.")
+        return None, _error("SOURCE_NOT_FOUND")
     except frappe.PermissionError:
         return None, _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot read that Sales Invoice.",
         )
 
     if not source.has_permission("read"):
         return None, _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot read that Sales Invoice.",
         )
     if int(source.docstatus) != 1:
         return None, _error(
             "SOURCE_NOT_READY",
-            "Only a Submitted Sales Invoice can be converted to a Delivery Note.",
         )
     if int(source.get("is_return") or 0) == 1:
         return None, _error(
             "SOURCE_NOT_ELIGIBLE",
-            "A return Sales Invoice is not eligible for normal Delivery Note conversion.",
         )
     if int(source.get("update_stock") or 0) == 1:
         return None, _error(
             "SOURCE_NOT_ELIGIBLE",
-            "A Sales Invoice with Update Stock already performs its stock delivery path and is not eligible for a separate Delivery Note.",
         )
     if not frappe.has_permission(_TARGET, "create"):
         return None, _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot create the converted Delivery Note.",
         )
     return source, None
 
@@ -160,25 +154,22 @@ def _map(source: Any) -> tuple[Any | None, dict[str, Any] | None, dict[str, Any]
         target = _native(source.name)
     except frappe.PermissionError:
         return None, None, _error(
-            "PERMISSION_DENIED", "The authenticated user cannot perform that conversion."
+            "PERMISSION_DENIED"
         )
     except frappe.ValidationError:
         return None, None, _error(
             "NATIVE_VALIDATION_FAILED",
-            "ERPNext rejected the Sales Invoice to Delivery Note conversion.",
         )
     except Exception:
         return None, None, _error(
             "CONVERSION_UNAVAILABLE",
-            "ERPNext could not prepare this Sales Invoice conversion.",
         )
 
     if int(target.docstatus or 0) != 0:
-        return None, None, _error("CONVERSION_UNAVAILABLE", "The mapped Delivery Note is not a Draft.")
+        return None, None, _error("CONVERSION_UNAVAILABLE")
     if not target.get("items"):
         return None, None, _error(
             "NO_MAPPABLE_ITEMS",
-            "No remaining deliverable Sales Invoice items are available for a Delivery Note.",
         )
     return target, _preview(source, target), None
 
@@ -189,7 +180,7 @@ def _fingerprint(preview: dict[str, Any]) -> str:
 
 def prepare_sales_invoice_to_delivery_note(sales_invoice: str) -> dict[str, Any]:
     if failure := disabled_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     user = _user()
     source, failure = _load(sales_invoice.strip() if isinstance(sales_invoice, str) else "")
     if failure:
@@ -224,7 +215,6 @@ def prepare_sales_invoice_to_delivery_note(sales_invoice: str) -> dict[str, Any]
 def _stale() -> dict[str, Any]:
     return _error(
         "STALE_CONFIRMATION",
-        "The Sales Invoice conversion changed after the preview was prepared. Please prepare it again.",
     )
 
 
@@ -232,13 +222,12 @@ def confirm_sales_invoice_to_delivery_note(
     approval_token: str, confirm: bool
 ) -> dict[str, Any]:
     if failure := approval_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     user = _user()
     if not confirm:
         approvals.cancel(approval_token, action=_ACTION, site=frappe.local.site, user=user)
         return _error(
             "CONFIRMATION_REQUIRED",
-            "Review the conversion preview before confirming it.",
         )
 
     approval, state = approvals.claim_for_confirm_write(
@@ -246,7 +235,7 @@ def confirm_sales_invoice_to_delivery_note(
     )
     if state != "available" or approval is None:
         code, message, retryable = confirmation_failure(state, "Delivery Note conversion")
-        return _error(code, message, retryable=retryable)
+        return _error(code, retryable=retryable)
 
     payload = approval.payload
     if (
@@ -254,7 +243,7 @@ def confirm_sales_invoice_to_delivery_note(
         or not payload.get("source_name")
         or not payload.get("fingerprint")
     ):
-        return _error("CONFIRMATION_UNAVAILABLE", "This conversion confirmation is not available.")
+        return _error("CONFIRMATION_UNAVAILABLE")
 
     source, failure = _load(payload["source_name"])
     if failure:
@@ -265,24 +254,22 @@ def confirm_sales_invoice_to_delivery_note(
 
     try:
         if failure := exact_mode_failure("create", WriteMode.APPROVAL_REQUIRED):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         target.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
         frappe.db.commit()
     except frappe.PermissionError:
         frappe.db.rollback()
         return _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot create the converted Delivery Note.",
         )
     except frappe.ValidationError:
         frappe.db.rollback()
         return _error(
             "NATIVE_VALIDATION_FAILED",
-            "ERPNext rejected the converted Delivery Note during final validation.",
         )
     except Exception:
         frappe.db.rollback()
-        return _error("CONVERSION_FAILED", "ERPNext could not create the converted Delivery Note.")
+        return _error("CONVERSION_FAILED")
 
     return {
         "status": "created",
@@ -301,34 +288,32 @@ def confirm_sales_invoice_to_delivery_note(
 def execute_sales_invoice_to_delivery_note(sales_invoice: str) -> dict[str, Any]:
     """Create a fresh mapped Delivery Note only when CREATE policy is direct."""
     if failure := direct_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     _user()
     source, failure = _load(sales_invoice.strip() if isinstance(sales_invoice, str) else "")
     if failure:
         return failure
     target, _preview_data, failure = _map(source)
     if failure or target is None:
-        return failure or _error("CONVERSION_UNAVAILABLE", "ERPNext could not map this Sales Invoice.")
+        return failure or _error("CONVERSION_UNAVAILABLE")
     try:
         if failure := exact_mode_failure("create", WriteMode.DIRECT):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         target.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
         frappe.db.commit()
     except frappe.PermissionError:
         frappe.db.rollback()
         return _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot create the converted Delivery Note.",
         )
     except frappe.ValidationError:
         frappe.db.rollback()
         return _error(
             "NATIVE_VALIDATION_FAILED",
-            "ERPNext rejected the converted Delivery Note during final validation.",
         )
     except Exception:
         frappe.db.rollback()
-        return _error("CONVERSION_FAILED", "ERPNext could not create the converted Delivery Note.")
+        return _error("CONVERSION_FAILED")
     return {
         "status": "created",
         "doctype": _TARGET,

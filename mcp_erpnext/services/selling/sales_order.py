@@ -9,7 +9,8 @@ import frappe
 from frappe.utils import getdate, nowdate
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
-from ...observability import new_error_reference, public_error
+from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from ..common.write_policy import approval_entry_failure, current_mode, direct_entry_failure, disabled_failure, exact_mode_failure
 from ...settings import WriteMode
@@ -86,9 +87,8 @@ def _prepare_items(items: Any) -> dict[str, Any]:
     missing_quantities: list[dict[str, Any]] = []
     for index, raw_item in enumerate(items, start=1):
         if not isinstance(raw_item, dict):
-            return public_error(
+            return defined_error(
                 "INVALID_ORDER_DETAILS",
-                message=f"Item row {index} must be a valid item entry.",
             )
         query = (
             raw_item.get("item")
@@ -127,9 +127,8 @@ def _prepare_items(items: Any) -> dict[str, Any]:
         }
         if "description" in raw_item and raw_item["description"] is not None:
             if not isinstance(raw_item["description"], str):
-                return public_error(
+                return defined_error(
                     "INVALID_ORDER_DETAILS",
-                    message=f"Item row {index} description must be text.",
                 )
             prepared_item["description"] = raw_item["description"]
         resolved_items.append(prepared_item)
@@ -207,7 +206,7 @@ def prepare_sales_order(
 ) -> dict[str, Any]:
     """Resolve inputs and return a preview without writing a Sales Order."""
     if failure := disabled_failure("create"):
-        return _confirmation_error(failure.code, failure.message, retryable=False)
+        return _confirmation_error(failure.code, retryable=False)
     if current_mode("create") is WriteMode.APPROVAL_REQUIRED and _create_approval:
         approvals.prune_expired()
     user = _current_user()
@@ -251,9 +250,8 @@ def prepare_sales_order(
     doc.order_type = "Sales"
     doc.transaction_date = transaction_date
     if not _set_sales_order_delivery_date(doc, delivery_date):
-        return public_error(
+        return defined_error(
             "INVALID_ORDER_DETAILS",
-            message="Delivery date cannot be before the transaction date.",
         )
     if selling_price_list:
         doc.selling_price_list = selling_price_list
@@ -264,9 +262,8 @@ def prepare_sales_order(
         doc.append("items", row)
     if custom_remarks is not None:
         if not frappe.get_meta("Sales Order").has_field("custom_remarks"):
-            return public_error(
+            return defined_error(
                 "CUSTOM_REMARKS_UNAVAILABLE",
-                message="custom_remarks is not available on this Sales Order site.",
             )
         doc.custom_remarks = custom_remarks
 
@@ -350,20 +347,14 @@ def prepare_sales_order(
     }
 
 
-def _confirmation_error(code: str, message: str, *, retryable: bool) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+def _confirmation_error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def confirm_sales_order(approval_token: str, confirm: bool) -> dict[str, Any]:
     """Create the reviewed Draft only for the original site, user, and action."""
     if failure := approval_entry_failure("create"):
-        return _confirmation_error(failure.code, failure.message, retryable=False)
+        return _confirmation_error(failure.code, retryable=False)
     user = _current_user()
     if not confirm:
         approvals.cancel(
@@ -384,11 +375,10 @@ def confirm_sales_order(approval_token: str, confirm: bool) -> dict[str, Any]:
     )
     if state != "available" or approval is None:
         code, message, retryable = confirmation_failure(state, "Sales Order")
-        return _confirmation_error(code, message, retryable=retryable)
+        return _confirmation_error(code, retryable=retryable)
     if not frappe.has_permission("Sales Order", "create"):
         return _confirmation_error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot create Sales Orders.",
             retryable=False,
         )
 
@@ -418,7 +408,6 @@ def confirm_sales_order(approval_token: str, confirm: bool) -> dict[str, Any]:
     ):
         return _confirmation_error(
             "CONFIRMATION_UNAVAILABLE",
-            "This Sales Order confirmation is not available in the current session.",
             retryable=False,
         )
 
@@ -426,7 +415,6 @@ def confirm_sales_order(approval_token: str, confirm: bool) -> dict[str, Any]:
     if rebuilt.get("status") != "ready" or "_doc" not in rebuilt:
         return _confirmation_error(
             "STALE_CONFIRMATION",
-            "The effective Sales Order changed after the preview was prepared. Please prepare it again.",
             retryable=False,
         )
     doc = rebuilt["_doc"]
@@ -441,13 +429,12 @@ def confirm_sales_order(approval_token: str, confirm: bool) -> dict[str, Any]:
     ) != approved_fingerprint:
         return _confirmation_error(
             "STALE_CONFIRMATION",
-            "The effective Sales Order changed after the preview was prepared. Please prepare it again.",
             retryable=False,
         )
 
     try:
         if failure := exact_mode_failure("create", WriteMode.APPROVAL_REQUIRED):
-            return _confirmation_error(failure.code, failure.message, retryable=False)
+            return _confirmation_error(failure.code, retryable=False)
         doc.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
         frappe.db.commit()
     except frappe.PermissionError:
@@ -462,14 +449,14 @@ def confirm_sales_order(approval_token: str, confirm: bool) -> dict[str, Any]:
 def execute_sales_order(**request: Any) -> dict[str, Any]:
     """Create a Sales Order using fresh planning and the direct policy path."""
     if failure := direct_entry_failure("create"):
-        return _confirmation_error(failure.code, failure.message, retryable=False)
+        return _confirmation_error(failure.code, retryable=False)
     planned = prepare_sales_order(**request, _create_approval=False)
     if planned.get("status") != "ready" or "_doc" not in planned:
         return planned
     doc = planned["_doc"]
     try:
         if failure := exact_mode_failure("create", WriteMode.DIRECT):
-            return _confirmation_error(failure.code, failure.message, retryable=False)
+            return _confirmation_error(failure.code, retryable=False)
         doc.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
         frappe.db.commit()
     except Exception:

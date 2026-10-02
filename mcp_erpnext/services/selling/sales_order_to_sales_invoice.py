@@ -9,7 +9,7 @@ import frappe
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import public_error
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from ..common.write_policy import (
     approval_entry_failure,
@@ -38,8 +38,8 @@ def _native_make_sales_invoice(source_name: str) -> Any:
     )
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return public_error(code, message=message, retryable=retryable)
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _current_user() -> str:
@@ -56,28 +56,24 @@ def _load_source(name: str) -> tuple[Any | None, dict[str, Any] | None]:
         sales_order = frappe.get_doc(_SOURCE_DOCTYPE, name)
     except frappe.DoesNotExistError:
         return None, _error(
-            "SOURCE_NOT_FOUND", "The requested Sales Order was not found."
+            "SOURCE_NOT_FOUND"
         )
     except frappe.PermissionError:
         return None, _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot read that Sales Order.",
         )
 
     if not sales_order.has_permission("read"):
         return None, _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot read that Sales Order.",
         )
     if int(sales_order.docstatus) != 1:
         return None, _error(
             "SOURCE_NOT_READY",
-            "Only a Submitted Sales Order can be converted to a Sales Invoice.",
         )
     if not frappe.has_permission(_TARGET_DOCTYPE, "create"):
         return None, _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot create the converted Sales Invoice.",
         )
     return sales_order, None
 
@@ -244,7 +240,6 @@ def _map_and_preview(
             None,
             _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot perform that conversion.",
             ),
         )
     except frappe.ValidationError:
@@ -253,7 +248,6 @@ def _map_and_preview(
             None,
             _error(
                 "NATIVE_VALIDATION_FAILED",
-                "ERPNext rejected the Sales Order to Sales Invoice conversion.",
             ),
         )
     except Exception:
@@ -262,7 +256,6 @@ def _map_and_preview(
             None,
             _error(
                 "CONVERSION_UNAVAILABLE",
-                "ERPNext could not prepare this Sales Order conversion.",
             ),
         )
 
@@ -272,7 +265,6 @@ def _map_and_preview(
             None,
             _error(
                 "CONVERSION_UNAVAILABLE",
-                "The mapped Sales Invoice is not a Draft.",
             ),
         )
     if not sales_invoice.get("items"):
@@ -281,7 +273,6 @@ def _map_and_preview(
             None,
             _error(
                 "NO_MAPPABLE_ITEMS",
-                "No remaining billable Sales Order items are available for a Sales Invoice.",
             ),
         )
     return sales_invoice, _preview(sales_order, sales_invoice), None
@@ -291,7 +282,7 @@ def prepare_sales_order_to_sales_invoice(sales_order: str) -> dict[str, Any]:
     """Prepare a native Draft Sales Invoice preview without persisting it."""
 
     if failure := disabled_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     user = _current_user()
     source, failure = _load_source(
         sales_order.strip() if isinstance(sales_order, str) else ""
@@ -329,7 +320,6 @@ def prepare_sales_order_to_sales_invoice(sales_order: str) -> dict[str, Any]:
 def _stale() -> dict[str, Any]:
     return _error(
         "STALE_CONFIRMATION",
-        "The Sales Order conversion changed after the preview was prepared. Please prepare it again.",
     )
 
 
@@ -339,7 +329,7 @@ def confirm_sales_order_to_sales_invoice(
     """Create one freshly revalidated native mapped Draft Sales Invoice."""
 
     if failure := approval_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     user = _current_user()
     if not confirm:
         approvals.cancel(
@@ -350,7 +340,6 @@ def confirm_sales_order_to_sales_invoice(
         )
         return _error(
             "CONFIRMATION_REQUIRED",
-            "Review the conversion preview before confirming it.",
         )
 
     approval, state = approvals.claim_for_confirm_write(
@@ -363,7 +352,7 @@ def confirm_sales_order_to_sales_invoice(
         code, message, retryable = confirmation_failure(
             state, "Sales Invoice conversion"
         )
-        return _error(code, message, retryable=retryable)
+        return _error(code, retryable=retryable)
 
     payload = approval.payload
     if (
@@ -374,7 +363,6 @@ def confirm_sales_order_to_sales_invoice(
     ):
         return _error(
             "CONFIRMATION_UNAVAILABLE",
-            "This conversion confirmation is not available.",
         )
 
     source, failure = _load_source(payload["source_name"])
@@ -393,7 +381,7 @@ def confirm_sales_order_to_sales_invoice(
 
     try:
         if failure := exact_mode_failure("create", WriteMode.APPROVAL_REQUIRED):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         target.insert(
             ignore_permissions=False,
             ignore_links=False,
@@ -404,19 +392,16 @@ def confirm_sales_order_to_sales_invoice(
         frappe.db.rollback()
         return _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot create the converted Sales Invoice.",
         )
     except frappe.ValidationError:
         frappe.db.rollback()
         return _error(
             "NATIVE_VALIDATION_FAILED",
-            "ERPNext rejected the converted Sales Invoice during final validation.",
         )
     except Exception:
         frappe.db.rollback()
         return _error(
             "CONVERSION_FAILED",
-            "ERPNext could not create the converted Sales Invoice.",
         )
 
     return {
@@ -436,7 +421,7 @@ def confirm_sales_order_to_sales_invoice(
 def execute_sales_order_to_sales_invoice(sales_order: str) -> dict[str, Any]:
     """Create a fresh native mapped Sales Invoice only in direct mode."""
     if failure := direct_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     _current_user()
     source, failure = _load_source(
         sales_order.strip() if isinstance(sales_order, str) else ""
@@ -446,11 +431,11 @@ def execute_sales_order_to_sales_invoice(sales_order: str) -> dict[str, Any]:
     target, _preview_data, failure = _map_and_preview(source)
     if failure or target is None:
         return failure or _error(
-            "CONVERSION_UNAVAILABLE", "ERPNext could not map this Sales Order."
+            "CONVERSION_UNAVAILABLE"
         )
     try:
         if failure := exact_mode_failure("create", WriteMode.DIRECT):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         target.insert(
             ignore_permissions=False,
             ignore_links=False,
@@ -461,19 +446,16 @@ def execute_sales_order_to_sales_invoice(sales_order: str) -> dict[str, Any]:
         frappe.db.rollback()
         return _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot create the converted Sales Invoice.",
         )
     except frappe.ValidationError:
         frappe.db.rollback()
         return _error(
             "NATIVE_VALIDATION_FAILED",
-            "ERPNext rejected the converted Sales Invoice during final validation.",
         )
     except Exception:
         frappe.db.rollback()
         return _error(
             "CONVERSION_FAILED",
-            "ERPNext could not create the converted Sales Invoice.",
         )
     return {
         "status": "created",

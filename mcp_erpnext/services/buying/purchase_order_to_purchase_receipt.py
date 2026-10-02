@@ -9,7 +9,7 @@ import frappe
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import public_error
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from ..common.write_policy import approval_entry_failure, current_mode, direct_entry_failure, disabled_failure, exact_mode_failure
 from ...settings import WriteMode
@@ -19,8 +19,8 @@ _SOURCE = "Purchase Order"
 _TARGET = "Purchase Receipt"
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return public_error(code, message=message, retryable=retryable)
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _user() -> str:
@@ -50,19 +50,19 @@ def _load_source(name: str) -> tuple[Any | None, dict[str, Any] | None]:
     try:
         source = frappe.get_doc(_SOURCE, name)
     except frappe.DoesNotExistError:
-        return None, _error("SOURCE_NOT_FOUND", "The requested Purchase Order was not found.")
+        return None, _error("SOURCE_NOT_FOUND")
     except frappe.PermissionError:
-        return None, _error("PERMISSION_DENIED", "The authenticated user cannot read that Purchase Order.")
+        return None, _error("PERMISSION_DENIED")
     if not source.has_permission("read"):
-        return None, _error("PERMISSION_DENIED", "The authenticated user cannot read that Purchase Order.")
+        return None, _error("PERMISSION_DENIED")
     if int(source.docstatus or 0) != 1:
-        return None, _error("SOURCE_NOT_READY", "Only a Submitted Purchase Order can be converted to a Purchase Receipt.")
+        return None, _error("SOURCE_NOT_READY")
     if _field(source, "status") in {"Closed", "On Hold", "Cancelled"}:
-        return None, _error("SOURCE_NOT_ELIGIBLE", "Closed, On Hold, or Cancelled Purchase Orders cannot be received.")
+        return None, _error("SOURCE_NOT_ELIGIBLE")
     if any(bool(source.get(field)) for field in ("is_subcontracted", "is_old_subcontracting_flow", "is_internal_supplier", "is_return")):
-        return None, _error("UNSUPPORTED_SOURCE", "This Purchase Order conversion belongs to a deferred Purchase Receipt workflow.")
+        return None, _error("UNSUPPORTED_SOURCE")
     if not frappe.has_permission(_TARGET, "create"):
-        return None, _error("PERMISSION_DENIED", "The authenticated user cannot create a Purchase Receipt.")
+        return None, _error("PERMISSION_DENIED")
     return source, None
 
 
@@ -72,22 +72,22 @@ def _warehouse(name: str | None, company: str | None) -> tuple[str | None, dict[
     try:
         warehouse = frappe.get_doc("Warehouse", name)
     except frappe.DoesNotExistError:
-        return None, _error("WAREHOUSE_NOT_FOUND", "The requested warehouse was not found.")
+        return None, _error("WAREHOUSE_NOT_FOUND")
     except frappe.PermissionError:
-        return None, _error("PERMISSION_DENIED", "The authenticated user cannot read that warehouse.")
+        return None, _error("PERMISSION_DENIED")
     if not warehouse.has_permission("read"):
-        return None, _error("PERMISSION_DENIED", "The authenticated user cannot read that warehouse.")
+        return None, _error("PERMISSION_DENIED")
     try:
         from erpnext.stock.utils import is_group_warehouse, validate_disabled_warehouse, validate_warehouse_company
         validate_disabled_warehouse(name)
         validate_warehouse_company(name, company)
         is_group_warehouse(name)
     except frappe.PermissionError:
-        return None, _error("PERMISSION_DENIED", "The authenticated user cannot use that warehouse.")
+        return None, _error("PERMISSION_DENIED")
     except Exception:
-        return None, _error("INVALID_WAREHOUSE", "The warehouse is disabled, belongs to another company, or is not valid for transactions.")
+        return None, _error("INVALID_WAREHOUSE")
     if bool(warehouse.get("disabled")) or bool(warehouse.get("is_group")) or (company and warehouse.get("company") != company):
-        return None, _error("INVALID_WAREHOUSE", "The warehouse is disabled, belongs to another company, or is not valid for transactions.")
+        return None, _error("INVALID_WAREHOUSE")
     return name, None
 
 
@@ -114,21 +114,21 @@ def _apply(source: Any, target: Any, lines: list[dict[str, Any]], posting_date: 
     by_source = _source_rows(source, [line["purchase_order_item"] for line in lines])
     target_by_source = {row.get("purchase_order_item"): row for row in target.get("items") or []}
     if len(target_by_source) != len(lines):
-        return _error("NO_MAPPABLE_ITEMS", "One or more selected Purchase Order rows are not mappable anymore.")
+        return _error("NO_MAPPABLE_ITEMS")
     for line in lines:
         source_row = by_source.get(line["purchase_order_item"])
         target_row = target_by_source.get(line["purchase_order_item"])
         if source_row is None:
-            return _error("INVALID_SOURCE_ROW", "Every selected row must belong to the Purchase Order.")
+            return _error("INVALID_SOURCE_ROW")
         if source_row.get("delivered_by_supplier"):
-            return _error("UNSUPPORTED_SOURCE_ROW", "Drop-ship Purchase Order rows are not supported by this conversion.")
+            return _error("UNSUPPORTED_SOURCE_ROW")
         if float(source_row.get("qty") or 0) <= 0:
-            return _error("UNSUPPORTED_SOURCE_ROW", "Zero-quantity Purchase Order rows are not supported.")
+            return _error("UNSUPPORTED_SOURCE_ROW")
         item_config = _item_configuration(source_row.get("item_code"))
         remaining = float(source_row.get("qty") or 0) - float(source_row.get("received_qty") or 0)
         proposed = float(line["accepted_qty"]) + float(line.get("rejected_qty") or 0)
         if proposed > remaining + 1e-9:
-            return _error("QUANTITY_EXCEEDS_REMAINING", "The proposed receipt exceeds the native remaining quantity for a selected row.")
+            return _error("QUANTITY_EXCEEDS_REMAINING")
         accepted, failure = _warehouse(line.get("warehouse"), target.get("company") or source.get("company"))
         if failure:
             return failure
@@ -136,7 +136,7 @@ def _apply(source: Any, target: Any, lines: list[dict[str, Any]], posting_date: 
         if failure:
             return failure
         if accepted and rejected and accepted == rejected:
-            return _error("INVALID_WAREHOUSE", "Accepted and rejected warehouses must be different.")
+            return _error("INVALID_WAREHOUSE")
         target_row.qty = line["accepted_qty"]
         target_row.rejected_qty = line.get("rejected_qty") or 0
         target_row.received_qty = float(target_row.qty or 0) + float(target_row.rejected_qty or 0)
@@ -145,9 +145,9 @@ def _apply(source: Any, target: Any, lines: list[dict[str, Any]], posting_date: 
         if rejected:
             target_row.rejected_warehouse = rejected
         if float(target_row.rejected_qty or 0) > 0 and not target_row.get("rejected_warehouse") and not target.get("rejected_warehouse"):
-            return _error("REJECTED_WAREHOUSE_REQUIRED", "A rejected warehouse is required for a rejected quantity.")
+            return _error("REJECTED_WAREHOUSE_REQUIRED")
         if float(target_row.qty or 0) > 0 and bool(item_config and item_config.get("is_stock_item")) and not target_row.get("warehouse"):
-            return _error("WAREHOUSE_REQUIRED", "An accepted warehouse is required for a stock item with a positive accepted quantity.")
+            return _error("WAREHOUSE_REQUIRED")
     if posting_date:
         target.posting_date = posting_date
     if delivery_note is not None:
@@ -199,13 +199,13 @@ def _map(source: Any, lines: list[dict[str, Any]], posting_date: str | None, del
     try:
         target = _native(source.name, selected)
     except frappe.PermissionError:
-        return None, None, _error("PERMISSION_DENIED", "The authenticated user cannot perform that conversion.")
+        return None, None, _error("PERMISSION_DENIED")
     except frappe.ValidationError:
-        return None, None, _error("NATIVE_VALIDATION_FAILED", "ERPNext rejected the Purchase Order to Purchase Receipt conversion.")
+        return None, None, _error("NATIVE_VALIDATION_FAILED")
     except Exception:
-        return None, None, _error("CONVERSION_UNAVAILABLE", "ERPNext could not prepare this Purchase Receipt conversion.")
+        return None, None, _error("CONVERSION_UNAVAILABLE")
     if int(target.docstatus or 0) != 0:
-        return None, None, _error("CONVERSION_UNAVAILABLE", "The mapped Purchase Receipt is not a Draft.")
+        return None, None, _error("CONVERSION_UNAVAILABLE")
     failure = _apply(source, target, lines, posting_date, delivery_note)
     if failure:
         return None, None, failure
@@ -219,7 +219,7 @@ def _fingerprint(preview: dict[str, Any]) -> str:
 
 def prepare_purchase_order_to_purchase_receipt(purchase_order: str, lines: list[dict[str, Any]], posting_date: str | None = None, supplier_delivery_note: str | None = None) -> dict[str, Any]:
     if failure := disabled_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     user = _user()
     source, failure = _load_source(purchase_order.strip() if isinstance(purchase_order, str) else "")
     if failure:
@@ -236,44 +236,44 @@ def prepare_purchase_order_to_purchase_receipt(purchase_order: str, lines: list[
 
 def confirm_purchase_order_to_purchase_receipt(approval_token: str, confirm: bool) -> dict[str, Any]:
     if failure := approval_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     user = _user()
     if not confirm:
         approvals.cancel(approval_token, action=_ACTION, site=frappe.local.site, user=user)
-        return _error("CONFIRMATION_REQUIRED", "Review the conversion preview before confirming it.")
+        return _error("CONFIRMATION_REQUIRED")
     approval, state = approvals.claim_for_confirm_write(approval_token, action=_ACTION, site=frappe.local.site, user=user)
     if state != "available" or approval is None:
         code, message, retryable = confirmation_failure(state, "Purchase Receipt conversion")
-        return _error(code, message, retryable=retryable)
+        return _error(code, retryable=retryable)
     payload = approval.payload
     if payload.get("source_doctype") != _SOURCE or not payload.get("source_name") or not payload.get("fingerprint") or not isinstance(payload.get("lines"), list):
-        return _error("CONFIRMATION_UNAVAILABLE", "This conversion confirmation is not available.")
+        return _error("CONFIRMATION_UNAVAILABLE")
     source, failure = _load_source(payload["source_name"])
     if failure:
-        return failure if failure.get("code") == "PERMISSION_DENIED" else _error("STALE_CONFIRMATION", "The Purchase Order changed after the preview was prepared. Please prepare it again.")
+        return failure if failure.get("code") == "PERMISSION_DENIED" else _error("STALE_CONFIRMATION")
     target, preview, failure = _map(source, payload["lines"], payload.get("posting_date"), payload.get("supplier_delivery_note"))
     if failure or _fingerprint(preview) != payload["fingerprint"]:
-        return failure if failure and failure.get("code") == "PERMISSION_DENIED" else _error("STALE_CONFIRMATION", "The Purchase Order conversion changed after the preview was prepared. Please prepare it again.")
+        return failure if failure and failure.get("code") == "PERMISSION_DENIED" else _error("STALE_CONFIRMATION")
     try:
         if failure := exact_mode_failure("create", WriteMode.APPROVAL_REQUIRED):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         target.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
         frappe.db.commit()
     except frappe.PermissionError:
         frappe.db.rollback()
-        return _error("PERMISSION_DENIED", "The authenticated user cannot create the Purchase Receipt.")
+        return _error("PERMISSION_DENIED")
     except frappe.ValidationError:
         frappe.db.rollback()
-        return _error("NATIVE_VALIDATION_FAILED", "ERPNext rejected the Purchase Receipt during final validation.")
+        return _error("NATIVE_VALIDATION_FAILED")
     except Exception:
         frappe.db.rollback()
-        return _error("CONVERSION_FAILED", "ERPNext could not create the Purchase Receipt.")
+        return _error("CONVERSION_FAILED")
     return {"status": "created", "doctype": _TARGET, "purchase_receipt": target.name, "docstatus": int(target.docstatus), "source_purchase_order": source.name, "supplier": _field(target, "supplier"), "company": _field(target, "company"), "item_count": len(target.get("items") or [])}
 
 
 def execute_purchase_order_to_purchase_receipt(purchase_order: str, lines: list[dict[str, Any]], posting_date: str | None = None, supplier_delivery_note: str | None = None) -> dict[str, Any]:
     if failure := direct_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     source, failure = _load_source(purchase_order.strip() if isinstance(purchase_order, str) else "")
     if failure:
         return failure
@@ -282,7 +282,7 @@ def execute_purchase_order_to_purchase_receipt(purchase_order: str, lines: list[
         return failure
     try:
         if failure := exact_mode_failure("create", WriteMode.DIRECT):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         target.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
         frappe.db.commit()
     except Exception:

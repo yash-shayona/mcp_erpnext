@@ -11,7 +11,7 @@ from ...config.business_defaults import (
     BusinessDefaultsConfigurationError,
     get_document_business_default,
 )
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.terms_resolution import TERMS_TYPO_FALLBACK_SCAN_LIMIT, resolve_terms
 
 TERMS_SEARCH_FILTERS = {"selling": 1, "disabled": 0}
@@ -19,14 +19,8 @@ TERMS_SEARCH_FIELDS = ("name", "title")
 TERMS_DISPLAY_FIELDS = ("title",)
 
 
-def _error(code: str, message: str) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": False,
-    }
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _permitted_terms(name: str, frappe_module: Any) -> bool:
@@ -62,21 +56,19 @@ def apply_selling_terms(
         except BusinessDefaultsConfigurationError:
             return _error(
                 "INVALID_BUSINESS_DEFAULTS",
-                "The site's document business-default configuration is invalid.",
             )
 
     selected_tc_name = explicit_tc_name or configured_tc_name
     if selected_tc_name is not None:
         if not isinstance(selected_tc_name, str) or not selected_tc_name.strip():
             return _error(
-                "INVALID_TERMS", "Terms and conditions must be an exact non-empty name."
+                "INVALID_TERMS"
             )
         tc_name = selected_tc_name.strip()
         if not _permitted_terms(tc_name, frappe_module):
             source = "configured " if configured_tc_name is not None else ""
             return _error(
                 "INVALID_TERMS",
-                f"The {source}Terms and Conditions template is not available to the authenticated user.",
             )
         doc.tc_name = tc_name
     elif not doc.get("tc_name"):
@@ -93,6 +85,5 @@ def apply_selling_terms(
         except Exception:
             return _error(
                 "TERMS_UNAVAILABLE",
-                "ERPNext could not render the selected Terms and Conditions.",
             )
     return None

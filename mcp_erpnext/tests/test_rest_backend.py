@@ -11,6 +11,7 @@ from mcp_erpnext.contracts.common import ToolError
 from mcp_erpnext import remote_api
 from mcp_erpnext.rest_client import ERPNextRestClient, RestBackendError
 from mcp_erpnext.settings import MCPSettings
+from mcp_erpnext.public_errors import defined_error
 
 
 def _settings(**overrides) -> MCPSettings:
@@ -778,19 +779,36 @@ class RemoteOperationRegistryTests(unittest.TestCase):
         "mcp_erpnext.remote_operations.delivery_note_to_sales_invoice.prepare_delivery_note_to_sales_invoice"
     )
     def test_delivery_note_conversion_uses_fixed_typed_handler(self, prepare):
-        prepare.return_value = {
-            "status": "error",
-            "code": "SOURCE_NOT_FOUND",
-            "message": "missing",
-            "reference": "MCP-ERR-TEST",
-        }
+        expected = defined_error("SOURCE_NOT_FOUND", reference="MCP-ERR-TEST")
+        prepare.return_value = expected
         result = remote_operations.execute_remote_operation(
             "prepare_delivery_note_to_sales_invoice",
             "sales",
             {"delivery_note": "MAT-DN-0001"},
         )
-        self.assertEqual(result["code"], "SOURCE_NOT_FOUND")
+        self.assertEqual(result, expected)
         prepare.assert_called_once_with("MAT-DN-0001")
+
+    @patch(
+        "mcp_erpnext.remote_operations.purchase_order_to_purchase_receipt.prepare_purchase_order_to_purchase_receipt"
+    )
+    def test_purchase_receipt_conversion_preserves_catalog_error(self, prepare):
+        expected = defined_error(
+            "QUANTITY_EXCEEDS_REMAINING", reference="MCP-ERR-TEST"
+        )
+        prepare.return_value = expected
+        result = remote_operations.execute_remote_operation(
+            "prepare_purchase_order_to_purchase_receipt",
+            "purchase",
+            {
+                "purchase_order": "PUR-ORD-0001",
+                "lines": [
+                    {"purchase_order_item": "PO-ITEM-0001", "accepted_qty": 1}
+                ],
+            },
+        )
+        self.assertEqual(result, expected)
+        prepare.assert_called_once()
 
     @patch(
         "mcp_erpnext.remote_operations.sales_invoice_to_delivery_note.prepare_sales_invoice_to_delivery_note"
@@ -867,12 +885,8 @@ class RemoteOperationRegistryTests(unittest.TestCase):
         "mcp_erpnext.remote_operations.multi_invoice_customer_receipt.prepare_multi_invoice_customer_receipt"
     )
     def test_multi_invoice_receipt_uses_fixed_typed_accounts_handler(self, prepare):
-        prepare.return_value = {
-            "status": "error",
-            "code": "NO_OUTSTANDING",
-            "message": "missing",
-            "reference": "MCP-ERR-TEST",
-        }
+        expected = defined_error("NO_OUTSTANDING", reference="MCP-ERR-TEST")
+        prepare.return_value = expected
         result = remote_operations.execute_remote_operation(
             "prepare_multi_invoice_customer_receipt",
             "accounts",
@@ -886,7 +900,7 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                 "mode_of_payment": "Bank Transfer",
             },
         )
-        self.assertEqual(result["code"], "NO_OUTSTANDING")
+        self.assertEqual(result, expected)
         prepare.assert_called_once()
 
     def test_multi_invoice_receipt_is_accounts_only(self):

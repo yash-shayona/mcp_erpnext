@@ -11,7 +11,7 @@ from ...config.business_defaults import (
     BusinessDefaultsConfigurationError,
     get_document_business_default,
 )
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.entity_resolution import (
     find_candidates,
     rank_candidates,
@@ -24,14 +24,8 @@ PAYMENT_TERMS_DISPLAY_FIELDS = ("template_name",)
 PAYMENT_TERMS_TYPO_FALLBACK_SCAN_LIMIT = 100
 
 
-def _error(code: str, message: str) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": False,
-    }
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _permitted_template(name: str, frappe_module: Any) -> bool:
@@ -147,7 +141,6 @@ def apply_payment_terms_template(
         except BusinessDefaultsConfigurationError:
             return _error(
                 "INVALID_BUSINESS_DEFAULTS",
-                "The site's document business-default configuration is invalid.",
             )
         configured = template is not None
 
@@ -156,14 +149,12 @@ def apply_payment_terms_template(
     if not isinstance(template, str) or not template.strip():
         return _error(
             "INVALID_PAYMENT_TERMS_TEMPLATE",
-            "Payment Terms Template must be an exact non-empty name.",
         )
     template = template.strip()
     if not _permitted_template(template, frappe_module):
         source = "configured " if configured else ""
         return _error(
             "INVALID_PAYMENT_TERMS_TEMPLATE",
-            f"The {source}Payment Terms Template is not available to the authenticated user.",
         )
     doc.payment_terms_template = template
     return None
@@ -176,6 +167,5 @@ def set_native_payment_schedule(doc: Any) -> dict[str, Any] | None:
     except Exception:
         return _error(
             "PAYMENT_SCHEDULE_UNAVAILABLE",
-            "ERPNext could not generate the effective Payment Schedule.",
         )
     return None

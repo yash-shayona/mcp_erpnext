@@ -8,7 +8,7 @@ import frappe
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import public_error
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from ..common.write_policy import (
     approval_entry_failure,
@@ -32,8 +32,8 @@ def _native_make_sales_order(source_name: str) -> Any:
     return make_sales_order(source_name)
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return public_error(code, message=message, retryable=retryable)
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _current_user() -> str:
@@ -50,30 +50,27 @@ def _load_source(name: str) -> tuple[Any | None, dict[str, Any] | None]:
         quotation = frappe.get_doc(_SOURCE_DOCTYPE, name)
     except frappe.DoesNotExistError:
         return None, _error(
-            "SOURCE_NOT_FOUND", "The requested Quotation was not found."
+            "SOURCE_NOT_FOUND"
         )
     if not quotation.has_permission("read"):
         return None, _error(
-            "PERMISSION_DENIED", "The authenticated user cannot read that Quotation."
+            "PERMISSION_DENIED"
         )
     if int(quotation.docstatus) != 1:
         return None, _error(
             "SOURCE_NOT_READY",
-            "Only a Submitted Customer Quotation can be converted to a Sales Order.",
         )
     if quotation.get("quotation_to") != "Customer":
         return None, _error(
             "UNSUPPORTED_QUOTATION_PARTY",
-            "Only Customer Quotations are supported for this conversion.",
         )
     if not quotation.get("party_name"):
         return None, _error(
-            "SOURCE_NOT_READY", "The Submitted Quotation has no Customer party."
+            "SOURCE_NOT_READY"
         )
     if not frappe.has_permission("Sales Order", "create"):
         return None, _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot create the converted Sales Order.",
         )
     return quotation, None
 
@@ -239,7 +236,6 @@ def _map_and_preview(
                 None,
                 _error(
                     "CONVERSION_UNAVAILABLE",
-                    "The mapped Sales Order has an invalid delivery date.",
                 ),
             )
         sales_order.run_method("validate")
@@ -249,7 +245,6 @@ def _map_and_preview(
             None,
             _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot perform that conversion.",
             ),
         )
     except Exception:
@@ -258,14 +253,13 @@ def _map_and_preview(
             None,
             _error(
                 "CONVERSION_UNAVAILABLE",
-                "ERPNext could not prepare this Quotation conversion.",
             ),
         )
     if int(sales_order.docstatus or 0) != 0:
         return (
             None,
             None,
-            _error("CONVERSION_UNAVAILABLE", "The mapped Sales Order is not a Draft."),
+            _error("CONVERSION_UNAVAILABLE"),
         )
     items = sales_order.get("items") or []
     if not items:
@@ -274,7 +268,6 @@ def _map_and_preview(
             None,
             _error(
                 "NO_MAPPABLE_ITEMS",
-                "No eligible Quotation items remain to create a Sales Order.",
             ),
         )
     for row in items:
@@ -284,7 +277,6 @@ def _map_and_preview(
                 None,
                 _error(
                     "CONVERSION_UNAVAILABLE",
-                    "ERPNext did not provide complete Quotation row lineage.",
                 ),
             )
     preview = _preview(quotation, sales_order)
@@ -295,7 +287,7 @@ def prepare_quotation_to_sales_order(quotation: str) -> dict[str, Any]:
     """Prepare a native Draft Sales Order preview without persisting anything."""
 
     if failure := disabled_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     user = _current_user()
     source, failure = _load_source(
         quotation.strip() if isinstance(quotation, str) else ""
@@ -331,7 +323,6 @@ def prepare_quotation_to_sales_order(quotation: str) -> dict[str, Any]:
 def _stale() -> dict[str, Any]:
     return _error(
         "STALE_CONFIRMATION",
-        "The Quotation conversion changed after the preview was prepared. Please prepare it again.",
     )
 
 
@@ -341,7 +332,7 @@ def confirm_quotation_to_sales_order(
     """Create one freshly revalidated native mapped Draft Sales Order."""
 
     if failure := approval_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     user = _current_user()
     if not confirm:
         approvals.cancel(
@@ -352,7 +343,6 @@ def confirm_quotation_to_sales_order(
         )
         return _error(
             "CONFIRMATION_REQUIRED",
-            "Review the conversion preview before confirming it.",
         )
 
     approval, state = approvals.claim_for_confirm_write(
@@ -363,14 +353,14 @@ def confirm_quotation_to_sales_order(
     )
     if state != "available" or approval is None:
         code, message, retryable = confirmation_failure(state, "Quotation conversion")
-        return _error(code, message, retryable=retryable)
+        return _error(code, retryable=retryable)
     if (
         approval.payload.get("source_doctype") != _SOURCE_DOCTYPE
         or not approval.payload.get("source_name")
         or not approval.payload.get("fingerprint")
     ):
         return _error(
-            "CONFIRMATION_UNAVAILABLE", "This conversion confirmation is not available."
+            "CONFIRMATION_UNAVAILABLE"
         )
 
     source, failure = _load_source(approval.payload["source_name"])
@@ -384,7 +374,7 @@ def confirm_quotation_to_sales_order(
 
     try:
         if failure := exact_mode_failure("create", WriteMode.APPROVAL_REQUIRED):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         sales_order.insert(
             ignore_permissions=False, ignore_links=False, ignore_mandatory=False
         )
@@ -393,13 +383,11 @@ def confirm_quotation_to_sales_order(
         frappe.db.rollback()
         return _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot create the converted Sales Order.",
         )
     except Exception:
         frappe.db.rollback()
         return _error(
             "CONVERSION_FAILED",
-            "ERPNext could not create the converted Sales Order.",
         )
     return {
         "status": "created",
@@ -413,7 +401,7 @@ def confirm_quotation_to_sales_order(
 def execute_quotation_to_sales_order(quotation: str) -> dict[str, Any]:
     """Create a fresh native mapped Sales Order only in direct mode."""
     if failure := direct_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     _current_user()
     source, failure = _load_source(
         quotation.strip() if isinstance(quotation, str) else ""
@@ -422,10 +410,10 @@ def execute_quotation_to_sales_order(quotation: str) -> dict[str, Any]:
         return failure
     sales_order, _preview_data, failure = _map_and_preview(source)
     if failure or sales_order is None:
-        return failure or _error("CONVERSION_UNAVAILABLE", "ERPNext could not map this Quotation.")
+        return failure or _error("CONVERSION_UNAVAILABLE")
     try:
         if failure := exact_mode_failure("create", WriteMode.DIRECT):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         sales_order.insert(
             ignore_permissions=False, ignore_links=False, ignore_mandatory=False
         )
@@ -434,13 +422,11 @@ def execute_quotation_to_sales_order(quotation: str) -> dict[str, Any]:
         frappe.db.rollback()
         return _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot create the converted Sales Order.",
         )
     except Exception:
         frappe.db.rollback()
         return _error(
             "CONVERSION_FAILED",
-            "ERPNext could not create the converted Sales Order.",
         )
     return {
         "status": "created",

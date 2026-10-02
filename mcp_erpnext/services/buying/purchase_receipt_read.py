@@ -11,14 +11,14 @@ from ..common.aggregate import build_aggregate_field, build_aggregate_fields, ex
 
 import frappe
 
-from ...observability import public_error
+from ...public_errors import defined_error
 
 _HEADER_FIELDS = {"name", "supplier", "supplier_name", "company", "posting_date", "posting_time", "docstatus", "status", "currency", "total_qty", "grand_total", "per_billed", "is_return", "return_against", "supplier_delivery_note", "owner", "creation", "modified"}
 _ITEM_FIELDS = {"name", "item_code", "item_name", "purchase_order", "purchase_order_item", "qty", "rejected_qty", "received_qty", "uom", "stock_uom", "conversion_factor", "warehouse", "rejected_warehouse", "rate", "amount", "quality_inspection"}
 
 
-def _error(code: str, message: str) -> dict[str, Any]:
-    return public_error(code, message=message)
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _project(value: Any, fields: list[str]) -> dict[str, Any]:
@@ -27,17 +27,17 @@ def _project(value: Any, fields: list[str]) -> dict[str, Any]:
 
 def get_purchase_receipt(purchase_receipt: str, fields: list[str], include_items: bool = False, item_fields: list[str] | None = None) -> dict[str, Any]:
     if any(field not in _HEADER_FIELDS for field in fields):
-        return _error("INVALID_FIELDS", "The requested Purchase Receipt header projection is not allowed.")
+        return _error("INVALID_FIELDS")
     if item_fields and any(field not in _ITEM_FIELDS for field in item_fields):
-        return _error("INVALID_FIELDS", "The requested Purchase Receipt item projection is not allowed.")
+        return _error("INVALID_FIELDS")
     try:
         doc = frappe.get_doc("Purchase Receipt", purchase_receipt)
     except frappe.DoesNotExistError:
         return {"status": "not_found", "purchase_receipt": purchase_receipt}
     except frappe.PermissionError:
-        return _error("PERMISSION_DENIED", "The authenticated user cannot read that Purchase Receipt.")
+        return _error("PERMISSION_DENIED")
     if not doc.has_permission("read"):
-        return _error("PERMISSION_DENIED", "The authenticated user cannot read that Purchase Receipt.")
+        return _error("PERMISSION_DENIED")
     document = _project(doc, fields)
     if include_items:
         document["items"] = [_project(row, item_fields or ["name", "item_code", "purchase_order", "purchase_order_item", "qty", "rejected_qty"]) for row in doc.get("items") or []]

@@ -11,7 +11,7 @@ from frappe.utils import flt, getdate
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import public_error
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 
 _ACTION = "reconcile_customer_payment_to_sales_invoice"
@@ -21,8 +21,8 @@ _RECONCILIATION = "Payment Reconciliation"
 _MAX_DISCOVERY_ROWS = 50
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return public_error(code, message=message, retryable=retryable)
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _user() -> str:
@@ -131,22 +131,20 @@ def _load_document(
     doctype: str, name: str | None, not_found_code: str, label: str
 ) -> tuple[Any | None, dict[str, Any] | None]:
     if not isinstance(name, str) or not name.strip():
-        return None, _error(not_found_code, f"An exact {label} name is required.")
+        return None, _error(not_found_code)
     name = name.strip()
     try:
         doc = frappe.get_doc(doctype, name)
     except frappe.DoesNotExistError:
-        return None, _error(not_found_code, f"The {label} was not found.")
+        return None, _error(not_found_code)
     except frappe.PermissionError:
         return None, _error(
             "PERMISSION_DENIED",
-            f"The authenticated user cannot read the {label}.",
         )
 
     if not _document_has_permission(doc, "read"):
         return None, _error(
             "PERMISSION_DENIED",
-            f"The authenticated user cannot read the {label}.",
         )
     return doc, None
 
@@ -168,7 +166,6 @@ def _load_and_authorize_documents(
             None,
             _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot reconcile the Payment Entry.",
             ),
         )
 
@@ -187,7 +184,6 @@ def _load_and_authorize_documents(
             None,
             _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot use Payment Reconciliation.",
             ),
         )
     return payment, invoice, None
@@ -207,7 +203,6 @@ def _link_permissions(
         if source_account != account and source_account != advance:
             return _error(
                 "ACCOUNT_MISMATCH",
-                "The Payment Entry account is not compatible with the Sales Invoice reconciliation account.",
             )
         links[f"Account:{source_account}"] = source_account
     if advance:
@@ -218,7 +213,6 @@ def _link_permissions(
         if name and not _has_permission(doctype, "read", str(name)):
             return _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot read the accounting context for this reconciliation.",
             )
     return None
 
@@ -254,7 +248,6 @@ def _party_accounts(
             None,
             _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot read the Customer accounting context.",
             ),
         )
     except Exception:
@@ -263,7 +256,6 @@ def _party_accounts(
             None,
             _error(
                 "ACCOUNT_MISMATCH",
-                "ERPNext could not resolve the Customer accounting context.",
             ),
         )
 
@@ -386,7 +378,6 @@ def _native_discovery(
             [],
             _error(
                 "PERMISSION_DENIED",
-                "ERPNext denied native payment reconciliation discovery.",
             ),
         )
     except AttributeError:
@@ -395,7 +386,6 @@ def _native_discovery(
             [],
             _error(
                 "NATIVE_RECONCILIATION_UNAVAILABLE",
-                "The installed ERPNext Payment Reconciliation seam is unavailable.",
             ),
         )
     except Exception:
@@ -404,7 +394,6 @@ def _native_discovery(
             [],
             _error(
                 "NATIVE_RECONCILIATION_UNAVAILABLE",
-                "ERPNext could not discover the current reconciliation state.",
             ),
         )
 
@@ -436,7 +425,6 @@ def _source_from_rows(
             None,
             _error(
                 "AMBIGUOUS_PAYMENT_SOURCE",
-                "The Payment Entry has multiple eligible native source buckets; V1 will not choose one automatically.",
             ),
         )
     if not rows:
@@ -447,7 +435,6 @@ def _source_from_rows(
             None,
             _error(
                 "INVALID_PAYMENT_ENTRY_STATE",
-                "The submitted Customer Payment Entry has no eligible unallocated or Sales Order advance amount.",
             ),
         )
 
@@ -471,7 +458,6 @@ def _source_from_rows(
                 None,
                 _error(
                     "INVALID_PAYMENT_ENTRY_STATE",
-                    "The native Sales Order advance reference is no longer eligible.",
                 ),
             )
         return row, "sales_order_advance", str(source_order), amount, None
@@ -505,24 +491,20 @@ def _build_allocation(
     except AttributeError:
         return None, _error(
             "NATIVE_RECONCILIATION_UNAVAILABLE",
-            "The installed ERPNext allocation seam is unavailable.",
         )
     except frappe.PermissionError:
         return None, _error(
             "PERMISSION_DENIED",
-            "ERPNext denied native allocation discovery.",
         )
     except Exception:
         return None, _error(
             "NATIVE_RECONCILIATION_UNAVAILABLE",
-            "ERPNext could not project the requested native allocation.",
         )
 
     allocations = list(_value(reconciliation, "allocation", []) or [])
     if len(allocations) != 1:
         return None, _error(
             "NATIVE_RECONCILIATION_UNAVAILABLE",
-            "ERPNext did not produce exactly one native reconciliation allocation.",
         )
     allocation = allocations[0]
     for field, value in {
@@ -562,7 +544,6 @@ def _build(
     if not _valid_amount(request.get("amount")):
         return None, _error(
             "INVALID_ALLOCATION_AMOUNT",
-            "Allocation amount must be a positive finite number.",
         )
 
     payment_name = request.get("payment_entry")
@@ -576,7 +557,6 @@ def _build(
     if int(_value(payment, "docstatus", 0) or 0) != 1:
         return None, _error(
             "INVALID_PAYMENT_ENTRY_STATE",
-            "Only a submitted Payment Entry can be reconciled.",
         )
     if (
         _value(payment, "party_type") != "Customer"
@@ -584,36 +564,30 @@ def _build(
     ):
         return None, _error(
             "INVALID_PAYMENT_ENTRY_STATE",
-            "V1 supports only a submitted Customer Receive Payment Entry.",
         )
     if int(_value(invoice, "docstatus", 0) or 0) != 1:
         return None, _error(
             "INVOICE_NOT_OUTSTANDING",
-            "Only a submitted Sales Invoice can be reconciled.",
         )
     if int(_value(invoice, "is_return", 0) or 0) == 1 or _value(
         invoice, "return_against"
     ):
         return None, _error(
             "INVOICE_NOT_OUTSTANDING",
-            "Return or credit-note Sales Invoices are outside this reconciliation capability.",
         )
     if _value(payment, "party") != _value(invoice, "customer"):
         return None, _error(
             "PARTY_MISMATCH",
-            "The Payment Entry and Sales Invoice must belong to the same Customer.",
         )
     if _value(payment, "company") != _value(invoice, "company"):
         return None, _error(
             "COMPANY_MISMATCH",
-            "The Payment Entry and Sales Invoice must belong to the same Company.",
         )
 
     receivable_account = _effective_receivable(invoice)
     if not receivable_account:
         return None, _error(
             "ACCOUNT_MISMATCH",
-            "The Sales Invoice has no usable native receivable account.",
         )
     _party_account, advance_account, failure = _party_accounts(invoice)
     if failure:
@@ -626,7 +600,6 @@ def _build(
     if _term_allocation_enabled(invoice):
         return None, _error(
             "PAYMENT_TERMS_UNSUPPORTED",
-            "Payment-term-specific allocation is outside this V1 reconciliation capability.",
         )
 
     reconciliation = _configure_reconciliation(
@@ -649,12 +622,10 @@ def _build(
         ):
             return None, _error(
                 "RECONCILIATION_ALREADY_RUNNING",
-                "A native Payment Reconciliation job is already running for this Customer and Company.",
             )
     except frappe.PermissionError:
         return None, _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot inspect native reconciliation jobs.",
         )
     except Exception:
         # The pinned native seam is optional at the site configuration boundary;
@@ -674,7 +645,6 @@ def _build(
     if len(invoice_rows) != 1:
         return None, _error(
             "INVOICE_NOT_OUTSTANDING",
-            "The native Payment Ledger has no single positive outstanding row for this Sales Invoice.",
         )
     invoice_row = invoice_rows[0]
     invoice_outstanding = flt(_value(invoice_row, "outstanding_amount"), _precision())
@@ -683,7 +653,6 @@ def _build(
     if requested_amount <= tolerance:
         return None, _error(
             "INVALID_ALLOCATION_AMOUNT",
-            "Allocation amount is below the native currency precision.",
         )
     if (
         requested_amount - float(source_available) > tolerance
@@ -691,7 +660,6 @@ def _build(
     ):
         return None, _error(
             "AMOUNT_EXCEEDS_AVAILABLE",
-            "The requested allocation exceeds the current native source or invoice availability.",
         )
 
     allocation_currency = (
@@ -709,12 +677,10 @@ def _build(
     ):
         return None, _error(
             "ACCOUNT_MISMATCH",
-            "The native Payment Ledger source and invoice currencies are incompatible for V1.",
         )
     if not allocation_currency:
         return None, _error(
             "NATIVE_RECONCILIATION_UNAVAILABLE",
-            "ERPNext did not provide a native reconciliation currency.",
         )
 
     reconciliation, failure = _build_allocation(
@@ -933,7 +899,6 @@ def prepare_customer_payment_reconciliation(request: dict[str, Any]) -> dict[str
 def _stale() -> dict[str, Any]:
     return _error(
         "STALE_CONFIRMATION",
-        "The native reconciliation state changed after preparation. Please prepare it again.",
     )
 
 
@@ -991,7 +956,6 @@ def confirm_customer_payment_reconciliation(
         approvals.cancel(approval_token, action=_ACTION, site=site, user=user)
         return _error(
             "CONFIRMATION_REQUIRED",
-            "The pending reconciliation was declined and no accounting mutation was performed.",
         )
 
     approval, state = approvals.claim_for_confirm_write(
@@ -1001,7 +965,7 @@ def confirm_customer_payment_reconciliation(
         code, message, retryable = confirmation_failure(
             state, "Customer Payment Entry reconciliation"
         )
-        return _error(code, message, retryable=retryable)
+        return _error(code, retryable=retryable)
 
     request = approval.payload.get("request")
     approved_preview = approval.payload.get("preview")
@@ -1013,7 +977,6 @@ def confirm_customer_payment_reconciliation(
     ):
         return _error(
             "CONFIRMATION_UNAVAILABLE",
-            "This reconciliation confirmation is unavailable.",
         )
 
     current, failure = _build(deepcopy(request))
@@ -1046,24 +1009,20 @@ def confirm_customer_payment_reconciliation(
         _safe_rollback()
         return _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot complete this reconciliation.",
         )
     except frappe.ValidationError as error:
         _safe_rollback()
         if "india_compliance" in type(error).__module__:
             return _error(
                 "REGIONAL_VALIDATION_FAILED",
-                "A regional ERPNext validation rejected this reconciliation.",
             )
         return _error(
             "NATIVE_VALIDATION_FAILED",
-            "ERPNext rejected this reconciliation during final validation.",
         )
     except Exception:
         _safe_rollback()
         return _error(
             "RECONCILIATION_FAILED",
-            "ERPNext could not complete the reconciliation. Inspect the exact Payment Entry and Sales Invoice before retrying.",
         )
 
     try:
@@ -1072,7 +1031,6 @@ def confirm_customer_payment_reconciliation(
     except Exception:
         return _error(
             "RECONCILIATION_FAILED",
-            "Reconciliation completed but the resulting documents could not be reloaded safely.",
         )
     source_after, invoice_after = _native_post_state(
         fresh_payment,

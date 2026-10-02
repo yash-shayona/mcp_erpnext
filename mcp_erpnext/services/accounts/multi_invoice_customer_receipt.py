@@ -10,20 +10,14 @@ from frappe.utils import flt, getdate, nowdate
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 
 _ACTION = "create_multi_invoice_customer_receipt"
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _value(doc: Any, field: str, default: Any = None) -> Any:
@@ -61,10 +55,10 @@ def _load(
             raise frappe.PermissionError
         return doc, None
     except frappe.DoesNotExistError:
-        return None, _error(code, f"{label} was not found.")
+        return None, _error(code)
     except frappe.PermissionError:
         return None, _error(
-            "PERMISSION_DENIED", f"The authenticated user cannot read {label}."
+            "PERMISSION_DENIED"
         )
 
 
@@ -76,11 +70,10 @@ def _destination(
     if mode and bank:
         return None, _error(
             "CONTRADICTORY_DESTINATION",
-            "Provide either Mode of Payment or Bank Account, not both.",
         )
     if not mode and not bank:
         return None, _error(
-            "DESTINATION_REQUIRED", "Provide one Mode of Payment or Bank Account."
+            "DESTINATION_REQUIRED"
         )
     if bank:
         bank_doc, failure = _load(
@@ -93,7 +86,6 @@ def _destination(
         ):
             return None, _error(
                 "INVALID_BANK_ACCOUNT",
-                "The Bank Account has no usable Company ledger account.",
             )
         account = str(_value(bank_doc, "account"))
         kind = "Bank Account"
@@ -114,7 +106,6 @@ def _destination(
         if not account:
             return None, _error(
                 "INVALID_MODE_OF_PAYMENT",
-                "The Mode of Payment has no usable Company bank or cash account.",
             )
         kind = "Mode of Payment"
         identity = str(mode)
@@ -127,7 +118,6 @@ def _destination(
     except Exception:
         return None, _error(
             "INVALID_DESTINATION_ACCOUNT",
-            "ERPNext could not validate the destination ledger account.",
         )
     return {
         "kind": kind,
@@ -286,7 +276,7 @@ def _build(
             None,
             None,
             _error(
-                "INVALID_REFERENCE_COUNT", "Provide 2-20 Sales Invoice allocations."
+                "INVALID_REFERENCE_COUNT"
             ),
         )
     names = [str(row.get("sales_invoice", "")).strip() for row in allocations]
@@ -296,7 +286,7 @@ def _build(
             None,
             None,
             _error(
-                "DUPLICATE_SALES_INVOICE", "Each Sales Invoice may appear only once."
+                "DUPLICATE_SALES_INVOICE"
             ),
         )
     request["posting_date"] = _json(getdate(request.get("posting_date") or nowdate()))
@@ -320,7 +310,7 @@ def _build(
             None,
             None,
             None,
-            _error("SOURCE_NOT_READY", "Every Sales Invoice must be Submitted."),
+            _error("SOURCE_NOT_READY"),
         )
     if any(bool(_value(invoice, "is_return", False)) for invoice in invoices.values()):
         return (
@@ -329,7 +319,6 @@ def _build(
             None,
             _error(
                 "RETURN_REFERENCE_UNSUPPORTED",
-                "Return Sales Invoices are not supported.",
             ),
         )
     if any(
@@ -342,7 +331,6 @@ def _build(
             None,
             _error(
                 "CUSTOMER_MISMATCH",
-                "Every Sales Invoice must belong to the explicit Customer.",
             ),
         )
     companies = {_value(invoice, "company") for invoice in invoices.values()}
@@ -357,7 +345,7 @@ def _build(
             None,
             None,
             _error(
-                "COMPANY_MISMATCH", "Every Sales Invoice must belong to one Company."
+                "COMPANY_MISMATCH"
             ),
         )
     if len(accounts) != 1 or None in accounts:
@@ -367,7 +355,6 @@ def _build(
             None,
             _error(
                 "RECEIVABLE_ACCOUNT_MISMATCH",
-                "Every Sales Invoice must use one effective receivable account.",
             ),
         )
     if len(party_currencies) != 1:
@@ -377,7 +364,6 @@ def _build(
             None,
             _error(
                 "PARTY_CURRENCY_MISMATCH",
-                "Every Sales Invoice must use one party-account currency.",
             ),
         )
     if len(currencies) != 1:
@@ -387,7 +373,6 @@ def _build(
             None,
             _error(
                 "MIXED_INVOICE_CURRENCY_UNSUPPORTED",
-                "Mixed Sales Invoice transaction currencies are unsupported.",
             ),
         )
     company, account, party_currency = (
@@ -402,7 +387,6 @@ def _build(
             None,
             _error(
                 "PAYMENT_TERMS_UNSUPPORTED",
-                "Payment-term allocation is unsupported for this receipt.",
             ),
         )
     if any(
@@ -415,7 +399,6 @@ def _build(
             None,
             _error(
                 "EARLY_PAYMENT_DISCOUNT_UNSUPPORTED",
-                "A selected invoice is eligible for an early-payment discount.",
             ),
         )
     destination, failure = _destination(company, request)
@@ -465,7 +448,6 @@ def _build(
                     None,
                     _error(
                         "PAYMENT_TERMS_UNSUPPORTED",
-                        "Term-specific outstanding rows are unsupported.",
                     ),
                 )
             by_name[str(_value(row, "voucher_no"))] = row
@@ -476,7 +458,6 @@ def _build(
             None,
             _error(
                 "NO_OUTSTANDING",
-                "Every selected Sales Invoice must have a fresh positive native outstanding row.",
             ),
         )
     from erpnext.accounts.utils import get_currency_precision
@@ -494,7 +475,7 @@ def _build(
             None,
             None,
             _error(
-                "ALLOCATION_TOTAL_MISMATCH", "Allocations exceed the receipt amount."
+                "ALLOCATION_TOTAL_MISMATCH"
             ),
         )
     if total < amount:
@@ -504,7 +485,6 @@ def _build(
             None,
             _error(
                 "UNALLOCATED_RECEIPT_UNSUPPORTED",
-                "The receipt amount must equal the explicit allocations.",
             ),
         )
     if any(
@@ -518,7 +498,6 @@ def _build(
             None,
             _error(
                 "ALLOCATION_EXCEEDS_OUTSTANDING",
-                "Each allocation must be positive and no greater than fresh native outstanding.",
             ),
         )
     if destination["currency"] != party_currency and request.get("bank_amount") is None:
@@ -528,7 +507,6 @@ def _build(
             None,
             _error(
                 "BANK_AMOUNT_REQUIRED",
-                "bank_amount is required when destination currency differs.",
             ),
         )
     if destination.get("account_type") == "Bank" and (
@@ -540,7 +518,6 @@ def _build(
             None,
             _error(
                 "TRANSACTION_REFERENCE_REQUIRED",
-                "Reference number and reference date are required for a Bank destination.",
             ),
         )
     try:
@@ -601,7 +578,6 @@ def _build(
             None,
             _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot create a Payment Entry.",
             ),
         )
     except Exception:
@@ -611,7 +587,6 @@ def _build(
             None,
             _error(
                 "NATIVE_PAYMENT_VALIDATION_FAILED",
-                "ERPNext could not prepare this native Payment Entry.",
             ),
         )
     if _value(doc, "taxes", []) or _value(doc, "tax_withholding_entries", []):
@@ -621,7 +596,6 @@ def _build(
             None,
             _error(
                 "UNEXPECTED_TAX_STATE",
-                "Native preparation produced unsupported tax or withholding state.",
             ),
         )
     deductions = _deduction_preview(doc)
@@ -632,7 +606,6 @@ def _build(
             None,
             _error(
                 "UNEXPECTED_DEDUCTION_STATE",
-                "Native preparation produced an unsupported deduction.",
             ),
         )
     if flt(_value(doc, "unallocated_amount"), precision) != 0:
@@ -642,7 +615,6 @@ def _build(
             None,
             _error(
                 "UNALLOCATED_RECEIPT_UNSUPPORTED",
-                "Native preparation produced an unallocated amount.",
             ),
         )
     if flt(_value(doc, "difference_amount"), precision) != 0:
@@ -652,7 +624,6 @@ def _build(
             None,
             _error(
                 "NONZERO_DIFFERENCE",
-                "Native preparation produced a nonzero difference amount.",
             ),
         )
     return doc, invoices, destination, None
@@ -692,7 +663,6 @@ def confirm_multi_invoice_customer_receipt(
         approvals.cancel(approval_token, action=_ACTION, site=site, user=user)
         return _error(
             "CONFIRMATION_REQUIRED",
-            "Review the Draft Payment Entry preview before confirming it.",
         )
     approval, state = approvals.claim_for_confirm_write(
         approval_token, action=_ACTION, site=site, user=user
@@ -701,17 +671,16 @@ def confirm_multi_invoice_customer_receipt(
         code, message, retryable = confirmation_failure(
             state, "multi-invoice Customer receipt"
         )
-        return _error(code, message, retryable=retryable)
+        return _error(code, retryable=retryable)
     request = approval.payload.get("request")
     if not isinstance(request, dict):
         return _error(
-            "CONFIRMATION_UNAVAILABLE", "This receipt confirmation is unavailable."
+            "CONFIRMATION_UNAVAILABLE"
         )
     doc, invoices, destination, failure = _build(deepcopy(request))
     if failure:
         return _error(
             "STALE_CONFIRMATION",
-            "The receipt changed after preparation. Please prepare it again.",
         )
     preview = _preview(doc, invoices, destination)
     if _fingerprint(request, preview, invoices, destination) != approval.payload.get(
@@ -719,7 +688,6 @@ def confirm_multi_invoice_customer_receipt(
     ):
         return _error(
             "STALE_CONFIRMATION",
-            "The receipt changed after preparation. Please prepare it again.",
         )
     try:
         doc.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
@@ -727,13 +695,12 @@ def confirm_multi_invoice_customer_receipt(
     except frappe.PermissionError:
         frappe.db.rollback()
         return _error(
-            "PERMISSION_DENIED", "The authenticated user cannot create a Payment Entry."
+            "PERMISSION_DENIED"
         )
     except Exception:
         frappe.db.rollback()
         return _error(
             "PAYMENT_ENTRY_CREATION_FAILED",
-            "ERPNext could not create the Draft Payment Entry.",
         )
     return {
         "status": "created",

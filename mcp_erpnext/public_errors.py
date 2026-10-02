@@ -264,6 +264,359 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
         ErrorCategory.NOT_FOUND,
         "The authenticated user does not have an eligible email address.",
     ),
+    "ACCOUNT_MISMATCH": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The payment and invoice accounts are not compatible.",
+    ),
+    "ALLOCATION_EXCEEDS_OUTSTANDING": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Each allocation must be positive and no greater than the current outstanding amount.",
+    ),
+    "ALLOCATION_TOTAL_MISMATCH": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The allocation total does not match the receipt amount.",
+    ),
+    "AMBIGUOUS_PAYMENT_SOURCE": PublicErrorDefinition(
+        ErrorCategory.AMBIGUOUS_SELECTION,
+        "The Payment Entry has more than one eligible source for reconciliation.",
+    ),
+    "AMOUNT_EXCEEDS_AVAILABLE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The requested allocation exceeds the current native source or invoice availability.",
+    ),
+    "AMOUNT_EXCEEDS_OUTSTANDING": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The payment amount exceeds the available outstanding amount.",
+    ),
+    "BANK_AMOUNT_REQUIRED": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "bank_amount is required when destination currency differs.",
+    ),
+    "COMPANY_MISMATCH": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The Payment Entry and Sales Invoice must belong to the same Company.",
+    ),
+    "CONTRADICTORY_DESTINATION": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Provide either Mode of Payment or Bank Account, not both.",
+    ),
+    "CONVERSION_FAILED": PublicErrorDefinition(
+        ErrorCategory.TEMPORARY_FAILURE,
+        "ERPNext could not complete this document conversion.",
+    ),
+    "CONVERSION_UNAVAILABLE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The converted document is unavailable for this operation.",
+    ),
+    "CUSTOMER_MISMATCH": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Every Sales Invoice must belong to the explicit Customer.",
+    ),
+    "CUSTOMER_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND, "The requested Customer was not found."
+    ),
+    "CUSTOM_REMARKS_UNAVAILABLE": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "Custom remarks are unavailable for this document on this site.",
+    ),
+    "DESTINATION_REQUIRED": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Provide one Mode of Payment or Bank Account.",
+    ),
+    "DUPLICATE_SALES_INVOICE": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Each Sales Invoice may appear only once.",
+    ),
+    "EARLY_PAYMENT_DISCOUNT_UNSUPPORTED": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "A selected invoice is eligible for an early-payment discount.",
+    ),
+    "INVALID_ALLOCATION_AMOUNT": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Allocation amount must be a positive finite number.",
+    ),
+    "INVALID_BANK_ACCOUNT": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "Select a Bank Account with a valid ledger account for this Company.",
+    ),
+    "INVALID_BANK_AMOUNT": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "bank_amount must be a positive finite number.",
+    ),
+    "INVALID_BUSINESS_DEFAULTS": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "The site document defaults are invalid. Ask an administrator to review the configuration.",
+    ),
+    "INVALID_COMMERCIAL_TEMPLATE": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Use an exact template name (at most 140 characters), or null to clear it.",
+    ),
+    "INVALID_CUSTOMER": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "A resolved Customer reference is required.",
+    ),
+    "INVALID_DESTINATION_ACCOUNT": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "The selected destination account is not valid for this Company.",
+    ),
+    "INVALID_FIELDS": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "One or more requested fields are not available for this read operation.",
+    ),
+    "INVALID_MODE_OF_PAYMENT": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "The selected Mode of Payment has no valid bank or cash account for this Company.",
+    ),
+    "INVALID_ORDER_DETAILS": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "The request cannot continue because the selected business conditions are not supported.",
+    ),
+    "INVALID_PAYMENT_AMOUNT": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Payment amount must be greater than zero.",
+    ),
+    "INVALID_PAYMENT_DESTINATION": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "The selected payment destination is unavailable or invalid.",
+    ),
+    "INVALID_PAYMENT_ENTRY_STATE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The submitted Customer Payment Entry has no eligible unallocated or Sales Order advance amount.",
+    ),
+    "INVALID_PAYMENT_TERMS_TEMPLATE": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Payment Terms Template must be an exact non-empty name.",
+    ),
+    "INVALID_PURCHASE_ORDER_DETAILS": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "A resolved Supplier reference is required.",
+    ),
+    "INVALID_QUOTATION_DETAILS": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Provide either a discount percentage or discount amount, not both.",
+    ),
+    "INVALID_REFERENCE_COUNT": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Provide 2-20 Sales Invoice allocations.",
+    ),
+    "INVALID_SALES_INVOICE": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "An exact Sales Invoice name is required.",
+    ),
+    "INVALID_SALES_INVOICE_DETAILS": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Company is not available to the authenticated user.",
+    ),
+    "INVALID_SALES_ORDER": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "An exact Sales Order name is required.",
+    ),
+    "INVALID_SOURCE_ROW": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Every selected row must belong to the Purchase Order.",
+    ),
+    "INVALID_SUPPLIER": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Supplier is not available to the authenticated user.",
+    ),
+    "INVALID_TERMS": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Terms and conditions must be an exact non-empty name.",
+    ),
+    "INVALID_WAREHOUSE": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "The warehouse is disabled, belongs to another company, or is not valid for transactions.",
+    ),
+    "COMPANY_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND, "The requested Company was not found."
+    ),
+    "INVOICE_NOT_OUTSTANDING": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Only a submitted Sales Invoice can be reconciled.",
+    ),
+    "MIXED_CURRENCY_AGGREGATE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Choose whether the payment is received or paid before aggregating amounts across currencies.",
+    ),
+    "MIXED_INVOICE_CURRENCY_UNSUPPORTED": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Mixed Sales Invoice transaction currencies are unsupported.",
+    ),
+    "MODE_OF_PAYMENT_ACCOUNT_MISSING": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "The selected Mode of Payment has no valid bank or cash account for this Company.",
+    ),
+    "NATIVE_PAYMENT_STATE_INVALID": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The Payment Entry could not be prepared in Draft state.",
+    ),
+    "NATIVE_PAYMENT_VALIDATION_FAILED": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "ERPNext rejected the Payment Entry during validation.",
+    ),
+    "NATIVE_RECONCILIATION_UNAVAILABLE": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "The reconciliation could not be prepared safely with the current setup.",
+    ),
+    "NATIVE_VALIDATION_FAILED": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "ERPNext rejected the document during validation.",
+    ),
+    "NONZERO_DIFFERENCE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The prepared payment contains a difference amount this operation cannot process.",
+    ),
+    "NO_MAPPABLE_ITEMS": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "No eligible items are available for this conversion.",
+    ),
+    "NO_OUTSTANDING": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The selected invoices have no outstanding amount available for allocation.",
+    ),
+    "PARTY_CURRENCY_MISMATCH": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Every Sales Invoice must use one party-account currency.",
+    ),
+    "PARTY_MISMATCH": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The Payment Entry and Sales Invoice must belong to the same Customer.",
+    ),
+    "PAYMENT_ENTRY_CREATION_FAILED": PublicErrorDefinition(
+        ErrorCategory.TEMPORARY_FAILURE,
+        "ERPNext could not create the Payment Entry.",
+    ),
+    "PAYMENT_ENTRY_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND, "The requested Payment Entry was not found."
+    ),
+    "PAYMENT_TERMS_UNSUPPORTED": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Payment-term-specific allocation is outside this V1 reconciliation capability.",
+    ),
+    "QUANTITY_EXCEEDS_REMAINING": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The requested receipt quantity exceeds the remaining quantity.",
+    ),
+    "RECEIVABLE_ACCOUNT_MISMATCH": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Every Sales Invoice must use one effective receivable account.",
+    ),
+    "RECONCILIATION_ALREADY_RUNNING": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "A native Payment Reconciliation job is already running for this Customer and Company.",
+    ),
+    "RECONCILIATION_FAILED": PublicErrorDefinition(
+        ErrorCategory.TEMPORARY_FAILURE,
+        "ERPNext could not complete the reconciliation. Review the payment and invoice status before trying again.",
+    ),
+    "REGIONAL_VALIDATION_FAILED": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Regional validation rejected this reconciliation.",
+    ),
+    "REJECTED_WAREHOUSE_REQUIRED": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "A rejected warehouse is required for a rejected quantity.",
+    ),
+    "RETURN_REFERENCE_UNSUPPORTED": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Return Sales Invoices are not supported.",
+    ),
+    "SALES_INVOICE_CREATION_FAILED": PublicErrorDefinition(
+        ErrorCategory.TEMPORARY_FAILURE,
+        "ERPNext could not create the Sales Invoice.",
+    ),
+    "SALES_INVOICE_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND,
+        "The Sales Invoice was not found.",
+    ),
+    "SALES_INVOICE_NOT_OUTSTANDING": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The Sales Invoice has no outstanding amount to receive.",
+    ),
+    "SALES_INVOICE_NOT_SUBMITTED": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Customer payment V1 requires a submitted Sales Invoice.",
+    ),
+    "SALES_ORDER_NOT_ELIGIBLE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The Sales Order is no longer eligible for a Customer advance.",
+    ),
+    "SALES_ORDER_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND,
+        "The Sales Order was not found.",
+    ),
+    "SALES_ORDER_NOT_SUBMITTED": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Customer advance V1 requires a submitted Sales Order.",
+    ),
+    "SOURCE_NOT_ELIGIBLE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The source document is not eligible for this conversion.",
+    ),
+    "SOURCE_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND,
+        "The requested source document was not found.",
+    ),
+    "SOURCE_NOT_READY": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The source document is not in a state that allows this conversion.",
+    ),
+    "TERMS_UNAVAILABLE": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "ERPNext could not render the selected Terms and Conditions.",
+    ),
+    "TRANSACTION_REFERENCE_REQUIRED": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Reference number and reference date are required for a Bank destination.",
+    ),
+    "UNALLOCATED_RECEIPT_UNSUPPORTED": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The receipt amount must equal the explicit allocations.",
+    ),
+    "UNEXPECTED_ACCOUNTING_STATE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "This payment contains tax, withholding, or deduction amounts this operation cannot reconcile.",
+    ),
+    "UNEXPECTED_DEDUCTION_STATE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "This payment includes a deduction this operation cannot process.",
+    ),
+    "UNEXPECTED_PAYMENT_STATE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The prepared payment amount is not supported for this operation.",
+    ),
+    "UNEXPECTED_REFERENCE_STATE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The Payment Entry is already allocated and cannot be used for this operation.",
+    ),
+    "UNEXPECTED_TAX_STATE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "This payment contains tax or withholding amounts this operation cannot process.",
+    ),
+    "UNSUPPORTED_NATIVE_PAYMENT_STATE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Tax, withholding, or deduction amounts are not supported in this payment flow.",
+    ),
+    "UNSUPPORTED_QUOTATION_PARTY": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Only Customer Quotations are supported for this conversion.",
+    ),
+    "UNSUPPORTED_SOURCE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "This Purchase Order conversion belongs to a deferred Purchase Receipt workflow.",
+    ),
+    "UNSUPPORTED_SOURCE_ROW": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "Drop-ship Purchase Order rows are not supported by this conversion.",
+    ),
+    "WAREHOUSE_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND,
+        "The requested warehouse was not found.",
+    ),
+    "WAREHOUSE_REQUIRED": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "A warehouse is required for the accepted receipt quantity.",
+    ),
 }
 
 FALLBACK_CODE = "ERP_REQUEST_FAILED"

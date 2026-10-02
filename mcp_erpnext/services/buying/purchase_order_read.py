@@ -8,7 +8,7 @@ from typing import Any
 import frappe
 from frappe.query_builder.functions import Count
 
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.aggregate import (
     build_aggregate_field,
     build_aggregate_fields,
@@ -86,14 +86,8 @@ _ITEM_METRICS = {
 }
 
 
-def _error(code: str, message: str) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": False,
-    }
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _range(
@@ -176,7 +170,6 @@ def get_purchase_order(
     if not doc.has_permission("read"):
         return _error(
             "PERMISSION_DENIED",
-            "The authenticated user cannot read that Purchase Order.",
         )
     result: dict[str, Any] = {
         "status": "ok",

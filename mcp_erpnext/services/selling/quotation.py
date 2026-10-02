@@ -15,7 +15,7 @@ from ...config.business_defaults import (
     get_quotation_validity_days,
 )
 from ...contracts.interaction import approval_directive, input_directive
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from ..common.write_policy import (
     approval_entry_failure,
@@ -48,14 +48,8 @@ def _current_user() -> str:
     return user
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _needs_input(missing: list[str], message: str | None = None) -> dict[str, Any]:
@@ -117,13 +111,12 @@ def _permitted_link(
         return None, None
     if not isinstance(value, str) or not value.strip():
         return None, _error(
-            "INVALID_QUOTATION_DETAILS", f"{label} must be a non-empty name."
+            "INVALID_QUOTATION_DETAILS"
         )
     name = value.strip()
     if not _permitted_record(doctype, name, [], filters):
         return None, _error(
             "INVALID_QUOTATION_DETAILS",
-            f"{label} is not available to the authenticated user.",
         )
     return name, None
 
@@ -132,11 +125,11 @@ def _number(
     value: Any, *, field: str, positive: bool = False
 ) -> tuple[float | None, dict[str, Any] | None]:
     if isinstance(value, bool) or value in (None, ""):
-        return None, _error("INVALID_QUOTATION_DETAILS", f"{field} must be a number.")
+        return None, _error("INVALID_QUOTATION_DETAILS")
     try:
         number = float(value)
     except (TypeError, ValueError):
-        return None, _error("INVALID_QUOTATION_DETAILS", f"{field} must be a number.")
+        return None, _error("INVALID_QUOTATION_DETAILS")
     if (
         not math.isfinite(number)
         or (positive and number <= 0)
@@ -144,7 +137,7 @@ def _number(
     ):
         constraint = "greater than zero" if positive else "zero or greater"
         return None, _error(
-            "INVALID_QUOTATION_DETAILS", f"{field} must be {constraint}."
+            "INVALID_QUOTATION_DETAILS"
         )
     return number, None
 
@@ -156,7 +149,7 @@ def _date(value: Any, *, field: str) -> tuple[Any | None, dict[str, Any] | None]
         return getdate(value), None
     except Exception:
         return None, _error(
-            "INVALID_QUOTATION_DETAILS", f"{field} must be a valid date."
+            "INVALID_QUOTATION_DETAILS"
         )
 
 
@@ -170,13 +163,12 @@ def _prepare_items(
     for index, raw in enumerate(items, start=1):
         if not isinstance(raw, dict):
             return None, _error(
-                "INVALID_QUOTATION_DETAILS", f"Item row {index} must be an object."
+                "INVALID_QUOTATION_DETAILS"
             )
         item_name = _reference_name(raw.get("item"), "Item")
         if not item_name:
             return None, _error(
                 "INVALID_QUOTATION_DETAILS",
-                f"Item row {index} requires a resolved Item reference.",
             )
         item = _permitted_record(
             "Item",
@@ -187,7 +179,6 @@ def _prepare_items(
         if not item:
             return None, _error(
                 "INVALID_ITEM",
-                f"Item row {index} is not available to the authenticated user.",
             )
         quantity, failure = _number(
             raw.get("qty"), field=f"Item row {index} quantity", positive=True
@@ -210,7 +201,6 @@ def _prepare_items(
             if not isinstance(raw["description"], str):
                 return None, _error(
                     "INVALID_QUOTATION_DETAILS",
-                    f"Item row {index} description must be text.",
                 )
             row["description"] = raw["description"]
         prepared.append(row)
@@ -301,7 +291,7 @@ def prepare_quotation(
 ) -> dict[str, Any]:
     """Prepare an ERPNext-calculated Quotation preview without creating a record."""
     if failure := disabled_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     if current_mode("create") is WriteMode.APPROVAL_REQUIRED and _create_approval:
         approvals.prune_expired()
     user = _current_user()
@@ -322,12 +312,12 @@ def prepare_quotation(
         return _permission_denied()
     customer_name = _reference_name(customer, "Customer")
     if not customer_name:
-        return _error("INVALID_CUSTOMER", "A resolved Customer reference is required.")
+        return _error("INVALID_CUSTOMER")
     if not _permitted_record(
         "Customer", customer_name, ["customer_name"], {"disabled": ["!=", 1]}
     ):
         return _error(
-            "INVALID_CUSTOMER", "Customer is not available to the authenticated user."
+            "INVALID_CUSTOMER"
         )
     prepared_items, failure = _prepare_items(items)
     if failure:
@@ -347,7 +337,6 @@ def prepare_quotation(
         except BusinessDefaultsConfigurationError:
             return _error(
                 "INVALID_BUSINESS_DEFAULTS",
-                "The site's document business-default configuration is invalid.",
             )
         validity = transaction + timedelta(days=quotation_validity_days)
     else:
@@ -373,7 +362,6 @@ def prepare_quotation(
     if additional_discount_percentage is not None and discount_amount is not None:
         return _error(
             "INVALID_QUOTATION_DETAILS",
-            "Provide either a discount percentage or discount amount, not both.",
         )
     additional_discount = None
     if additional_discount_percentage is not None:
@@ -411,14 +399,14 @@ def prepare_quotation(
     if failure := apply_payment_terms_template(
         doc, payment_terms_template, frappe_module=frappe
     ):
-        return _error("INVALID_QUOTATION_DETAILS", failure["message"])
+        return _error("INVALID_QUOTATION_DETAILS")
 
     doc.set_missing_values()
     for prepared_item, row in zip(prepared_items or [], doc.items, strict=True):
         if "description" in prepared_item:
             row.description = prepared_item["description"]
     if failure := apply_selling_terms(doc, tc_name, frappe_module=frappe):
-        return _error("INVALID_QUOTATION_DETAILS", failure["message"])
+        return _error("INVALID_QUOTATION_DETAILS")
     missing_defaults = [
         fieldname for fieldname in _COMMERCIAL_DEFAULTS if not doc.get(fieldname)
     ]
@@ -429,7 +417,7 @@ def prepare_quotation(
         )
     doc.calculate_taxes_and_totals()
     if failure := set_native_payment_schedule(doc):
-        return _error("INVALID_QUOTATION_DETAILS", failure["message"])
+        return _error("INVALID_QUOTATION_DETAILS")
     try:
         # Use the native controller seam without dispatching document-event
         # webhooks/server scripts during non-persisting preparation.
@@ -437,7 +425,6 @@ def prepare_quotation(
     except frappe.ValidationError:
         return _error(
             "NATIVE_VALIDATION_FAILED",
-            "ERPNext rejected the Quotation during preparation.",
         )
     preview = _preview(doc)
     document = _safe_doc_data(doc)
@@ -476,7 +463,7 @@ def prepare_quotation(
 def confirm_quotation(approval_token: str, confirm: bool) -> dict[str, Any]:
     """Create the reviewed Draft Quotation using only signed server-side prepared data."""
     if failure := approval_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     user = _current_user()
     if not confirm:
         approvals.cancel(
@@ -484,14 +471,13 @@ def confirm_quotation(approval_token: str, confirm: bool) -> dict[str, Any]:
         )
         return _error(
             "CONFIRMATION_REQUIRED",
-            "Review the Quotation preview before confirming it.",
         )
     approval, state = approvals.claim_for_confirm_write(
         approval_token, action=_ACTION, site=frappe.local.site, user=user
     )
     if state != "available" or approval is None:
         code, message, retryable = confirmation_failure(state, "Quotation")
-        return _error(code, message, retryable=retryable)
+        return _error(code, retryable=retryable)
     if not frappe.has_permission("Quotation", "create"):
         return _permission_denied()
     payload = approval.payload
@@ -522,14 +508,12 @@ def confirm_quotation(approval_token: str, confirm: bool) -> dict[str, Any]:
     ):
         return _error(
             "CONFIRMATION_UNAVAILABLE",
-            "This Quotation confirmation is not available in the current session.",
         )
 
     rebuilt = prepare_quotation(**request, _create_approval=False)
     if rebuilt.get("status") != "ready" or "_doc" not in rebuilt:
         return _error(
             "STALE_CONFIRMATION",
-            "The effective Quotation changed after the preview was prepared. Please prepare it again.",
         )
     doc = rebuilt["_doc"]
     current_preview = rebuilt["preview"]
@@ -543,12 +527,11 @@ def confirm_quotation(approval_token: str, confirm: bool) -> dict[str, Any]:
     ) != approved_fingerprint:
         return _error(
             "STALE_CONFIRMATION",
-            "The effective Quotation changed after the preview was prepared. Please prepare it again.",
         )
 
     try:
         if failure := exact_mode_failure("create", WriteMode.APPROVAL_REQUIRED):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         doc.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
         frappe.db.commit()
     except frappe.PermissionError:
@@ -580,7 +563,7 @@ def execute_quotation(
 ) -> dict[str, Any]:
     """Create a Draft Quotation through the direct policy path."""
     if failure := direct_entry_failure("create"):
-        return _error(failure.code, failure.message)
+        return _error(failure.code)
     planned = prepare_quotation(
         customer,
         items,
@@ -600,7 +583,7 @@ def execute_quotation(
     doc = planned["_doc"]
     try:
         if failure := exact_mode_failure("create", WriteMode.DIRECT):
-            return _error(failure.code, failure.message)
+            return _error(failure.code)
         doc.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
         frappe.db.commit()
     except frappe.PermissionError:

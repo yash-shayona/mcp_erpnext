@@ -10,21 +10,15 @@ from frappe.utils import flt, getdate, nowdate
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from .multi_invoice_customer_receipt import _destination
 
 _ACTION = "create_customer_payment_entry"
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+def _error(code: str, *, retryable: bool | None = None) -> dict[str, Any]:
+    return defined_error(code, retryable=retryable)
 
 
 def _value(doc: Any, field: str, default: Any = None) -> Any:
@@ -58,10 +52,10 @@ def _load(
             raise frappe.PermissionError
         return doc, None
     except frappe.DoesNotExistError:
-        return None, _error(code, f"{label} was not found.")
+        return None, _error(code)
     except frappe.PermissionError:
         return None, _error(
-            "PERMISSION_DENIED", f"The authenticated user cannot read {label}."
+            "PERMISSION_DENIED"
         )
 
 
@@ -139,7 +133,6 @@ def _build(
             None,
             _error(
                 "TRANSACTION_REFERENCE_REQUIRED",
-                "Reference number and reference date are required for a Bank destination.",
             ),
         )
     try:
@@ -179,7 +172,6 @@ def _build(
                 None,
                 _error(
                     "BANK_AMOUNT_REQUIRED",
-                    "bank_amount is required when destination currency differs.",
                 ),
             )
     except frappe.PermissionError:
@@ -188,7 +180,6 @@ def _build(
             None,
             _error(
                 "PERMISSION_DENIED",
-                "The authenticated user cannot create a Payment Entry.",
             ),
         )
     except Exception:
@@ -197,7 +188,6 @@ def _build(
             None,
             _error(
                 "NATIVE_PAYMENT_VALIDATION_FAILED",
-                "ERPNext could not prepare this native Payment Entry.",
             ),
         )
     if _value(doc, "references", []) or flt(_value(doc, "total_allocated_amount")) != 0:
@@ -206,7 +196,6 @@ def _build(
             None,
             _error(
                 "UNEXPECTED_REFERENCE_STATE",
-                "Native preparation produced an allocated Payment Entry state.",
             ),
         )
     if (
@@ -218,7 +207,6 @@ def _build(
             None,
             _error(
                 "UNEXPECTED_PAYMENT_STATE",
-                "Native preparation produced an unsupported Payment Entry amount state.",
             ),
         )
     if (
@@ -231,7 +219,6 @@ def _build(
             None,
             _error(
                 "UNEXPECTED_ACCOUNTING_STATE",
-                "Native preparation produced unsupported tax, withholding, or deduction state.",
             ),
         )
     return doc, destination, None
@@ -271,7 +258,6 @@ def confirm_customer_payment_entry(
         approvals.cancel(approval_token, action=_ACTION, site=site, user=user)
         return _error(
             "CONFIRMATION_REQUIRED",
-            "Review the Draft Payment Entry preview before confirming it.",
         )
     approval, state = approvals.claim_for_confirm_write(
         approval_token, action=_ACTION, site=site, user=user
@@ -280,7 +266,7 @@ def confirm_customer_payment_entry(
         code, message, retryable = confirmation_failure(
             state, "standalone Customer receipt"
         )
-        return _error(code, message, retryable=retryable)
+        return _error(code, retryable=retryable)
     request = approval.payload.get("request")
     approved_preview = approval.payload.get("preview")
     approved_fingerprint = approval.payload.get("fingerprint")
@@ -291,19 +277,16 @@ def confirm_customer_payment_entry(
     ):
         return _error(
             "CONFIRMATION_UNAVAILABLE",
-            "This Payment Entry confirmation is unavailable.",
         )
     doc, destination, failure = _build(deepcopy(request))
     if failure:
         return _error(
             "STALE_CONFIRMATION",
-            "The native payment preview changed after preparation. Please prepare it again.",
         )
     preview = _preview(doc, destination)
     if _fingerprint(request, preview, doc, destination) != approved_fingerprint:
         return _error(
             "STALE_CONFIRMATION",
-            "The native payment preview changed after preparation. Please prepare it again.",
         )
     try:
         doc.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
@@ -311,13 +294,12 @@ def confirm_customer_payment_entry(
     except frappe.PermissionError:
         frappe.db.rollback()
         return _error(
-            "PERMISSION_DENIED", "The authenticated user cannot create a Payment Entry."
+            "PERMISSION_DENIED"
         )
     except Exception:
         frappe.db.rollback()
         return _error(
             "PAYMENT_ENTRY_CREATION_FAILED",
-            "ERPNext could not create the Draft Payment Entry.",
         )
     return {
         "status": "created",
