@@ -154,5 +154,6 @@ messages and verifies that India Compliance/helper paths do not independently
 present standard errors. It preserves the five-field `ToolError`, stable codes,
 permission and approval semantics, Contact relationship rules, credential
 secrecy/email safeguards, Tea Entry transaction behavior, and structured
-non-error states. The PATCH version is `4.0.4`. ER-05 remains repository-wide
+non-error states. The PATCH version is `4.0.5` after the `PROFILE_MISMATCH`
+business-wording correction. ER-05 remains repository-wide
 residual scanning, Direct/REST parity, and live Direct-MCP validation.

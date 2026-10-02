@@ -15,7 +15,10 @@ import mcp_erpnext
 from mcp_erpnext.public_errors import defined_error
 from mcp_erpnext.approvals import ApprovalStore
 from mcp_erpnext.settings import ApprovalMode
-from mcp_erpnext.tests.approval_test_backend import FakeSharedApprovalBackend, mutate_record
+from mcp_erpnext.tests.approval_test_backend import (
+    FakeSharedApprovalBackend,
+    mutate_record,
+)
 from shayona.shayona.doctype.tea_entry.tea_entry import TeaEntry
 from mcp_erpnext.contracts.registry import (
     SideEffectClass,
@@ -65,12 +68,11 @@ def _meta(*, missing: str | None = None, wrong: tuple[str, str] | None = None):
 
 class TeaEntryContractTests(unittest.TestCase):
     def test_version_and_safe_schema_message(self):
-        self.assertEqual(mcp_erpnext.__version__, "4.0.4")
-        result = defined_error(
-            "TEA_ENTRY_SCHEMA_UNAVAILABLE", reference="MCP-ERR-TEST"
-        )
+        self.assertEqual(mcp_erpnext.__version__, "4.0.5")
+        result = defined_error("TEA_ENTRY_SCHEMA_UNAVAILABLE", reference="MCP-ERR-TEST")
         self.assertEqual(
-            result["message"], "Tea Entry information is unavailable in the current setup."
+            result["message"],
+            "Tea Entry information is unavailable in the current setup.",
         )
 
     def test_contracts_reject_unbounded_or_mutation_inputs(self):
@@ -132,8 +134,9 @@ class TeaEntryServiceTests(unittest.TestCase):
             _meta(wrong=("date", "Data")),
             _meta(wrong=("total_amount", "Float")),
         ):
-            with self.subTest(meta=meta), self.assertRaises(
-                tea_entries.TeaEntrySchemaUnavailableError
+            with (
+                self.subTest(meta=meta),
+                self.assertRaises(tea_entries.TeaEntrySchemaUnavailableError),
             ):
                 tea_entries.tea_entry_schema(meta)
 
@@ -234,9 +237,7 @@ class TeaEntryServiceTests(unittest.TestCase):
             get_list.call_args.kwargs["filters"],
             [["date", "=", date(2026, 10, 1)]],
         )
-        tea_entries.query_tea_entries(
-            {"limit": 20, "offset": 0, "sort_order": "desc"}
-        )
+        tea_entries.query_tea_entries({"limit": 20, "offset": 0, "sort_order": "desc"})
         self.assertEqual(get_list.call_args.kwargs["filters"], [])
         self.assertEqual(get_list.call_args.kwargs["order_by"], "date desc, name desc")
 
@@ -279,9 +280,7 @@ class TeaEntryServiceTests(unittest.TestCase):
             ],
         )
 
-        tea_entries.aggregate_tea_entries(
-            {"metrics": ["count"], "group_by": "date"}
-        )
+        tea_entries.aggregate_tea_entries({"metrics": ["count"], "group_by": "date"})
         self.assertEqual(get_list.call_args.kwargs["group_by"], "date")
         self.assertEqual(get_list.call_args.kwargs["order_by"], "date")
 
@@ -316,19 +315,28 @@ class TeaEntryToolTests(unittest.TestCase):
     @patch.object(tea_entry_tools, "execute_tool_with_context")
     def test_create_adapters_use_json_safe_rest_and_same_service(self, execute):
         for name in ("prepare_tea_entry", "execute_tea_entry", "confirm_tea_entry"):
-            with self.subTest(name=name), patch.object(tea_entries, name, return_value=defined_error("CREATE_DISABLED")) as service:
+            with (
+                self.subTest(name=name),
+                patch.object(
+                    tea_entries, name, return_value=defined_error("CREATE_DISABLED")
+                ) as service,
+            ):
+
                 def invoke(ctx, tool, callback, *, rest_arguments):
                     self.assertEqual(tool, name)
                     if name != "confirm_tea_entry":
                         self.assertEqual(rest_arguments["date"], "2026-10-02")
                         self.assertEqual(rest_arguments["rate_per_cup"], "15.5")
                     return callback()
+
                 execute.side_effect = invoke
                 if name == "confirm_tea_entry":
                     getattr(tea_entry_tools, name)("token", True, ctx=object())
                     service.assert_called_once_with("token", True)
                 else:
-                    getattr(tea_entry_tools, name)(2, Decimal("15.5"), ctx=object(), date=date(2026, 10, 2))
+                    getattr(tea_entry_tools, name)(
+                        2, Decimal("15.5"), ctx=object(), date=date(2026, 10, 2)
+                    )
                     service.assert_called_once()
 
     def test_only_governed_tea_create_trio_is_exposed(self):
@@ -347,7 +355,9 @@ class TeaEntryCreateTests(unittest.TestCase):
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
-        self.stack.enter_context(patch.dict(os.environ, {"MCP_CREATE_MODE": "approval_required"}))
+        self.stack.enter_context(
+            patch.dict(os.environ, {"MCP_CREATE_MODE": "approval_required"})
+        )
         self.backend = FakeSharedApprovalBackend()
         self.store = ApprovalStore(ApprovalMode.AGENT_DELEGATED, backend=self.backend)
         self.stack.enter_context(patch.object(tea_entries, "approvals", self.store))
@@ -355,39 +365,70 @@ class TeaEntryCreateTests(unittest.TestCase):
         self.today = "2026-10-02"
         self.validation_hook = lambda: None
         self.insert_error = None
-        self.db = SimpleNamespace(commit=Mock(), rollback=Mock(), exists=Mock(return_value=None))
+        self.db = SimpleNamespace(
+            commit=Mock(), rollback=Mock(), exists=Mock(return_value=None)
+        )
         self.fake = SimpleNamespace(
-            session=SimpleNamespace(user="test@example.com"), local=SimpleNamespace(site="test.localhost"),
-            get_meta=Mock(return_value=_meta()), has_permission=Mock(return_value=True),
-            get_doc=lambda values: self.new_doc(values["doctype"]), db=self.db, PermissionError=frappe.PermissionError,
+            session=SimpleNamespace(user="test@example.com"),
+            local=SimpleNamespace(site="test.localhost"),
+            get_meta=Mock(return_value=_meta()),
+            has_permission=Mock(return_value=True),
+            get_doc=lambda values: self.new_doc(values["doctype"]),
+            db=self.db,
+            PermissionError=frappe.PermissionError,
             ValidationError=frappe.ValidationError,
         )
         self.stack.enter_context(patch.object(tea_entries, "frappe", self.fake))
-        self.native_defaults = self.stack.enter_context(patch.object(
-            tea_entries, "make_new_doc", side_effect=lambda doctype: {"doctype": doctype}
-        ))
-        self.dynamic_defaults = self.stack.enter_context(patch.object(tea_entries, "set_dynamic_default_values"))
-        self.stack.enter_context(patch.object(tea_entries, "logged_defined_error", side_effect=lambda tool, code, **kw: defined_error(code, **kw)))
+        self.native_defaults = self.stack.enter_context(
+            patch.object(
+                tea_entries,
+                "make_new_doc",
+                side_effect=lambda doctype: {"doctype": doctype},
+            )
+        )
+        self.dynamic_defaults = self.stack.enter_context(
+            patch.object(tea_entries, "set_dynamic_default_values")
+        )
+        self.stack.enter_context(
+            patch.object(
+                tea_entries,
+                "logged_defined_error",
+                side_effect=lambda tool, code, **kw: defined_error(code, **kw),
+            )
+        )
         self.request = {"no_of_cups": 10, "rate_per_cup": "15"}
 
     def new_doc(self, doctype):
         self.assertEqual(doctype, "Tea Entry")
-        doc = SimpleNamespace(name=None, date=self.today, no_of_cups=None, rate_per_cup=15, vendor=None)
+        doc = SimpleNamespace(
+            name=None, date=self.today, no_of_cups=None, rate_per_cup=15, vendor=None
+        )
         doc.set = lambda key, value: setattr(doc, key, value)
         doc.check_permission = Mock()
         doc.set_total_amount = lambda: TeaEntry.set_total_amount(doc)
+
         def duplicate():
             # Exercise the actual native controller with only its database/throw seams replaced.
-            with patch("shayona.shayona.doctype.tea_entry.tea_entry.frappe", SimpleNamespace(
-                db=self.db, throw=lambda **kw: (_ for _ in ()).throw(frappe.ValidationError("RAW-SENTINEL"))
-            )):
+            with patch(
+                "shayona.shayona.doctype.tea_entry.tea_entry.frappe",
+                SimpleNamespace(
+                    db=self.db,
+                    throw=lambda **kw: (_ for _ in ()).throw(
+                        frappe.ValidationError("RAW-SENTINEL")
+                    ),
+                ),
+            ):
                 TeaEntry.validate_duplicate_date(doc)
+
         doc.validate_duplicate_date = duplicate
+
         def validate(method):
             self.assertEqual(method, "validate")
             TeaEntry.validate(doc)
             self.validation_hook()
+
         doc.run_method = Mock(side_effect=validate)
+
         def insert(**kwargs):
             self.assertEqual(kwargs, {"ignore_permissions": False})
             if self.insert_error:
@@ -396,6 +437,7 @@ class TeaEntryCreateTests(unittest.TestCase):
             # Prove the response uses post-insert native values, not the preview.
             doc.total_amount = Decimal("151")
             return doc
+
         doc.insert = Mock(side_effect=insert)
         self.docs.append(doc)
         return doc
@@ -407,11 +449,21 @@ class TeaEntryCreateTests(unittest.TestCase):
 
     def test_bounded_contracts(self):
         TeaEntryCreateInput(no_of_cups=1, rate_per_cup=0)
-        for extra in ({"no_of_cups": 0}, {"no_of_cups": -1}, {"no_of_cups": True},
-                      {"no_of_cups": 1.2}, {"rate_per_cup": -1}, {"rate_per_cup": "NaN"},
-                      {"vendor": " "}, {"total_amount": 1}, {"name": "x"},
-                      {"ignore_permissions": True}, {"create_mode": "direct"},
-                      {"MCP_CREATE_MODE": "direct"}, {"approval_needed": False}):
+        for extra in (
+            {"no_of_cups": 0},
+            {"no_of_cups": -1},
+            {"no_of_cups": True},
+            {"no_of_cups": 1.2},
+            {"rate_per_cup": -1},
+            {"rate_per_cup": "NaN"},
+            {"vendor": " "},
+            {"total_amount": 1},
+            {"name": "x"},
+            {"ignore_permissions": True},
+            {"create_mode": "direct"},
+            {"MCP_CREATE_MODE": "direct"},
+            {"approval_needed": False},
+        ):
             with self.subTest(extra=extra), self.assertRaises(ValidationError):
                 TeaEntryCreateInput(**(self.request | extra))
         with self.assertRaises(ValidationError):
@@ -423,28 +475,52 @@ class TeaEntryCreateTests(unittest.TestCase):
         self.assertEqual(ready["preview"]["date"], date(2026, 10, 2))
         self.assertEqual(ready["preview"]["total_amount"], Decimal("150"))
         self.assertNotIn("name", ready["preview"])
-        approval, state = self.store.lookup(ready["approval_token"], action="create_tea_entry", site="test.localhost", user="test@example.com")
+        approval, state = self.store.lookup(
+            ready["approval_token"],
+            action="create_tea_entry",
+            site="test.localhost",
+            user="test@example.com",
+        )
         self.assertEqual(state, "available")
         plan = tea_entries.TeaEntryPlan(**approval.payload)
-        self.assertEqual(set(plan.values()), {"date", "no_of_cups", "rate_per_cup", "vendor"})
+        self.assertEqual(
+            set(plan.values()), {"date", "no_of_cups", "rate_per_cup", "vendor"}
+        )
         self.assert_no_write()
-        explicit = tea_entries.prepare_tea_entry(self.request | {"date": "2026-09-01", "vendor": "Vendor"})
+        explicit = tea_entries.prepare_tea_entry(
+            self.request | {"date": "2026-09-01", "vendor": "Vendor"}
+        )
         self.assertEqual(explicit["preview"]["date"], date(2026, 9, 1))
 
     def test_disabled_and_wrong_entry_modes_never_plan_or_touch_approvals(self):
-        for mode, expected in (("disabled", "CREATE_DISABLED"), ("direct", "DIRECT_EXECUTION_REQUIRED")):
-            with patch.dict(os.environ, {"MCP_CREATE_MODE": mode}), patch.object(tea_entries, "approvals") as store:
+        for mode, expected in (
+            ("disabled", "CREATE_DISABLED"),
+            ("direct", "DIRECT_EXECUTION_REQUIRED"),
+        ):
+            with (
+                patch.dict(os.environ, {"MCP_CREATE_MODE": mode}),
+                patch.object(tea_entries, "approvals") as store,
+            ):
                 result = tea_entries.confirm_tea_entry("token", True)
                 self.assertEqual(result["code"], expected)
                 if mode == "disabled":
-                    self.assertEqual(tea_entries.prepare_tea_entry(self.request)["code"], expected)
-                    self.assertEqual(tea_entries.execute_tea_entry(self.request)["code"], expected)
+                    self.assertEqual(
+                        tea_entries.prepare_tea_entry(self.request)["code"], expected
+                    )
+                    self.assertEqual(
+                        tea_entries.execute_tea_entry(self.request)["code"], expected
+                    )
                 self.assertEqual(store.mock_calls, [])
-        self.assertEqual(tea_entries.execute_tea_entry(self.request)["code"], "APPROVAL_REQUIRED")
+        self.assertEqual(
+            tea_entries.execute_tea_entry(self.request)["code"], "APPROVAL_REQUIRED"
+        )
         self.assertEqual(self.docs, [])
 
     def test_direct_preview_and_fresh_execute_are_store_inert(self):
-        with patch.dict(os.environ, {"MCP_CREATE_MODE": "direct"}), patch.object(tea_entries, "approvals") as store:
+        with (
+            patch.dict(os.environ, {"MCP_CREATE_MODE": "direct"}),
+            patch.object(tea_entries, "approvals") as store,
+        ):
             preview = tea_entries.prepare_tea_entry(self.request)
             TeaEntryPrepareOutput.model_validate(preview)
             self.assertEqual(preview["status"], "preview")
@@ -468,7 +544,10 @@ class TeaEntryCreateTests(unittest.TestCase):
         TeaEntryCreateOutput.model_validate(result)
         self.assertEqual(str(result["tea_entry"]["date"]), "2026-10-02")
         self.assertEqual(result["tea_entry"]["total_amount"], 151)
-        self.assertEqual(tea_entries.confirm_tea_entry(ready["approval_token"], True)["code"], "CONFIRMATION_CONSUMED")
+        self.assertEqual(
+            tea_entries.confirm_tea_entry(ready["approval_token"], True)["code"],
+            "CONFIRMATION_CONSUMED",
+        )
         self.db.commit.assert_called_once()
 
     def test_final_mode_switches_block_both_paths(self):
@@ -478,19 +557,28 @@ class TeaEntryCreateTests(unittest.TestCase):
             ("approval_required", "direct", "DIRECT_EXECUTION_REQUIRED"),
             ("approval_required", "disabled", "CREATE_DISABLED"),
         ):
-            with self.subTest(entry=entry, target=target), patch.dict(os.environ, {"MCP_CREATE_MODE": entry}):
+            with (
+                self.subTest(entry=entry, target=target),
+                patch.dict(os.environ, {"MCP_CREATE_MODE": entry}),
+            ):
                 self.validation_hook = lambda: None
                 if entry == "approval_required":
                     ready = tea_entries.prepare_tea_entry(self.request)
-                    self.validation_hook = lambda: os.environ.__setitem__("MCP_CREATE_MODE", target)
-                    result = tea_entries.confirm_tea_entry(ready["approval_token"], True)
+                    self.validation_hook = lambda: os.environ.__setitem__(
+                        "MCP_CREATE_MODE", target
+                    )
+                    result = tea_entries.confirm_tea_entry(
+                        ready["approval_token"], True
+                    )
                 else:
                     # Switch during apply revalidation, after fresh direct planning.
                     calls = []
+
                     def switch():
                         calls.append(1)
                         if len(calls) == 2:
                             os.environ["MCP_CREATE_MODE"] = target
+
                     self.validation_hook = switch
                     with patch.object(tea_entries, "approvals") as store:
                         result = tea_entries.execute_tea_entry(self.request)
@@ -511,31 +599,49 @@ class TeaEntryCreateTests(unittest.TestCase):
 
     def test_changed_native_total_is_stale(self):
         ready = tea_entries.prepare_tea_entry(self.request)
-        self.validation_hook = lambda: setattr(self.docs[-1], "total_amount", Decimal("999"))
-        self.assertEqual(tea_entries.confirm_tea_entry(ready["approval_token"], True)["code"], "STALE_CONFIRMATION")
+        self.validation_hook = lambda: setattr(
+            self.docs[-1], "total_amount", Decimal("999")
+        )
+        self.assertEqual(
+            tea_entries.confirm_tea_entry(ready["approval_token"], True)["code"],
+            "STALE_CONFIRMATION",
+        )
         self.assert_no_write()
 
     def test_schema_and_permissions_prevent_token_creation(self):
         self.fake.get_meta.return_value = _meta(missing="date")
-        self.assertEqual(tea_entries.prepare_tea_entry(self.request)["code"], "TEA_ENTRY_SCHEMA_UNAVAILABLE")
+        self.assertEqual(
+            tea_entries.prepare_tea_entry(self.request)["code"],
+            "TEA_ENTRY_SCHEMA_UNAVAILABLE",
+        )
         self.fake.get_meta.return_value = _meta()
         self.fake.has_permission.return_value = False
-        self.assertEqual(tea_entries.prepare_tea_entry(self.request)["code"], "ERP_PERMISSION_DENIED")
+        self.assertEqual(
+            tea_entries.prepare_tea_entry(self.request)["code"], "ERP_PERMISSION_DENIED"
+        )
         self.fake.has_permission.return_value = True
         self.fake.session.user = "Guest"
-        self.assertEqual(tea_entries.prepare_tea_entry(self.request)["code"], "ERP_PERMISSION_DENIED")
+        self.assertEqual(
+            tea_entries.prepare_tea_entry(self.request)["code"], "ERP_PERMISSION_DENIED"
+        )
         self.assertTrue(self.backend.is_empty())
         self.assert_no_write()
 
     def test_permission_revoked_after_prepare_blocks_confirmation(self):
         ready = tea_entries.prepare_tea_entry(self.request)
         self.fake.has_permission.return_value = False
-        self.assertEqual(tea_entries.confirm_tea_entry(ready["approval_token"], True)["code"], "ERP_PERMISSION_DENIED")
+        self.assertEqual(
+            tea_entries.confirm_tea_entry(ready["approval_token"], True)["code"],
+            "ERP_PERMISSION_DENIED",
+        )
         self.db.rollback.assert_called_once()
         self.assert_no_write()
 
     def test_direct_validation_and_insert_failures_remain_store_inert(self):
-        with patch.dict(os.environ, {"MCP_CREATE_MODE": "direct"}), patch.object(tea_entries, "approvals") as store:
+        with (
+            patch.dict(os.environ, {"MCP_CREATE_MODE": "direct"}),
+            patch.object(tea_entries, "approvals") as store,
+        ):
             self.db.exists.return_value = "EXISTING"
             result = tea_entries.execute_tea_entry(self.request)
             self.assertEqual(result["code"], "TEA_ENTRY_VALIDATION_FAILED")
@@ -550,9 +656,11 @@ class TeaEntryCreateTests(unittest.TestCase):
         self.assertEqual(self.db.rollback.call_count, 2)
 
     def test_insert_failures_rollback_without_raw_errors(self):
-        for error, code in ((frappe.PermissionError("RAW-SENTINEL"), "ERP_PERMISSION_DENIED"),
-                            (frappe.ValidationError("RAW-SENTINEL"), "STALE_CONFIRMATION"),
-                            (RuntimeError("RAW-SENTINEL"), "TEA_ENTRY_WRITE_FAILED")):
+        for error, code in (
+            (frappe.PermissionError("RAW-SENTINEL"), "ERP_PERMISSION_DENIED"),
+            (frappe.ValidationError("RAW-SENTINEL"), "STALE_CONFIRMATION"),
+            (RuntimeError("RAW-SENTINEL"), "TEA_ENTRY_WRITE_FAILED"),
+        ):
             with self.subTest(code=code):
                 ready = tea_entries.prepare_tea_entry(self.request)
                 self.insert_error = error
@@ -566,27 +674,64 @@ class TeaEntryCreateTests(unittest.TestCase):
         self.store.configure_approval_mode(ApprovalMode.TRUSTED_HUMAN)
         ready = tea_entries.prepare_tea_entry(self.request)
         token = ready["approval_token"]
-        self.assertEqual(tea_entries.confirm_tea_entry(token, True)["code"], "TRUSTED_APPROVAL_UNAVAILABLE")
+        self.assertEqual(
+            tea_entries.confirm_tea_entry(token, True)["code"],
+            "TRUSTED_APPROVAL_UNAVAILABLE",
+        )
         self.assert_no_write()
-        self.store.record_trusted_user_approval(token, action="create_tea_entry", site="test.localhost", user="test@example.com")
-        self.assertEqual(tea_entries.confirm_tea_entry(token, True)["status"], "created")
+        self.store.record_trusted_user_approval(
+            token,
+            action="create_tea_entry",
+            site="test.localhost",
+            user="test@example.com",
+        )
+        self.assertEqual(
+            tea_entries.confirm_tea_entry(token, True)["status"], "created"
+        )
         declined = tea_entries.prepare_tea_entry(self.request)["approval_token"]
-        self.assertEqual(tea_entries.confirm_tea_entry(declined, False)["code"], "CONFIRMATION_REQUIRED")
-        self.assertEqual(tea_entries.confirm_tea_entry(declined, True)["code"], "CONFIRMATION_CONSUMED")
+        self.assertEqual(
+            tea_entries.confirm_tea_entry(declined, False)["code"],
+            "CONFIRMATION_REQUIRED",
+        )
+        self.assertEqual(
+            tea_entries.confirm_tea_entry(declined, True)["code"],
+            "CONFIRMATION_CONSUMED",
+        )
         self.db.commit.assert_called_once()
 
     def test_shared_binding_expiry_invalid_and_corruption(self):
         for field in ("action", "site", "user"):
             token = tea_entries.prepare_tea_entry(self.request)["approval_token"]
-            mutate_record(self.store, self.backend, token, lambda row: setattr(row, field, "other"))
-            self.assertEqual(tea_entries.confirm_tea_entry(token, True)["code"], "CONFIRMATION_UNAVAILABLE")
+            mutate_record(
+                self.store,
+                self.backend,
+                token,
+                lambda row: setattr(row, field, "other"),
+            )
+            self.assertEqual(
+                tea_entries.confirm_tea_entry(token, True)["code"],
+                "CONFIRMATION_UNAVAILABLE",
+            )
         token = tea_entries.prepare_tea_entry(self.request)["approval_token"]
         mutate_record(self.store, self.backend, token, lambda row: None, ttl_seconds=-1)
-        self.assertEqual(tea_entries.confirm_tea_entry(token, True)["code"], "CONFIRMATION_EXPIRED")
-        self.assertEqual(tea_entries.confirm_tea_entry("invalid", True)["code"], "CONFIRMATION_EXPIRED")
+        self.assertEqual(
+            tea_entries.confirm_tea_entry(token, True)["code"], "CONFIRMATION_EXPIRED"
+        )
+        self.assertEqual(
+            tea_entries.confirm_tea_entry("invalid", True)["code"],
+            "CONFIRMATION_EXPIRED",
+        )
         token = tea_entries.prepare_tea_entry(self.request)["approval_token"]
-        mutate_record(self.store, self.backend, token, lambda row: row.payload.update({"values_json": "{}"}))
-        self.assertEqual(tea_entries.confirm_tea_entry(token, True)["code"], "CONFIRMATION_UNAVAILABLE")
+        mutate_record(
+            self.store,
+            self.backend,
+            token,
+            lambda row: row.payload.update({"values_json": "{}"}),
+        )
+        self.assertEqual(
+            tea_entries.confirm_tea_entry(token, True)["code"],
+            "CONFIRMATION_UNAVAILABLE",
+        )
         self.assert_no_write()
 
 
@@ -594,14 +739,20 @@ class TeaEntryUpdateTests(unittest.TestCase):
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
-        self.stack.enter_context(patch.dict(os.environ, {"MCP_UPDATE_MODE": "approval_required"}))
+        self.stack.enter_context(
+            patch.dict(os.environ, {"MCP_UPDATE_MODE": "approval_required"})
+        )
         self.backend = FakeSharedApprovalBackend()
         self.store = ApprovalStore(ApprovalMode.AGENT_DELEGATED, backend=self.backend)
         self.stack.enter_context(patch.object(tea_entries, "approvals", self.store))
         self.db = SimpleNamespace(
             commit=Mock(),
             rollback=Mock(),
-            exists=Mock(side_effect=lambda *_args, **_kwargs: "TEA-OTHER" if self.duplicate else None),
+            exists=Mock(
+                side_effect=lambda *_args, **_kwargs: (
+                    "TEA-OTHER" if self.duplicate else None
+                )
+            ),
         )
         native_frappe = SimpleNamespace(
             db=self.db,
@@ -613,9 +764,14 @@ class TeaEntryUpdateTests(unittest.TestCase):
             patch("shayona.shayona.doctype.tea_entry.tea_entry.frappe", native_frappe)
         )
         self.source = dict(
-            name="TEA-1", date=date(2026, 10, 1), no_of_cups=10,
-            rate_per_cup=Decimal("15"), total_amount=Decimal("150"),
-            vendor="Vendor A", modified="2026-10-01 10:00:00", permission=True,
+            name="TEA-1",
+            date=date(2026, 10, 1),
+            no_of_cups=10,
+            rate_per_cup=Decimal("15"),
+            total_amount=Decimal("150"),
+            vendor="Vendor A",
+            modified="2026-10-01 10:00:00",
+            permission=True,
         )
         self.documents = []
         self.duplicate = False
@@ -631,21 +787,37 @@ class TeaEntryUpdateTests(unittest.TestCase):
             doc.set_total_amount = lambda: TeaEntry.set_total_amount(doc)
             doc.validate_duplicate_date = lambda: TeaEntry.validate_duplicate_date(doc)
             doc.check_permission = lambda _permission: (
-                None if doc.permission else (_ for _ in ()).throw(frappe.PermissionError())
+                None
+                if doc.permission
+                else (_ for _ in ()).throw(frappe.PermissionError())
             )
+
             def validate(_method):
                 TeaEntry.validate(doc)
                 self.validation_hook()
+
             doc.run_method = validate
+
             def save(**kwargs):
                 self.assertEqual(kwargs, {"ignore_permissions": False})
                 if self.save_error:
                     raise self.save_error
                 doc.modified = "2026-10-02 11:00:00"
-                self.source.update({key: getattr(doc, key) for key in (
-                    "date", "no_of_cups", "rate_per_cup", "total_amount", "vendor", "modified",
-                )})
+                self.source.update(
+                    {
+                        key: getattr(doc, key)
+                        for key in (
+                            "date",
+                            "no_of_cups",
+                            "rate_per_cup",
+                            "total_amount",
+                            "vendor",
+                            "modified",
+                        )
+                    }
+                )
                 return doc
+
             doc.save = Mock(side_effect=save)
             self.documents.append(doc)
             self.doc = doc
@@ -663,21 +835,29 @@ class TeaEntryUpdateTests(unittest.TestCase):
             db=self.db,
         )
         self.stack.enter_context(patch.object(tea_entries, "frappe", self.fake))
-        self.stack.enter_context(patch.object(
-            tea_entries, "logged_defined_error",
-            side_effect=lambda tool, code, **kw: defined_error(code, **kw),
-        ))
+        self.stack.enter_context(
+            patch.object(
+                tea_entries,
+                "logged_defined_error",
+                side_effect=lambda tool, code, **kw: defined_error(code, **kw),
+            )
+        )
         self.request = {
             "tea_entry_name": "TEA-1",
             "changes": {"no_of_cups": 12},
         }
 
     def _reset_source(self):
-        self.source.update({
-            "date": date(2026, 10, 1), "no_of_cups": 10,
-            "rate_per_cup": Decimal("15"), "total_amount": Decimal("150"),
-            "vendor": "Vendor A", "modified": "2026-10-01 10:00:00",
-        })
+        self.source.update(
+            {
+                "date": date(2026, 10, 1),
+                "no_of_cups": 10,
+                "rate_per_cup": Decimal("15"),
+                "total_amount": Decimal("150"),
+                "vendor": "Vendor A",
+                "modified": "2026-10-01 10:00:00",
+            }
+        )
 
     def test_bounded_contract_requires_supported_non_null_change(self):
         TeaEntryUpdateInput.model_validate(self.request)
@@ -688,7 +868,10 @@ class TeaEntryUpdateTests(unittest.TestCase):
             {"tea_entry_name": "TEA-1", "changes": {"rate_per_cup": "NaN"}},
             {"tea_entry_name": "TEA-1", "changes": {"vendor": " "}},
             {"tea_entry_name": "TEA-1", "changes": {"vendor": None}},
-            {"tea_entry_name": "TEA-1", "changes": {"date": "2026-10-02", "owner": "x"}},
+            {
+                "tea_entry_name": "TEA-1",
+                "changes": {"date": "2026-10-02", "owner": "x"},
+            },
             self.request | {"ignore_permissions": True},
             self.request | {"MCP_UPDATE_MODE": "direct"},
         ):
@@ -707,11 +890,16 @@ class TeaEntryUpdateTests(unittest.TestCase):
         self.doc.save.assert_not_called()
         self.db.commit.assert_not_called()
         approval, state = self.store.lookup(
-            result["approval_token"], action="update_tea_entry",
-            site="test.localhost", user="test@example.com",
+            result["approval_token"],
+            action="update_tea_entry",
+            site="test.localhost",
+            user="test@example.com",
         )
         self.assertEqual(state, "available")
-        self.assertEqual(set(approval.payload), {"request_json", "before_json", "preview_json", "modified"})
+        self.assertEqual(
+            set(approval.payload),
+            {"request_json", "before_json", "preview_json", "modified"},
+        )
 
     def test_confirm_and_direct_execute_save_normally(self):
         ready = tea_entries.prepare_tea_entry_update(self.request)
@@ -724,7 +912,10 @@ class TeaEntryUpdateTests(unittest.TestCase):
 
         self.doc.save.reset_mock()
         self.db.commit.reset_mock()
-        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}), patch.object(tea_entries, "approvals") as store:
+        with (
+            patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}),
+            patch.object(tea_entries, "approvals") as store,
+        ):
             preview = tea_entries.prepare_tea_entry_update(self.request)
             TeaEntryUpdatePrepareOutput.model_validate(preview)
             self.assertEqual(preview["status"], "preview")
@@ -752,21 +943,30 @@ class TeaEntryUpdateTests(unittest.TestCase):
             ("approval_required", "disabled", "UPDATE_DISABLED"),
         )
         for entry, target, expected in transitions:
-            with self.subTest(entry=entry, target=target), patch.dict(os.environ, {"MCP_UPDATE_MODE": entry}):
+            with (
+                self.subTest(entry=entry, target=target),
+                patch.dict(os.environ, {"MCP_UPDATE_MODE": entry}),
+            ):
                 self.validation_hook = lambda: None
                 if entry == "approval_required":
                     ready = tea_entries.prepare_tea_entry_update(self.request)
                     self._reset_source()
-                    self.validation_hook = lambda: os.environ.__setitem__("MCP_UPDATE_MODE", target)
-                    result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+                    self.validation_hook = lambda: os.environ.__setitem__(
+                        "MCP_UPDATE_MODE", target
+                    )
+                    result = tea_entries.confirm_tea_entry_update(
+                        ready["approval_token"], True
+                    )
                 else:
                     calls = []
+
                     def switch_mode():
                         calls.append(True)
                         if len(calls) == 1:
                             self._reset_source()
                         if len(calls) == 2:
                             os.environ["MCP_UPDATE_MODE"] = target
+
                     self.validation_hook = switch_mode
                     with patch.object(tea_entries, "approvals") as store:
                         result = tea_entries.execute_tea_entry_update(self.request)
@@ -776,21 +976,39 @@ class TeaEntryUpdateTests(unittest.TestCase):
         self.db.commit.assert_not_called()
 
     def test_disabled_and_wrong_path_modes_reject_before_document_or_store_access(self):
-        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "disabled"}), patch.object(
-            tea_entries.frappe, "get_doc"
-        ) as get_doc, patch.object(tea_entries, "approvals") as store:
-            self.assertEqual(tea_entries.prepare_tea_entry_update(self.request)["code"], "UPDATE_DISABLED")
-            self.assertEqual(tea_entries.confirm_tea_entry_update("token", True)["code"], "UPDATE_DISABLED")
-            self.assertEqual(tea_entries.execute_tea_entry_update(self.request)["code"], "UPDATE_DISABLED")
+        with (
+            patch.dict(os.environ, {"MCP_UPDATE_MODE": "disabled"}),
+            patch.object(tea_entries.frappe, "get_doc") as get_doc,
+            patch.object(tea_entries, "approvals") as store,
+        ):
+            self.assertEqual(
+                tea_entries.prepare_tea_entry_update(self.request)["code"],
+                "UPDATE_DISABLED",
+            )
+            self.assertEqual(
+                tea_entries.confirm_tea_entry_update("token", True)["code"],
+                "UPDATE_DISABLED",
+            )
+            self.assertEqual(
+                tea_entries.execute_tea_entry_update(self.request)["code"],
+                "UPDATE_DISABLED",
+            )
             get_doc.assert_not_called()
             self.assertEqual(store.mock_calls, [])
-        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}), patch.object(
-            tea_entries, "approvals"
-        ) as store:
-            self.assertEqual(tea_entries.confirm_tea_entry_update("token", True)["code"], "DIRECT_EXECUTION_REQUIRED")
+        with (
+            patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}),
+            patch.object(tea_entries, "approvals") as store,
+        ):
+            self.assertEqual(
+                tea_entries.confirm_tea_entry_update("token", True)["code"],
+                "DIRECT_EXECUTION_REQUIRED",
+            )
             self.assertEqual(store.mock_calls, [])
         with patch.dict(os.environ, {"MCP_UPDATE_MODE": "approval_required"}):
-            self.assertEqual(tea_entries.execute_tea_entry_update(self.request)["code"], "APPROVAL_REQUIRED")
+            self.assertEqual(
+                tea_entries.execute_tea_entry_update(self.request)["code"],
+                "APPROVAL_REQUIRED",
+            )
 
     def test_stale_and_native_failure_paths_rollback(self):
         ready = tea_entries.prepare_tea_entry_update(self.request)
@@ -877,7 +1095,9 @@ class TeaEntryUpdateTests(unittest.TestCase):
                     ready["approval_token"],
                     lambda approval: setattr(approval, field, "other"),
                 )
-                result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+                result = tea_entries.confirm_tea_entry_update(
+                    ready["approval_token"], True
+                )
                 self.assertEqual(result["code"], "CONFIRMATION_UNAVAILABLE")
                 self.doc.save.assert_not_called()
 

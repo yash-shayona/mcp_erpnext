@@ -236,7 +236,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "PROFILE_MISMATCH": PublicErrorDefinition(
         ErrorCategory.INVALID_REQUEST,
-        "The prepared action belongs to a different MCP profile.",
+        "The prepared action does not match this operation. Prepare and review it again.",
     ),
     "EMAIL_ACCOUNT_NOT_CONFIGURED": PublicErrorDefinition(
         ErrorCategory.CONFIGURATION_UNAVAILABLE,

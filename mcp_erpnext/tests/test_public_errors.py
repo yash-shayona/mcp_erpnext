@@ -57,53 +57,125 @@ class PublicErrorFoundationTests(unittest.TestCase):
 
     def test_catalog_covers_the_migrated_core_and_common_codes(self):
         codes = {
-            "CREATE_DISABLED", "UPDATE_DISABLED", "CANCEL_DISABLED", "DELETE_DISABLED",
-            "APPROVAL_REQUIRED", "DIRECT_EXECUTION_REQUIRED", "CONFIRMATION_EXPIRED",
-            "CONFIRMATION_CONSUMED", "CONFIRMATION_UNAVAILABLE",
-            "TRUSTED_APPROVAL_UNAVAILABLE", "PERMISSION_DENIED", "ERP_PERMISSION_DENIED",
-            "DOCTYPE_NOT_ALLOWED", "INVALID_TARGET", "STALE_CONFIRMATION",
-            "LIFECYCLE_VALIDATION_FAILED", "LINKED_DOCUMENT", "INVALID_DOCUMENT_STATE",
-            "INVALID_PRINT_FORMAT", "PDF_RENDER_FAILED", "ACTION_MISMATCH",
-            "AMBIGUOUS_CHILD_TARGET", "CHILD_TARGET_NOT_ALLOWED", "CONFIRMATION_REQUIRED",
-            "DELETE_BLOCKED", "DOCUMENT_NOT_FOUND", "DUPLICATE_ITEM_ROW",
-            "FIELD_NOT_WRITABLE", "INVALID_CHILD_TARGET", "INVALID_FIELD", "INVALID_FIELD_VALUE",
-            "INVALID_ITEM", "INVALID_ITEM_DETAILS", "INVALID_LINK", "NOT_SUBMITTABLE",
-            "PAYMENT_SCHEDULE_UNAVAILABLE", "PROFILE_MISMATCH", "EMAIL_ACCOUNT_NOT_CONFIGURED",
-            "EMAIL_PREPARE_FAILED", "EMAIL_QUEUE_FAILED", "INVALID_EMAIL", "INVALID_RECIPIENT",
-            "INVALID_RECIPIENT_SCOPE", "PREPARED_STATE_CHANGED", "RECIPIENT_NOT_FOUND",
-            "SELF_RECIPIENT_UNAVAILABLE", "MCP_REMOTE_REQUEST_INVALID",
-            "MCP_REMOTE_RESPONSE_INVALID", "EMAIL_DISABLED", "ORDER_CREATE_UNAVAILABLE",
-            "ORDER_PREVIEW_UNAVAILABLE", "ERP_REQUEST_FAILED", "MCP_AUTHENTICATION_MISSING",
-            "MCP_AUTHENTICATION_INVALID", "MCP_USER_IDENTITY_MISSING", "MCP_USER_NOT_FOUND",
-            "MCP_USER_DISABLED", "MCP_IDENTITY_CONFIGURATION_ERROR",
+            "CREATE_DISABLED",
+            "UPDATE_DISABLED",
+            "CANCEL_DISABLED",
+            "DELETE_DISABLED",
+            "APPROVAL_REQUIRED",
+            "DIRECT_EXECUTION_REQUIRED",
+            "CONFIRMATION_EXPIRED",
+            "CONFIRMATION_CONSUMED",
+            "CONFIRMATION_UNAVAILABLE",
+            "TRUSTED_APPROVAL_UNAVAILABLE",
+            "PERMISSION_DENIED",
+            "ERP_PERMISSION_DENIED",
+            "DOCTYPE_NOT_ALLOWED",
+            "INVALID_TARGET",
+            "STALE_CONFIRMATION",
+            "LIFECYCLE_VALIDATION_FAILED",
+            "LINKED_DOCUMENT",
+            "INVALID_DOCUMENT_STATE",
+            "INVALID_PRINT_FORMAT",
+            "PDF_RENDER_FAILED",
+            "ACTION_MISMATCH",
+            "AMBIGUOUS_CHILD_TARGET",
+            "CHILD_TARGET_NOT_ALLOWED",
+            "CONFIRMATION_REQUIRED",
+            "DELETE_BLOCKED",
+            "DOCUMENT_NOT_FOUND",
+            "DUPLICATE_ITEM_ROW",
+            "FIELD_NOT_WRITABLE",
+            "INVALID_CHILD_TARGET",
+            "INVALID_FIELD",
+            "INVALID_FIELD_VALUE",
+            "INVALID_ITEM",
+            "INVALID_ITEM_DETAILS",
+            "INVALID_LINK",
+            "NOT_SUBMITTABLE",
+            "PAYMENT_SCHEDULE_UNAVAILABLE",
+            "PROFILE_MISMATCH",
+            "EMAIL_ACCOUNT_NOT_CONFIGURED",
+            "EMAIL_PREPARE_FAILED",
+            "EMAIL_QUEUE_FAILED",
+            "INVALID_EMAIL",
+            "INVALID_RECIPIENT",
+            "INVALID_RECIPIENT_SCOPE",
+            "PREPARED_STATE_CHANGED",
+            "RECIPIENT_NOT_FOUND",
+            "SELF_RECIPIENT_UNAVAILABLE",
+            "MCP_REMOTE_REQUEST_INVALID",
+            "MCP_REMOTE_RESPONSE_INVALID",
+            "EMAIL_DISABLED",
+            "ORDER_CREATE_UNAVAILABLE",
+            "ORDER_PREVIEW_UNAVAILABLE",
+            "ERP_REQUEST_FAILED",
+            "MCP_AUTHENTICATION_MISSING",
+            "MCP_AUTHENTICATION_INVALID",
+            "MCP_USER_IDENTITY_MISSING",
+            "MCP_USER_NOT_FOUND",
+            "MCP_USER_DISABLED",
+            "MCP_IDENTITY_CONFIGURATION_ERROR",
         }
         self.assertLessEqual(codes, PUBLIC_ERROR_DEFINITIONS.keys())
 
     def test_catalog_covers_masters_and_shayona_codes(self):
         codes = {
-            "CONTACT_CHILD_STALE_STATE", "CONTACT_CREATE_FAILED", "CONTACT_DUPLICATE_SUSPECTED",
-            "CONTACT_EMAIL_AMBIGUOUS", "CONTACT_EMAIL_NOT_FOUND", "CONTACT_INVALID_DATA",
-            "CONTACT_INVALID_EMAIL", "CONTACT_INVALID_IDENTITY", "CONTACT_INVALID_PHONE",
-            "CONTACT_INVALID_REQUEST", "CONTACT_LINK_FAILED", "CONTACT_LINK_STALE_STATE",
-            "CONTACT_NOT_FOUND", "CONTACT_NOT_LINKED_TO_CUSTOMER", "CONTACT_PHONE_AMBIGUOUS",
-            "CONTACT_PHONE_NOT_FOUND", "CONTACT_PRIMARY_STATE_INCONSISTENT",
-            "CONTACT_PRIMARY_UNSUPPORTED", "CONTACT_SCOPE_REQUIRED", "CONTACT_SHARED_WITH_OTHER_PARTIES",
-            "CONTACT_STALE_STATE", "CONTACT_UPDATE_FAILED", "CREDENTIAL_INACTIVE", "CREDENTIAL_NOT_FOUND",
-            "CREDENTIAL_READ_FAILED", "CREDENTIAL_SECRET_UNAVAILABLE", "CUSTOMER_EMAIL_UNAVAILABLE",
-            "CUSTOMER_PRIMARY_CONTACT_STALE", "CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED",
-            "CUSTOMER_STRUCTURED_QUERY_REQUIRED", "EMAIL_RENDER_FAILED", "EMAIL_TEMPLATE_INVALID",
-            "EMAIL_TEMPLATE_NOT_CONFIGURED", "EMAIL_TEMPLATE_NOT_FOUND", "EMAIL_TEMPLATE_UNSAFE",
-            "GSTIN_UNSUPPORTED", "INDIA_COMPLIANCE_ADDRESS_BRIDGE_UNAVAILABLE",
-            "INDIA_COMPLIANCE_GST_UNAVAILABLE", "INVALID_CUSTOMER_DETAILS", "ITEM_RUNTIME_REQUIREMENT_UNAVAILABLE",
-            "OPERATOR_EMAIL_UNAVAILABLE", "PRIMARY_CONTACT_PROMOTION_FAILED", "PRIMARY_CONTACT_PROMOTION_UNSAFE",
-            "TEA_ENTRY_VALIDATION_FAILED", "TEA_ENTRY_WRITE_FAILED",
+            "CONTACT_CHILD_STALE_STATE",
+            "CONTACT_CREATE_FAILED",
+            "CONTACT_DUPLICATE_SUSPECTED",
+            "CONTACT_EMAIL_AMBIGUOUS",
+            "CONTACT_EMAIL_NOT_FOUND",
+            "CONTACT_INVALID_DATA",
+            "CONTACT_INVALID_EMAIL",
+            "CONTACT_INVALID_IDENTITY",
+            "CONTACT_INVALID_PHONE",
+            "CONTACT_INVALID_REQUEST",
+            "CONTACT_LINK_FAILED",
+            "CONTACT_LINK_STALE_STATE",
+            "CONTACT_NOT_FOUND",
+            "CONTACT_NOT_LINKED_TO_CUSTOMER",
+            "CONTACT_PHONE_AMBIGUOUS",
+            "CONTACT_PHONE_NOT_FOUND",
+            "CONTACT_PRIMARY_STATE_INCONSISTENT",
+            "CONTACT_PRIMARY_UNSUPPORTED",
+            "CONTACT_SCOPE_REQUIRED",
+            "CONTACT_SHARED_WITH_OTHER_PARTIES",
+            "CONTACT_STALE_STATE",
+            "CONTACT_UPDATE_FAILED",
+            "CREDENTIAL_INACTIVE",
+            "CREDENTIAL_NOT_FOUND",
+            "CREDENTIAL_READ_FAILED",
+            "CREDENTIAL_SECRET_UNAVAILABLE",
+            "CUSTOMER_EMAIL_UNAVAILABLE",
+            "CUSTOMER_PRIMARY_CONTACT_STALE",
+            "CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED",
+            "CUSTOMER_STRUCTURED_QUERY_REQUIRED",
+            "EMAIL_RENDER_FAILED",
+            "EMAIL_TEMPLATE_INVALID",
+            "EMAIL_TEMPLATE_NOT_CONFIGURED",
+            "EMAIL_TEMPLATE_NOT_FOUND",
+            "EMAIL_TEMPLATE_UNSAFE",
+            "GSTIN_UNSUPPORTED",
+            "INDIA_COMPLIANCE_ADDRESS_BRIDGE_UNAVAILABLE",
+            "INDIA_COMPLIANCE_GST_UNAVAILABLE",
+            "INVALID_CUSTOMER_DETAILS",
+            "ITEM_RUNTIME_REQUIREMENT_UNAVAILABLE",
+            "OPERATOR_EMAIL_UNAVAILABLE",
+            "PRIMARY_CONTACT_PROMOTION_FAILED",
+            "PRIMARY_CONTACT_PROMOTION_UNSAFE",
+            "TEA_ENTRY_VALIDATION_FAILED",
+            "TEA_ENTRY_WRITE_FAILED",
         }
         self.assertLessEqual(codes, PUBLIC_ERROR_DEFINITIONS.keys())
         for code in codes:
             with self.subTest(code=code):
                 result = defined_error(code)
-                self.assertEqual(result["message"], PUBLIC_ERROR_DEFINITIONS[code].message)
-                self.assertEqual(set(result), {"status", "code", "message", "reference", "retryable"})
+                self.assertEqual(
+                    result["message"], PUBLIC_ERROR_DEFINITIONS[code].message
+                )
+                self.assertEqual(
+                    set(result), {"status", "code", "message", "reference", "retryable"}
+                )
 
     def test_catalog_covers_sales_buying_and_accounts_codes(self):
         codes = {
@@ -246,7 +318,6 @@ class PublicErrorFoundationTests(unittest.TestCase):
                 for term in implementation_terms:
                     self.assertNotIn(term, lowered_message)
 
-
     def test_logged_defined_error_correlates_without_a_public_message_override(self):
         with (
             patch("mcp_erpnext.observability._log_tool_failure") as log_failure,
@@ -257,22 +328,34 @@ class PublicErrorFoundationTests(unittest.TestCase):
         ):
             result = logged_defined_error("test_tool", "LIFECYCLE_VALIDATION_FAILED")
 
-        self.assertEqual(result["message"], definition_for("LIFECYCLE_VALIDATION_FAILED").message)
+        self.assertEqual(
+            result["message"], definition_for("LIFECYCLE_VALIDATION_FAILED").message
+        )
         self.assertEqual(result["reference"], "MCP-ERR-ABCDEF12")
         self.assertEqual(log_failure.call_args.kwargs["reference"], result["reference"])
         self.assertEqual(log_failure.call_args.kwargs["code"], result["code"])
         with self.assertRaises(TypeError):
-            logged_defined_error("test_tool", "ERP_REQUEST_FAILED", message="raw diagnostic")
+            logged_defined_error(
+                "test_tool", "ERP_REQUEST_FAILED", message="raw diagnostic"
+            )
 
     def test_common_read_pdf_and_email_errors_use_catalog_messages(self):
         cases = (
-            (read._error("DOCTYPE_NOT_ALLOWED", "internal details"), "DOCTYPE_NOT_ALLOWED"),
-            (pdf._error("INVALID_PRINT_FORMAT", "format path /private"), "INVALID_PRINT_FORMAT"),
+            (
+                read._error("DOCTYPE_NOT_ALLOWED", "internal details"),
+                "DOCTYPE_NOT_ALLOWED",
+            ),
+            (
+                pdf._error("INVALID_PRINT_FORMAT", "format path /private"),
+                "INVALID_PRINT_FORMAT",
+            ),
             (email._error("INVALID_EMAIL", "recipient token=private"), "INVALID_EMAIL"),
         )
         for result, code in cases:
             with self.subTest(code=code):
-                self.assertEqual(set(result), {"status", "code", "message", "reference", "retryable"})
+                self.assertEqual(
+                    set(result), {"status", "code", "message", "reference", "retryable"}
+                )
                 self.assertEqual(result["status"], "error")
                 self.assertEqual(result["code"], code)
                 self.assertEqual(result["message"], definition_for(code).message)
@@ -281,9 +364,32 @@ class PublicErrorFoundationTests(unittest.TestCase):
     def test_policy_and_permission_categories_remain_distinct(self):
         capability = defined_error("DELETE_DISABLED")
         permission = defined_error("PERMISSION_DENIED")
-        self.assertEqual(definition_for(capability["code"]).category, ErrorCategory.CAPABILITY_UNAVAILABLE)
-        self.assertEqual(definition_for(permission["code"]).category, ErrorCategory.PERMISSION_DENIED)
+        self.assertEqual(
+            definition_for(capability["code"]).category,
+            ErrorCategory.CAPABILITY_UNAVAILABLE,
+        )
+        self.assertEqual(
+            definition_for(permission["code"]).category, ErrorCategory.PERMISSION_DENIED
+        )
         self.assertNotEqual(capability["message"], permission["message"])
+
+    def test_profile_mismatch_keeps_code_and_category_with_business_wording(self):
+        result = defined_error("PROFILE_MISMATCH")
+
+        self.assertEqual(result["code"], "PROFILE_MISMATCH")
+        self.assertEqual(
+            definition_for(result["code"]).category, ErrorCategory.INVALID_REQUEST
+        )
+        self.assertFalse(result["retryable"])
+        self.assertEqual(
+            result["message"],
+            "The prepared action does not match this operation. Prepare and review it again.",
+        )
+        self.assertNotIn("MCP", result["message"])
+        self.assertNotIn("profile", result["message"].lower())
+        self.assertEqual(
+            set(result), {"status", "code", "message", "reference", "retryable"}
+        )
 
     def test_approval_states_keep_codes_and_retry_semantics_with_catalog_wording(self):
         expected = {
@@ -294,7 +400,9 @@ class PublicErrorFoundationTests(unittest.TestCase):
         }
         for state, (code, retryable) in expected.items():
             with self.subTest(state=state):
-                actual_code, message, actual_retryable = confirmation_failure(state, "document")
+                actual_code, message, actual_retryable = confirmation_failure(
+                    state, "document"
+                )
                 self.assertEqual((actual_code, actual_retryable), (code, retryable))
                 self.assertEqual(message, definition_for(code).message)
 
