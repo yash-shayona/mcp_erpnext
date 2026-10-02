@@ -5,12 +5,18 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from mcp_erpnext.approvals import ApprovalStore
 from mcp_erpnext.contracts.shayona.credential_email import (
     CredentialEmailConfirmInput,
     CredentialEmailPrepareInput,
 )
 from mcp_erpnext.services.shayona import credential_email
 from mcp_erpnext.services.shayona.config import load_business_defaults
+from mcp_erpnext.settings import ApprovalMode
+from mcp_erpnext.tests.approval_test_backend import (
+    FakeSharedApprovalBackend,
+    read_record,
+)
 
 
 class ShayonaCredentialEmailTests(unittest.TestCase):
@@ -60,6 +66,68 @@ class ShayonaCredentialEmailTests(unittest.TestCase):
         create.assert_not_called()
         password.assert_not_called()
 
+    def test_direct_credential_execute_is_store_inert_under_trusted_human_policy(self):
+        store = ApprovalStore(
+            ApprovalMode.TRUSTED_HUMAN, backend=FakeSharedApprovalBackend()
+        )
+        payload = self._prepared_payload(self._template())
+        doc = SimpleNamespace(
+            get=lambda field: "user" if field == "username" else None,
+            get_password=lambda _field: "pass",
+        )
+        snapshot = {
+            "credential_name": "CSC-1",
+            "customer": "Customer 1",
+            "domain_name": "example.com",
+            "credential_type": "cPanel",
+            "account_name": "Main",
+            "account_identity": "main",
+            "control_panel_url": "https://panel.example.com",
+        }
+        template = self._template()
+        template.get_formatted_email = lambda _context: {
+            "subject": "Access CSC-1",
+            "message": "body",
+        }
+        db = SimpleNamespace(commit=Mock(), rollback=Mock())
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "MCP_EMAIL_MODE": "direct",
+                    "MCP_APPROVAL_MODE": "trusted_human",
+                },
+            ),
+            patch.object(credential_email, "approvals", store),
+            patch.object(store, "create") as create,
+            patch.object(store, "claim_for_confirm_write") as claim,
+            patch.object(credential_email, "_plan", return_value=(payload, {})),
+            patch.object(
+                credential_email,
+                "_revalidate",
+                return_value=(doc, snapshot, template, "operator@example.com"),
+            ),
+            patch.object(credential_email.frappe, "db", db),
+            patch.object(
+                credential_email.frappe,
+                "sendmail",
+                return_value=SimpleNamespace(
+                    name="EMAIL-QUEUE-1",
+                    to=["recipient@example.com"],
+                    cc=["customer@example.com", "operator@example.com"],
+                ),
+            ) as sendmail,
+        ):
+            result = credential_email.execute_customer_service_credential_email(
+                credential_name="CSC-1", recipient_email="recipient@example.com"
+            )
+
+        self.assertEqual(result["status"], "queued")
+        create.assert_not_called()
+        claim.assert_not_called()
+        sendmail.assert_called_once()
+        self.assertTrue(sendmail.call_args.kwargs["redact_message_after_send"])
+
     def test_wrong_credential_confirm_mode_is_checked_before_claim(self):
         with (
             patch.dict(os.environ, {"MCP_EMAIL_MODE": "direct"}),
@@ -76,8 +144,18 @@ class ShayonaCredentialEmailTests(unittest.TestCase):
     def test_wrong_mode_confirm_preserves_credential_approval_for_later_confirmation(
         self,
     ):
-        token = "opaque"
-        consumed = False
+        site = "shayona.localhost"
+        user = "operator@example.com"
+        store = ApprovalStore(
+            ApprovalMode.AGENT_DELEGATED, backend=FakeSharedApprovalBackend()
+        )
+        payload = self._prepared_payload(self._template())
+        token = store.create(
+            action=credential_email.CREDENTIAL_EMAIL_ACTION,
+            site=site,
+            user=user,
+            payload=payload,
+        )
         credential_values = {
             "name": "CSC-1",
             "modified": "m1",
@@ -101,34 +179,72 @@ class ShayonaCredentialEmailTests(unittest.TestCase):
             "message": "body",
         }
 
-        def claim(_token, **_kwargs):
-            nonlocal consumed
-            self.assertEqual(_token, token)
-            self.assertFalse(consumed)
-            consumed = True
-            return (
-                SimpleNamespace(payload=self._prepared_payload(self._template())),
-                "available",
-            )
-
         with (
             patch.dict(os.environ, {"MCP_EMAIL_MODE": "direct"}),
+            patch.object(credential_email, "approvals", store),
             patch.object(
-                credential_email.approvals, "claim_for_confirm_write", side_effect=claim
-            ) as claim_mock,
+                credential_email.frappe,
+                "session",
+                SimpleNamespace(user=user),
+            ),
+            patch.object(
+                credential_email.frappe,
+                "local",
+                SimpleNamespace(site=site),
+            ),
             patch.object(credential_email.frappe, "sendmail") as sendmail,
         ):
             rejected = credential_email.confirm_customer_service_credential_email(token)
         self.assertEqual(rejected["code"], "DIRECT_EXECUTION_REQUIRED")
-        self.assertFalse(consumed)
-        claim_mock.assert_not_called()
+        self.assertIsNone(read_record(store, token).consumed_at)
         sendmail.assert_not_called()
 
-        result, _password, sendmail, _db = self._confirm_with_real_revalidation(
-            claim=claim, successful_queue=True, doc=doc, template=template
-        )
+        db = SimpleNamespace(commit=Mock(), rollback=Mock())
+        with (
+            patch.dict(os.environ, {"MCP_EMAIL_MODE": "approval_required"}),
+            patch.object(credential_email, "approvals", store),
+            patch.object(
+                credential_email.frappe,
+                "session",
+                SimpleNamespace(user=user),
+            ),
+            patch.object(
+                credential_email.frappe,
+                "local",
+                SimpleNamespace(site=site),
+            ),
+            patch.object(
+                credential_email,
+                "_revalidate",
+                return_value=(
+                    doc,
+                    {
+                        "credential_name": "CSC-1",
+                        "customer": "Customer 1",
+                        "domain_name": "example.com",
+                        "credential_type": "cPanel",
+                        "account_name": "Main",
+                        "account_identity": "main",
+                        "control_panel_url": "https://panel.example.com",
+                    },
+                    template,
+                    user,
+                ),
+            ),
+            patch.object(credential_email.frappe, "db", db),
+            patch.object(
+                credential_email.frappe,
+                "sendmail",
+                return_value=SimpleNamespace(
+                    name="EMAIL-QUEUE-1",
+                    to=["recipient@example.com"],
+                    cc=["customer@example.com", "operator@example.com"],
+                ),
+            ) as sendmail,
+        ):
+            result = credential_email.confirm_customer_service_credential_email(token)
         self.assertEqual(result["status"], "queued")
-        self.assertTrue(consumed)
+        self.assertIsNotNone(read_record(store, token).consumed_at)
         sendmail.assert_called_once()
 
     def test_credential_apply_checks_mode_before_secret_access(self):

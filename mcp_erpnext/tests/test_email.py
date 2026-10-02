@@ -128,10 +128,20 @@ class EmailServiceTests(unittest.TestCase):
         sendmail.assert_not_called()
 
     def test_direct_email_prepare_is_preview_only_and_execute_is_store_inert(self):
+        trusted_store = ApprovalStore(
+            ApprovalMode.TRUSTED_HUMAN, backend=FakeSharedApprovalBackend()
+        )
         with (
-            patch.dict(os.environ, {"MCP_EMAIL_MODE": "direct"}),
-            patch.object(email.approvals, "create") as create,
-            patch.object(email.approvals, "claim_for_confirm_write") as claim,
+            patch.dict(
+                os.environ,
+                {
+                    "MCP_EMAIL_MODE": "direct",
+                    "MCP_APPROVAL_MODE": "trusted_human",
+                },
+            ),
+            patch.object(email, "approvals", trusted_store),
+            patch.object(trusted_store, "create") as create,
+            patch.object(trusted_store, "claim_for_confirm_write") as claim,
             patch.object(
                 email.frappe, "sendmail", return_value=SimpleNamespace(name="QUEUE-1")
             ) as sendmail,
@@ -216,6 +226,7 @@ class EmailServiceTests(unittest.TestCase):
 
         with self.subTest(mode="approval_required"):
             prepared = email.prepare_document_email("Sales Order", "SO-001", "sales")
+
             def flip_approval_mode(*_args):
                 os.environ["MCP_EMAIL_MODE"] = "direct"
                 return first_render
