@@ -598,7 +598,20 @@ class TeaEntryUpdateTests(unittest.TestCase):
         self.backend = FakeSharedApprovalBackend()
         self.store = ApprovalStore(ApprovalMode.AGENT_DELEGATED, backend=self.backend)
         self.stack.enter_context(patch.object(tea_entries, "approvals", self.store))
-        self.db = SimpleNamespace(commit=Mock(), rollback=Mock())
+        self.db = SimpleNamespace(
+            commit=Mock(),
+            rollback=Mock(),
+            exists=Mock(side_effect=lambda *_args, **_kwargs: "TEA-OTHER" if self.duplicate else None),
+        )
+        native_frappe = SimpleNamespace(
+            db=self.db,
+            throw=lambda **_kwargs: (_ for _ in ()).throw(
+                frappe.ValidationError("RAW-SENTINEL")
+            ),
+        )
+        self.stack.enter_context(
+            patch("shayona.shayona.doctype.tea_entry.tea_entry.frappe", native_frappe)
+        )
         self.source = dict(
             name="TEA-1", date=date(2026, 10, 1), no_of_cups=10,
             rate_per_cup=Decimal("15"), total_amount=Decimal("150"),
@@ -607,18 +620,21 @@ class TeaEntryUpdateTests(unittest.TestCase):
         self.documents = []
         self.duplicate = False
         self.save_error = None
+        self.deleted = False
         self.validation_hook = lambda: None
 
         def load_doc(_doctype, _name):
+            if self.deleted:
+                raise frappe.DoesNotExistError("RAW-SENTINEL")
             doc = SimpleNamespace(**self.source)
             doc.set = lambda field, value: setattr(doc, field, value)
+            doc.set_total_amount = lambda: TeaEntry.set_total_amount(doc)
+            doc.validate_duplicate_date = lambda: TeaEntry.validate_duplicate_date(doc)
             doc.check_permission = lambda _permission: (
                 None if doc.permission else (_ for _ in ()).throw(frappe.PermissionError())
             )
             def validate(_method):
-                if self.duplicate:
-                    raise frappe.ValidationError("RAW-SENTINEL")
-                doc.total_amount = Decimal(doc.no_of_cups) * Decimal(doc.rate_per_cup)
+                TeaEntry.validate(doc)
                 self.validation_hook()
             doc.run_method = validate
             def save(**kwargs):
@@ -801,6 +817,109 @@ class TeaEntryUpdateTests(unittest.TestCase):
             self.assertEqual(result["code"], "TEA_ENTRY_VALIDATION_FAILED")
             self.assertNotIn("RAW-SENTINEL", str(result))
         self.assertEqual(self.doc.save.call_count, 0)
+
+    def test_deleted_target_after_prepare_is_stale_without_write(self):
+        ready = tea_entries.prepare_tea_entry_update(self.request)
+        self.deleted = True
+
+        result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+
+        self.assertEqual(result["code"], "STALE_CONFIRMATION")
+        self.assertNotIn("RAW-SENTINEL", str(result))
+        self.assertEqual(self.doc.save.call_count, 0)
+        self.db.commit.assert_not_called()
+
+    def test_permission_revoked_after_prepare_blocks_confirmation_safely(self):
+        ready = tea_entries.prepare_tea_entry_update(self.request)
+        self.source["permission"] = False
+
+        result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+
+        self.assertEqual(result["code"], "ERP_PERMISSION_DENIED")
+        self.assertNotIn("RAW-SENTINEL", str(result))
+        self.doc.save.assert_not_called()
+        self.db.rollback.assert_called_once()
+        self.db.commit.assert_not_called()
+
+    def test_duplicate_date_appearing_after_prepare_is_stale_and_safe(self):
+        request = {"tea_entry_name": "TEA-1", "changes": {"date": "2026-10-02"}}
+        ready = tea_entries.prepare_tea_entry_update(request)
+        self._reset_source()
+        self.duplicate = True
+
+        result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+
+        self.assertEqual(result["code"], "STALE_CONFIRMATION")
+        self.assertNotIn("RAW-SENTINEL", str(result))
+        self.doc.save.assert_not_called()
+        self.db.rollback.assert_called_once()
+        self.db.commit.assert_not_called()
+
+    def test_confirmation_token_replay_is_rejected_after_single_write(self):
+        ready = tea_entries.prepare_tea_entry_update(self.request)
+        self._reset_source()
+
+        first = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+        second = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+
+        self.assertEqual(first["status"], "updated")
+        self.assertEqual(second["code"], "CONFIRMATION_CONSUMED")
+        self.doc.save.assert_called_once_with(ignore_permissions=False)
+        self.db.commit.assert_called_once()
+
+    def test_shared_approval_binding_and_trusted_human_guard(self):
+        for field in ("action", "site", "user"):
+            with self.subTest(binding=field):
+                ready = tea_entries.prepare_tea_entry_update(self.request)
+                mutate_record(
+                    self.store,
+                    self.backend,
+                    ready["approval_token"],
+                    lambda approval: setattr(approval, field, "other"),
+                )
+                result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+                self.assertEqual(result["code"], "CONFIRMATION_UNAVAILABLE")
+                self.doc.save.assert_not_called()
+
+        self.store.configure_approval_mode(ApprovalMode.TRUSTED_HUMAN)
+        ready = tea_entries.prepare_tea_entry_update(self.request)
+        result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+        self.assertEqual(result["code"], "TRUSTED_APPROVAL_UNAVAILABLE")
+        self.doc.save.assert_not_called()
+
+        self.store.record_trusted_user_approval(
+            ready["approval_token"],
+            action="update_tea_entry",
+            site="test.localhost",
+            user="test@example.com",
+        )
+        self._reset_source()
+        result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+        self.assertEqual(result["status"], "updated")
+        self.doc.save.assert_called_once_with(ignore_permissions=False)
+
+    def test_apply_permission_and_save_failures_rollback_without_leaking_details(self):
+        ready = tea_entries.prepare_tea_entry_update(self.request)
+        self.source["permission"] = False
+        result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+        self.assertEqual(result["code"], "ERP_PERMISSION_DENIED")
+        self.assertNotIn("RAW-SENTINEL", str(result))
+        self.doc.save.assert_not_called()
+        self.db.rollback.assert_called_once()
+        self.db.commit.assert_not_called()
+
+        self._reset_source()
+        self.source["permission"] = True
+        self.db.rollback.reset_mock()
+        ready = tea_entries.prepare_tea_entry_update(self.request)
+        self._reset_source()
+        self.save_error = RuntimeError("RAW-SENTINEL")
+        result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+        self.assertEqual(result["code"], "TEA_ENTRY_WRITE_FAILED")
+        self.assertNotIn("RAW-SENTINEL", str(result))
+        self.doc.save.assert_called_once_with(ignore_permissions=False)
+        self.db.rollback.assert_called_once()
+        self.db.commit.assert_not_called()
 
 
 if __name__ == "__main__":
