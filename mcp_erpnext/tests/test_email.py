@@ -150,31 +150,94 @@ class EmailServiceTests(unittest.TestCase):
         claim.assert_not_called()
         sendmail.assert_called_once()
 
-    def test_final_email_mode_change_blocks_generic_enqueue(self):
-        first_render = {
-            "status": "ok", "doctype": "Sales Order", "name": "SO-001",
-            "print_format_used": "Standard", "filename": "SO-001.pdf",
-            "mime_type": "application/pdf", "_pdf": b"approved-pdf",
-        }
-        renders = [first_render]
+    def test_wrong_mode_confirm_preserves_generic_approval_for_later_confirmation(self):
+        prepared = email.prepare_document_email("Sales Order", "SO-001", "sales")
+        token = prepared["approval_token"]
 
-        def render_after_policy_change(*_args):
-            if renders:
-                return renders.pop()
-            os.environ["MCP_EMAIL_MODE"] = "disabled"
-            return first_render
-
-        with patch.dict(os.environ, {"MCP_EMAIL_MODE": "direct"}), patch.object(
-            email.pdf_service,
-            "render_document_pdf",
-            side_effect=render_after_policy_change,
-        ), patch.object(email.frappe, "sendmail") as sendmail, patch.object(
-            email.frappe, "db", SimpleNamespace(commit=Mock(), rollback=Mock())
-        ) as db:
-            result = email.execute_document_email("Sales Order", "SO-001", "sales")
-        self.assertEqual(result["code"], "EMAIL_DISABLED")
+        with (
+            patch.dict(os.environ, {"MCP_EMAIL_MODE": "direct"}),
+            patch.object(email.frappe, "sendmail") as sendmail,
+        ):
+            rejected = email.confirm_document_email(token, "sales")
+        self.assertEqual(rejected["code"], "DIRECT_EXECUTION_REQUIRED")
+        self.assertIsNone(read_record(self.store, token).consumed_at)
         sendmail.assert_not_called()
-        db.commit.assert_not_called()
+
+        with (
+            patch.dict(os.environ, {"MCP_EMAIL_MODE": "approval_required"}),
+            patch.object(
+                email.frappe,
+                "sendmail",
+                return_value=SimpleNamespace(name="EMAIL-QUEUE-RETRIED"),
+            ) as sendmail,
+            patch.object(
+                email.frappe, "db", SimpleNamespace(commit=Mock(), rollback=Mock())
+            ),
+        ):
+            confirmed = email.confirm_document_email(token, "sales")
+        self.assertEqual(confirmed["status"], "queued")
+        sendmail.assert_called_once()
+
+    def test_final_email_mode_change_blocks_generic_direct_and_approval_enqueue(self):
+        first_render = {
+            "status": "ok",
+            "doctype": "Sales Order",
+            "name": "SO-001",
+            "print_format_used": "Standard",
+            "filename": "SO-001.pdf",
+            "mime_type": "application/pdf",
+            "_pdf": b"approved-pdf",
+        }
+        with self.subTest(mode="direct"):
+            renders = [first_render]
+
+            def flip_to_disabled(*_args):
+                if renders:
+                    return renders.pop()
+                os.environ["MCP_EMAIL_MODE"] = "disabled"
+                return first_render
+
+            with (
+                patch.dict(os.environ, {"MCP_EMAIL_MODE": "direct"}),
+                patch.object(
+                    email.pdf_service,
+                    "render_document_pdf",
+                    side_effect=flip_to_disabled,
+                ),
+                patch.object(email.frappe, "sendmail") as sendmail,
+                patch.object(
+                    email.frappe, "db", SimpleNamespace(commit=Mock(), rollback=Mock())
+                ) as db,
+            ):
+                result = email.execute_document_email("Sales Order", "SO-001", "sales")
+            self.assertEqual(result["code"], "EMAIL_DISABLED")
+            sendmail.assert_not_called()
+            db.commit.assert_not_called()
+
+        with self.subTest(mode="approval_required"):
+            prepared = email.prepare_document_email("Sales Order", "SO-001", "sales")
+            def flip_approval_mode(*_args):
+                os.environ["MCP_EMAIL_MODE"] = "direct"
+                return first_render
+
+            with (
+                patch.dict(os.environ, {"MCP_EMAIL_MODE": "approval_required"}),
+                patch.object(
+                    email.pdf_service,
+                    "render_document_pdf",
+                    side_effect=flip_approval_mode,
+                ),
+                patch.object(email.frappe, "sendmail") as sendmail,
+                patch.object(
+                    email.frappe, "db", SimpleNamespace(commit=Mock(), rollback=Mock())
+                ) as db,
+            ):
+                result = email.confirm_document_email(
+                    prepared["approval_token"], "sales"
+                )
+            self.assertEqual(result["code"], "DIRECT_EXECUTION_REQUIRED")
+            sendmail.assert_not_called()
+            db.commit.assert_not_called()
 
     def test_document_email_approval_is_independent_of_create_mode(self):
         for mode in ("disabled", "direct"):

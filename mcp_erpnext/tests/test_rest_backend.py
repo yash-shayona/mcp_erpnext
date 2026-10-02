@@ -536,16 +536,78 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                 {"approval_token": "opaque", "password": "secret"},
             )
 
-        with self.assertRaises(remote_operations.RemoteOperationError):
-            remote_operations.execute_remote_operation(
+        for operation, arguments, excluded in (
+            (
+                "prepare_customer_service_credential_email",
+                {"credential_name": "CSC-1", "recipient_email": "a@example.com"},
+                (),
+            ),
+            (
                 "execute_customer_service_credential_email",
-                "all",
-                {
-                    "credential_name": "CSC-1",
-                    "recipient_email": "a@example.com",
-                    "mode": "direct",
-                },
-            )
+                {"credential_name": "CSC-1", "recipient_email": "a@example.com"},
+                (),
+            ),
+            (
+                "confirm_customer_service_credential_email",
+                {"approval_token": "opaque"},
+                ("approval_token",),
+            ),
+        ):
+            for field in (
+                "email_mode",
+                "MCP_EMAIL_MODE",
+                "approval_mode",
+                "MCP_APPROVAL_MODE",
+                "policy",
+                "approved",
+                "approval_token",
+                "ignore_permissions",
+            ):
+                if field in excluded:
+                    continue
+                with (
+                    self.subTest(operation=operation, override=field),
+                    self.assertRaises(remote_operations.RemoteOperationError),
+                ):
+                    remote_operations.execute_remote_operation(
+                        operation,
+                        "all",
+                        {**arguments, field: "direct"},
+                    )
+
+    def test_document_email_rejects_every_rest_policy_override_alias(self):
+        request = {
+            "doctype": "Purchase Order",
+            "name": "PO-001",
+        }
+        for operation, arguments, excluded in (
+            ("prepare_document_email", request, ()),
+            ("execute_document_email", request, ()),
+            (
+                "confirm_document_email",
+                {"approval_token": "opaque"},
+                ("approval_token",),
+            ),
+        ):
+            for field in (
+                "email_mode",
+                "MCP_EMAIL_MODE",
+                "approval_mode",
+                "MCP_APPROVAL_MODE",
+                "policy",
+                "approved",
+                "approval_token",
+                "ignore_permissions",
+            ):
+                if field in excluded:
+                    continue
+                with (
+                    self.subTest(operation=operation, override=field),
+                    self.assertRaises(remote_operations.RemoteOperationError),
+                ):
+                    remote_operations.execute_remote_operation(
+                        operation, "purchase", {**arguments, field: "direct"}
+                    )
 
     def test_document_email_execute_is_a_fixed_profile_aware_remote_operation(self):
         with patch.object(

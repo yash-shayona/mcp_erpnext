@@ -328,6 +328,25 @@ class ProfileRegistrationTests(unittest.TestCase):
         self.assertEqual(inventories[1], inventories[2])
         self.assertIn("execute_document_email", inventories[0])
 
+        all_base = _settings(MCPProfile.ALL)
+        all_inventories = [
+            [
+                tool.name
+                for tool in asyncio.run(
+                    create_mcp(replace(all_base, email_mode=mode)).list_tools()
+                )
+            ]
+            for mode in LifecycleActionMode
+        ]
+        self.assertEqual(all_inventories[0], all_inventories[1])
+        self.assertEqual(all_inventories[1], all_inventories[2])
+        for name in (
+            "prepare_customer_service_credential_email",
+            "confirm_customer_service_credential_email",
+            "execute_customer_service_credential_email",
+        ):
+            self.assertIn(name, all_inventories[0])
+
     def test_create_mcp_rejects_manual_invalid_lifecycle_mode(self):
         with self.assertRaisesRegex(RuntimeError, "MCP_UPDATE_MODE"):
             create_mcp(replace(_settings(MCPProfile.SALES), update_mode="unsafe"))
