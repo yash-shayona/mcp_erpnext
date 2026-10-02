@@ -15,35 +15,10 @@ import frappe
 from frappe.utils.logger import get_logger
 from mcp_identity.identity import MCPIdentityError
 
+from .public_errors import definition_for
+
 ResultT = TypeVar("ResultT")
 _LOGGER_LOCK = Lock()
-
-_PUBLIC_MESSAGES = {
-    "MCP_AUTHENTICATION_MISSING": "MCP authentication is required.",
-    "MCP_AUTHENTICATION_INVALID": "MCP authentication failed.",
-    "MCP_USER_IDENTITY_MISSING": "MCP user identity is required.",
-    "MCP_USER_NOT_FOUND": "The requested MCP user is not configured.",
-    "MCP_USER_DISABLED": "The requested MCP user is disabled.",
-    "MCP_IDENTITY_CONFIGURATION_ERROR": "The MCP identity configuration is incomplete.",
-    "ERP_PERMISSION_DENIED": (
-        "The configured ERPNext user does not have permission for that request. "
-        "Please contact your administrator."
-    ),
-    "ORDER_CREATE_UNAVAILABLE": (
-        "I couldn't complete the Sales Order request right now. "
-        "Please contact your administrator for assistance."
-    ),
-    "ORDER_PREVIEW_UNAVAILABLE": "I couldn't prepare the Sales Order preview right now. Please try again later.",
-    "ERP_REQUEST_FAILED": "I couldn't complete that ERPNext request right now. Please try again later.",
-    "MCP_REMOTE_REQUEST_INVALID": "The remote ERPNext request is invalid.",
-    "MCP_REMOTE_RESPONSE_INVALID": "The remote ERPNext response is invalid.",
-    "CREDENTIAL_SCHEMA_UNAVAILABLE": (
-        "Customer Service Credential capability is unavailable on this site."
-    ),
-    "TEA_ENTRY_SCHEMA_UNAVAILABLE": (
-        "Tea Entry capability is unavailable on this site."
-    ),
-}
 
 ERROR_REFERENCE_PREFIX = "MCP-ERR"
 
@@ -97,8 +72,9 @@ def public_error(
     return {
         "status": "error",
         "code": code,
-        "message": message
-        or _PUBLIC_MESSAGES.get(code, _PUBLIC_MESSAGES["ERP_REQUEST_FAILED"]),
+        # ``message`` is retained for existing callers during phased migration.
+        # New centralized callers should use public_errors.defined_error().
+        "message": message or definition_for(code).message,
         "reference": reference or new_error_reference(),
         "retryable": retryable,
     }
