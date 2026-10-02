@@ -193,6 +193,33 @@ class PublicErrorFoundationTests(unittest.TestCase):
                     PUBLIC_ERROR_DEFINITIONS["ERP_REQUEST_FAILED"],
                 )
 
+    def test_er03_messages_use_business_wording(self):
+        expected_messages = {
+            "AMOUNT_EXCEEDS_AVAILABLE": "The requested allocation exceeds the amount currently available from the source or invoice.",
+            "BANK_AMOUNT_REQUIRED": "A bank amount is required when the payment and destination currencies differ.",
+            "INVALID_BANK_AMOUNT": "The bank amount must be a positive, valid number.",
+            "PAYMENT_TERMS_UNSUPPORTED": "This reconciliation does not support allocation by payment terms.",
+            "RECONCILIATION_ALREADY_RUNNING": "A Payment Reconciliation process is already running for this Customer and Company.",
+            "SALES_INVOICE_NOT_SUBMITTED": "The Sales Invoice must be submitted before a payment can be created.",
+            "SALES_ORDER_NOT_SUBMITTED": "The Sales Order must be submitted before an advance payment can be created.",
+            "UNSUPPORTED_SOURCE": "This Purchase Order cannot be converted through this operation.",
+            "NATIVE_PAYMENT_STATE_INVALID": "The Payment Entry could not be prepared as a draft.",
+            "NATIVE_PAYMENT_VALIDATION_FAILED": "The Payment Entry did not pass validation.",
+            "NATIVE_RECONCILIATION_UNAVAILABLE": "Reconciliation is unavailable with the current setup.",
+            "NATIVE_VALIDATION_FAILED": "The document did not pass validation.",
+            "UNSUPPORTED_NATIVE_PAYMENT_STATE": "This payment cannot be processed because it includes tax, withholding, or deduction amounts.",
+        }
+        implementation_terms = ("native", "v1", "bank_amount", "deferred workflow")
+
+        for code, message in expected_messages.items():
+            with self.subTest(code=code):
+                definition = definition_for(code)
+                self.assertEqual(definition.message, message)
+                self.assertFalse(definition.retryable)
+                lowered_message = definition.message.lower()
+                for term in implementation_terms:
+                    self.assertNotIn(term, lowered_message)
+
 
     def test_logged_defined_error_correlates_without_a_public_message_override(self):
         with (

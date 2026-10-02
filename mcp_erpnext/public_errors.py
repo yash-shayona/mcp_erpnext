@@ -282,7 +282,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "AMOUNT_EXCEEDS_AVAILABLE": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
-        "The requested allocation exceeds the current native source or invoice availability.",
+        "The requested allocation exceeds the amount currently available from the source or invoice.",
     ),
     "AMOUNT_EXCEEDS_OUTSTANDING": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
@@ -290,7 +290,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "BANK_AMOUNT_REQUIRED": PublicErrorDefinition(
         ErrorCategory.INVALID_REQUEST,
-        "bank_amount is required when destination currency differs.",
+        "A bank amount is required when the payment and destination currencies differ.",
     ),
     "COMPANY_MISMATCH": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
@@ -341,7 +341,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "INVALID_BANK_AMOUNT": PublicErrorDefinition(
         ErrorCategory.INVALID_REQUEST,
-        "bank_amount must be a positive finite number.",
+        "The bank amount must be a positive, valid number.",
     ),
     "INVALID_BUSINESS_DEFAULTS": PublicErrorDefinition(
         ErrorCategory.CONFIGURATION_UNAVAILABLE,
@@ -448,19 +448,19 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "NATIVE_PAYMENT_STATE_INVALID": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
-        "The Payment Entry could not be prepared in Draft state.",
+        "The Payment Entry could not be prepared as a draft.",
     ),
     "NATIVE_PAYMENT_VALIDATION_FAILED": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
-        "ERPNext rejected the Payment Entry during validation.",
+        "The Payment Entry did not pass validation.",
     ),
     "NATIVE_RECONCILIATION_UNAVAILABLE": PublicErrorDefinition(
         ErrorCategory.CONFIGURATION_UNAVAILABLE,
-        "The reconciliation could not be prepared safely with the current setup.",
+        "Reconciliation is unavailable with the current setup.",
     ),
     "NATIVE_VALIDATION_FAILED": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
-        "ERPNext rejected the document during validation.",
+        "The document did not pass validation.",
     ),
     "NONZERO_DIFFERENCE": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
@@ -491,7 +491,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "PAYMENT_TERMS_UNSUPPORTED": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
-        "Payment-term-specific allocation is outside this V1 reconciliation capability.",
+        "This reconciliation does not support allocation by payment terms.",
     ),
     "QUANTITY_EXCEEDS_REMAINING": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
@@ -503,7 +503,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "RECONCILIATION_ALREADY_RUNNING": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
-        "A native Payment Reconciliation job is already running for this Customer and Company.",
+        "A Payment Reconciliation process is already running for this Customer and Company.",
     ),
     "RECONCILIATION_FAILED": PublicErrorDefinition(
         ErrorCategory.TEMPORARY_FAILURE,
@@ -535,7 +535,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "SALES_INVOICE_NOT_SUBMITTED": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
-        "Customer payment V1 requires a submitted Sales Invoice.",
+        "The Sales Invoice must be submitted before a payment can be created.",
     ),
     "SALES_ORDER_NOT_ELIGIBLE": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
@@ -547,7 +547,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "SALES_ORDER_NOT_SUBMITTED": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
-        "Customer advance V1 requires a submitted Sales Order.",
+        "The Sales Order must be submitted before an advance payment can be created.",
     ),
     "SOURCE_NOT_ELIGIBLE": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
@@ -595,7 +595,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "UNSUPPORTED_NATIVE_PAYMENT_STATE": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
-        "Tax, withholding, or deduction amounts are not supported in this payment flow.",
+        "This payment cannot be processed because it includes tax, withholding, or deduction amounts.",
     ),
     "UNSUPPORTED_QUOTATION_PARTY": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
@@ -603,7 +603,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "UNSUPPORTED_SOURCE": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
-        "This Purchase Order conversion belongs to a deferred Purchase Receipt workflow.",
+        "This Purchase Order cannot be converted through this operation.",
     ),
     "UNSUPPORTED_SOURCE_ROW": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
