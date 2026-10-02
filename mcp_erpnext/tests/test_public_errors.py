@@ -5,13 +5,20 @@ from unittest.mock import patch
 
 from mcp_erpnext.contracts.common import ToolError
 from mcp_erpnext.instructions.base import BASE_INSTRUCTIONS
-from mcp_erpnext.observability import logged_public_error, public_error
+from mcp_erpnext.approvals import confirmation_failure
+from mcp_erpnext.observability import (
+    logged_defined_error,
+    logged_public_error,
+    public_error,
+)
 from mcp_erpnext.public_errors import (
     ErrorCategory,
     PUBLIC_ERROR_DEFINITIONS,
     defined_error,
     definition_for,
 )
+from mcp_erpnext.services.common import email, pdf, read
+from mcp_erpnext.remote_api import _safe_error
 
 
 class PublicErrorFoundationTests(unittest.TestCase):
@@ -48,11 +55,103 @@ class PublicErrorFoundationTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             defined_error("ERP_REQUEST_FAILED", message="database password=secret")
 
+    def test_catalog_covers_the_migrated_core_and_common_codes(self):
+        codes = {
+            "CREATE_DISABLED", "UPDATE_DISABLED", "CANCEL_DISABLED", "DELETE_DISABLED",
+            "APPROVAL_REQUIRED", "DIRECT_EXECUTION_REQUIRED", "CONFIRMATION_EXPIRED",
+            "CONFIRMATION_CONSUMED", "CONFIRMATION_UNAVAILABLE",
+            "TRUSTED_APPROVAL_UNAVAILABLE", "PERMISSION_DENIED", "ERP_PERMISSION_DENIED",
+            "DOCTYPE_NOT_ALLOWED", "INVALID_TARGET", "STALE_CONFIRMATION",
+            "LIFECYCLE_VALIDATION_FAILED", "LINKED_DOCUMENT", "INVALID_DOCUMENT_STATE",
+            "INVALID_PRINT_FORMAT", "PDF_RENDER_FAILED", "ACTION_MISMATCH",
+            "AMBIGUOUS_CHILD_TARGET", "CHILD_TARGET_NOT_ALLOWED", "CONFIRMATION_REQUIRED",
+            "DELETE_BLOCKED", "DOCUMENT_NOT_FOUND", "DUPLICATE_ITEM_ROW",
+            "FIELD_NOT_WRITABLE", "INVALID_CHILD_TARGET", "INVALID_FIELD", "INVALID_FIELD_VALUE",
+            "INVALID_ITEM", "INVALID_ITEM_DETAILS", "INVALID_LINK", "NOT_SUBMITTABLE",
+            "PAYMENT_SCHEDULE_UNAVAILABLE", "PROFILE_MISMATCH", "EMAIL_ACCOUNT_NOT_CONFIGURED",
+            "EMAIL_PREPARE_FAILED", "EMAIL_QUEUE_FAILED", "INVALID_EMAIL", "INVALID_RECIPIENT",
+            "INVALID_RECIPIENT_SCOPE", "PREPARED_STATE_CHANGED", "RECIPIENT_NOT_FOUND",
+            "SELF_RECIPIENT_UNAVAILABLE", "MCP_REMOTE_REQUEST_INVALID",
+            "MCP_REMOTE_RESPONSE_INVALID", "EMAIL_DISABLED", "ORDER_CREATE_UNAVAILABLE",
+            "ORDER_PREVIEW_UNAVAILABLE", "ERP_REQUEST_FAILED", "MCP_AUTHENTICATION_MISSING",
+            "MCP_AUTHENTICATION_INVALID", "MCP_USER_IDENTITY_MISSING", "MCP_USER_NOT_FOUND",
+            "MCP_USER_DISABLED", "MCP_IDENTITY_CONFIGURATION_ERROR",
+        }
+        self.assertLessEqual(codes, PUBLIC_ERROR_DEFINITIONS.keys())
+
+    def test_logged_defined_error_correlates_without_a_public_message_override(self):
+        with (
+            patch("mcp_erpnext.observability._log_tool_failure") as log_failure,
+            patch(
+                "mcp_erpnext.observability.new_error_reference",
+                return_value="MCP-ERR-ABCDEF12",
+            ),
+        ):
+            result = logged_defined_error("test_tool", "LIFECYCLE_VALIDATION_FAILED")
+
+        self.assertEqual(result["message"], definition_for("LIFECYCLE_VALIDATION_FAILED").message)
+        self.assertEqual(result["reference"], "MCP-ERR-ABCDEF12")
+        self.assertEqual(log_failure.call_args.kwargs["reference"], result["reference"])
+        self.assertEqual(log_failure.call_args.kwargs["code"], result["code"])
+        with self.assertRaises(TypeError):
+            logged_defined_error("test_tool", "ERP_REQUEST_FAILED", message="raw diagnostic")
+
+    def test_common_read_pdf_and_email_errors_use_catalog_messages(self):
+        cases = (
+            (read._error("DOCTYPE_NOT_ALLOWED", "internal details"), "DOCTYPE_NOT_ALLOWED"),
+            (pdf._error("INVALID_PRINT_FORMAT", "format path /private"), "INVALID_PRINT_FORMAT"),
+            (email._error("INVALID_EMAIL", "recipient token=private"), "INVALID_EMAIL"),
+        )
+        for result, code in cases:
+            with self.subTest(code=code):
+                self.assertEqual(set(result), {"status", "code", "message", "reference", "retryable"})
+                self.assertEqual(result["status"], "error")
+                self.assertEqual(result["code"], code)
+                self.assertEqual(result["message"], definition_for(code).message)
+                self.assertNotIn("internal details", result["message"])
+
+    def test_policy_and_permission_categories_remain_distinct(self):
+        capability = defined_error("DELETE_DISABLED")
+        permission = defined_error("PERMISSION_DENIED")
+        self.assertEqual(definition_for(capability["code"]).category, ErrorCategory.CAPABILITY_UNAVAILABLE)
+        self.assertEqual(definition_for(permission["code"]).category, ErrorCategory.PERMISSION_DENIED)
+        self.assertNotEqual(capability["message"], permission["message"])
+
+    def test_approval_states_keep_codes_and_retry_semantics_with_catalog_wording(self):
+        expected = {
+            "expired": ("CONFIRMATION_EXPIRED", True),
+            "consumed": ("CONFIRMATION_CONSUMED", False),
+            "unavailable": ("CONFIRMATION_UNAVAILABLE", False),
+            "not_trusted": ("TRUSTED_APPROVAL_UNAVAILABLE", False),
+        }
+        for state, (code, retryable) in expected.items():
+            with self.subTest(state=state):
+                actual_code, message, actual_retryable = confirmation_failure(state, "document")
+                self.assertEqual((actual_code, actual_retryable), (code, retryable))
+                self.assertEqual(message, definition_for(code).message)
+
+    def test_rest_error_message_matches_direct_catalog_semantics(self):
+        with (
+            patch("mcp_erpnext.observability._log_tool_failure"),
+            patch(
+                "mcp_erpnext.observability.new_error_reference",
+                return_value="MCP-ERR-ABCDEF12",
+            ),
+        ):
+            remote = _safe_error("ERP_PERMISSION_DENIED")
+        direct = defined_error("ERP_PERMISSION_DENIED", reference="MCP-ERR-ABCDEF12")
+        self.assertEqual(remote["code"], direct["code"])
+        self.assertEqual(remote["message"], direct["message"])
+        self.assertEqual(remote["retryable"], direct["retryable"])
+
     def test_explicit_retry_override_is_deterministic(self):
         self.assertFalse(
             defined_error("ERP_REQUEST_FAILED", retryable=False)["retryable"]
         )
         self.assertTrue(defined_error("DELETE_DISABLED")["retryable"] is False)
+        for code in ("PDF_RENDER_FAILED", "EMAIL_PREPARE_FAILED", "EMAIL_QUEUE_FAILED"):
+            with self.subTest(code=code):
+                self.assertFalse(defined_error(code)["retryable"])
 
     def test_tool_error_envelope_fields_remain_compatible(self):
         self.assertEqual(

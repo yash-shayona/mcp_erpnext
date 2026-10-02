@@ -7,7 +7,7 @@ from typing import Any
 
 import frappe
 
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 
 MAX_LIMIT = 50
 
@@ -78,8 +78,21 @@ _DOCUMENTS = {
         "child_table": "items",
     },
     "Delivery Note": {
-        "party_field": "customer", "primary_field": "posting_date", "secondary_field": "posting_time",
-        "fields": ("name", "customer", "customer_name", "posting_date", "posting_time", "docstatus", "status", "company", "currency", "grand_total"),
+        "party_field": "customer",
+        "primary_field": "posting_date",
+        "secondary_field": "posting_time",
+        "fields": (
+            "name",
+            "customer",
+            "customer_name",
+            "posting_date",
+            "posting_time",
+            "docstatus",
+            "status",
+            "company",
+            "currency",
+            "grand_total",
+        ),
         "child_table": "items",
     },
 }
@@ -88,13 +101,7 @@ _ITEM_FIELDS = ("item_code", "item_name", "qty", "rate", "amount")
 
 
 def _error(code: str, message: str) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": False,
-    }
+    return defined_error(code)
 
 
 def _definition(doctype: str) -> dict[str, Any] | None:
@@ -146,7 +153,8 @@ def _filters(doctype: str, criteria: dict[str, Any]) -> dict[str, Any]:
         filters["status"] = criteria["status"].strip()
     if criteria.get("date_from"):
         filters[definition["primary_field"]] = [
-            ">=", _normalise_dates(criteria["date_from"])
+            ">=",
+            _normalise_dates(criteria["date_from"]),
         ]
     if criteria.get("date_to"):
         if criteria.get("date_from"):
@@ -159,7 +167,8 @@ def _filters(doctype: str, criteria: dict[str, Any]) -> dict[str, Any]:
             ]
         else:
             filters[definition["primary_field"]] = [
-                "<=", _normalise_dates(criteria["date_to"])
+                "<=",
+                _normalise_dates(criteria["date_to"]),
             ]
     return filters
 
@@ -213,9 +222,19 @@ def search_documents(
 
 def _profile_doctypes(profile: str) -> frozenset[str]:
     return {
-        "sales": frozenset({"Quotation", "Sales Order", "Sales Invoice", "Delivery Note"}),
+        "sales": frozenset(
+            {"Quotation", "Sales Order", "Sales Invoice", "Delivery Note"}
+        ),
         "purchase": frozenset({"Purchase Order"}),
-        "all": frozenset({"Quotation", "Sales Order", "Sales Invoice", "Delivery Note", "Purchase Order"}),
+        "all": frozenset(
+            {
+                "Quotation",
+                "Sales Order",
+                "Sales Invoice",
+                "Delivery Note",
+                "Purchase Order",
+            }
+        ),
     }.get(profile, frozenset())
 
 

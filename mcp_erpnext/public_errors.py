@@ -167,7 +167,6 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     "PDF_RENDER_FAILED": PublicErrorDefinition(
         ErrorCategory.TEMPORARY_FAILURE,
         "The document PDF could not be prepared. Please try again later.",
-        True,
     ),
     "DOCUMENT_NOT_FOUND": PublicErrorDefinition(
         ErrorCategory.NOT_FOUND, "The requested document was not found."
@@ -175,7 +174,6 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     "EMAIL_QUEUE_FAILED": PublicErrorDefinition(
         ErrorCategory.TEMPORARY_FAILURE,
         "The document email could not be queued. Please try again later.",
-        True,
     ),
     "PREPARED_STATE_CHANGED": PublicErrorDefinition(
         ErrorCategory.STALE_STATE,
@@ -247,7 +245,6 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     "EMAIL_PREPARE_FAILED": PublicErrorDefinition(
         ErrorCategory.TEMPORARY_FAILURE,
         "The document email could not be prepared. Please try again later.",
-        True,
     ),
     "INVALID_EMAIL": PublicErrorDefinition(
         ErrorCategory.INVALID_REQUEST, "The email subject or message is invalid."

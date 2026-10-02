@@ -8,20 +8,14 @@ from urllib.parse import quote
 import frappe
 from frappe.translate import print_language
 
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from .read import _DOCUMENTS, _profile_doctypes
 
 PDF_MIME_TYPE = "application/pdf"
 
 
 def _error(code: str, message: str) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": False,
-    }
+    return defined_error(code)
 
 
 def _artifact_uri(doctype: str, name: str) -> str:

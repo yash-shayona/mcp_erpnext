@@ -9,7 +9,7 @@ from typing import Any
 import frappe
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from .observability import logged_public_error
+from .observability import logged_defined_error
 from .remote_operations import RemoteOperationError, execute_remote_operation
 
 
@@ -23,11 +23,9 @@ class _RemoteEnvelope(BaseModel):
 
 def _safe_error(code: str, *, level: str = "warning") -> dict[str, object]:
     """Use the shared safe-error and correlation-log convention remotely."""
-    return logged_public_error(
+    return logged_defined_error(
         "remote_api",
         code,
-        message="The remote ERPNext request could not be completed.",
-        retryable=False,
         level=level,
     )
 

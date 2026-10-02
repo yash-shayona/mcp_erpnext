@@ -14,7 +14,8 @@ from frappe.utils import flt, get_datetime, getdate
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import logged_public_error, new_error_reference
+from ...observability import logged_defined_error, new_error_reference
+from ...public_errors import defined_error
 from ...settings import WriteMode
 from ..selling.payment_terms import set_native_payment_schedule
 from ..selling.terms import apply_selling_terms
@@ -144,13 +145,7 @@ _SYSTEM_FIELDS = frozenset(
 
 
 def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+    return defined_error(code, retryable=retryable)
 
 
 def _user() -> str:
@@ -669,14 +664,21 @@ def _plan_update(
                 return (
                     None,
                     None,
-                    logged_public_error(
+                    logged_defined_error(
                         "prepare_document_update",
                         "LIFECYCLE_VALIDATION_FAILED",
-                        message="ERPNext could not validate the Purchase Order commercial terms.",
                         level="exception",
                     ),
                 )
-            return None, None, _error("LIFECYCLE_VALIDATION_FAILED", str(error))
+            return (
+                None,
+                None,
+                logged_defined_error(
+                    "prepare_document_update",
+                    "LIFECYCLE_VALIDATION_FAILED",
+                    level="exception",
+                ),
+            )
     preview = {
         **_base_preview(doc, "UPDATE"),
         "changes": [
@@ -887,7 +889,13 @@ def _plan_child_add(
             if hasattr(doc, "run_method"):
                 doc.run_method("validate")
     except Exception as error:
-        return None, None, _error("LIFECYCLE_VALIDATION_FAILED", str(error))
+        return (
+            None,
+            None,
+            logged_defined_error(
+                "prepare_child_add", "LIFECYCLE_VALIDATION_FAILED", level="exception"
+            ),
+        )
     prepared_row = _child_row_values(new_row, child_meta)
     preview = {
         **_base_preview(doc, "ADD_ITEM"),
@@ -987,7 +995,15 @@ def _plan_child_remove(
         try:
             _refresh_purchase_order(doc)
         except Exception as error:
-            return None, None, _error("LIFECYCLE_VALIDATION_FAILED", str(error))
+            return (
+                None,
+                None,
+                logged_defined_error(
+                    "prepare_child_remove",
+                    "LIFECYCLE_VALIDATION_FAILED",
+                    level="exception",
+                ),
+            )
     elif hasattr(doc, "calculate_taxes_and_totals"):
         doc.calculate_taxes_and_totals()
     return (
@@ -1456,17 +1472,18 @@ def _apply_mutation(
         )
     except frappe.LinkExistsError as error:
         frappe.db.rollback()
-        return _error("LINKED_DOCUMENT", str(error))
+        return logged_defined_error("lifecycle", "LINKED_DOCUMENT", level="warning")
     except Exception as error:
         frappe.db.rollback()
         if doc.doctype == "Purchase Order" and payload.get("commercial"):
-            return logged_public_error(
+            return logged_defined_error(
                 "confirm_document_update",
                 "LIFECYCLE_VALIDATION_FAILED",
-                message="ERPNext could not validate the Purchase Order commercial terms.",
                 level="exception",
             )
-        return _error("LIFECYCLE_VALIDATION_FAILED", str(error))
+        return logged_defined_error(
+            "lifecycle", "LIFECYCLE_VALIDATION_FAILED", level="exception"
+        )
     result_status = {
         "update": "updated",
         "child_add": "added",

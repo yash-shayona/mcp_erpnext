@@ -15,6 +15,7 @@ import frappe
 from redis.exceptions import WatchError
 
 from .settings import ApprovalMode
+from .public_errors import definition_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -319,25 +320,13 @@ approvals = ApprovalStore()
 def confirmation_failure(state: ApprovalClaim, subject: str) -> tuple[str, str, bool]:
     """Map shared approval-guard states to the safe public error envelope."""
     if state == "expired":
-        return (
-            "CONFIRMATION_EXPIRED",
-            f"This {subject} confirmation has expired. Please prepare it again.",
-            True,
-        )
+        code = "CONFIRMATION_EXPIRED"
+        return code, definition_for(code).message, True
     if state == "consumed":
-        return (
-            "CONFIRMATION_CONSUMED",
-            f"This {subject} confirmation has already been used or declined. Please prepare it again.",
-            False,
-        )
+        code = "CONFIRMATION_CONSUMED"
+        return code, definition_for(code).message, False
     if state == "not_trusted":
-        return (
-            "TRUSTED_APPROVAL_UNAVAILABLE",
-            f"A server-verified human approval is required before this {subject} can be created.",
-            False,
-        )
-    return (
-        "CONFIRMATION_UNAVAILABLE",
-        f"This {subject} confirmation is not available in the current session.",
-        False,
-    )
+        code = "TRUSTED_APPROVAL_UNAVAILABLE"
+        return code, definition_for(code).message, False
+    code = "CONFIRMATION_UNAVAILABLE"
+    return code, definition_for(code).message, False

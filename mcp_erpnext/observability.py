@@ -15,7 +15,7 @@ import frappe
 from frappe.utils.logger import get_logger
 from mcp_identity.identity import MCPIdentityError
 
-from .public_errors import definition_for
+from .public_errors import defined_error, definition_for
 
 ResultT = TypeVar("ResultT")
 _LOGGER_LOCK = Lock()
@@ -108,6 +108,26 @@ def logged_public_error(
     )
 
 
+def logged_defined_error(
+    tool_name: str,
+    code: str,
+    *,
+    retryable: bool | None = None,
+    level: str = "warning",
+) -> dict[str, object]:
+    """Log a correlated failure and return catalog-owned public wording."""
+    reference = new_error_reference()
+    _log_tool_failure(
+        level,
+        reference=reference,
+        code=code,
+        tool_name=tool_name,
+        site=getattr(frappe.local, "site", None),
+        user=getattr(getattr(frappe.local, "session", None), "user", None),
+    )
+    return defined_error(code, reference=reference, retryable=retryable)
+
+
 def _error_code_for_tool(tool_name: str) -> str:
     if tool_name == "confirm_sales_order":
         return "ORDER_CREATE_UNAVAILABLE"
@@ -183,7 +203,7 @@ def execute_tool(tool_name: str, operation: Callable[[], ResultT]) -> ResultT:
             site=site,
             user=user,
         )
-        return public_error(code, reference=reference)
+        return defined_error(code, reference=reference)
     except Exception as error:
         site = getattr(frappe.local, "site", None)
         user = getattr(getattr(frappe.local, "session", None), "user", None)
@@ -197,4 +217,4 @@ def execute_tool(tool_name: str, operation: Callable[[], ResultT]) -> ResultT:
             site=site,
             user=user,
         )
-        return public_error(code, reference=reference)
+        return defined_error(code, reference=reference)

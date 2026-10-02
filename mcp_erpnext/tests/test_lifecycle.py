@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from mcp_erpnext.approvals import ApprovalStore
 from mcp_erpnext.contracts.lifecycle import PrepareChildAddInput
+from mcp_erpnext.public_errors import PUBLIC_ERROR_DEFINITIONS
 from mcp_erpnext.services.common import lifecycle
 from mcp_erpnext.settings import ApprovalMode
 from mcp_erpnext.tests.approval_test_backend import FakeSharedApprovalBackend
@@ -218,16 +219,20 @@ class LifecycleServiceTests(unittest.TestCase):
             )
         self.assertEqual(result["code"], "UPDATE_DISABLED")
         self.assertEqual(
-            result["message"], "Document update is disabled by server policy."
+            result["message"],
+            "Updating this document is unavailable in the current setup.",
         )
         self.assertFalse(result["retryable"])
         lifecycle.frappe.get_doc.assert_not_called()
         self.assertTrue(self.approval_backend.is_empty())
 
     def test_direct_update_preview_and_execute_do_not_use_approval_store(self):
-        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}, clear=False), patch.object(
-            lifecycle.approvals, "create", wraps=lifecycle.approvals.create
-        ) as create:
+        with (
+            patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}, clear=False),
+            patch.object(
+                lifecycle.approvals, "create", wraps=lifecycle.approvals.create
+            ) as create,
+        ):
             preview = lifecycle.prepare_update(
                 {"doctype": "Sales Order", "name": "SO-001"},
                 [{"field": "remarks", "value": "Direct update"}],
@@ -252,8 +257,9 @@ class LifecycleServiceTests(unittest.TestCase):
             os.environ["MCP_UPDATE_MODE"] = "approval_required"
             return result
 
-        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}, clear=False), patch.object(
-            lifecycle, "_plan_update", side_effect=plan_and_flip
+        with (
+            patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}, clear=False),
+            patch.object(lifecycle, "_plan_update", side_effect=plan_and_flip),
         ):
             result = lifecycle.execute_update(
                 {"doctype": "Sales Order", "name": "SO-001"},
@@ -265,9 +271,10 @@ class LifecycleServiceTests(unittest.TestCase):
         self.database.commit.assert_not_called()
 
     def test_direct_mode_rejects_token_confirmation(self):
-        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}, clear=False), patch.object(
-            lifecycle.approvals, "claim_for_confirm_write"
-        ) as claim:
+        with (
+            patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}, clear=False),
+            patch.object(lifecycle.approvals, "claim_for_confirm_write") as claim,
+        ):
             result = lifecycle.confirm("update", "opaque", True, "sales")
         self.assertEqual(result["code"], "DIRECT_EXECUTION_REQUIRED")
         claim.assert_not_called()
@@ -325,7 +332,10 @@ class LifecycleServiceTests(unittest.TestCase):
 
     def test_submit_approval_is_independent_of_create_mode(self):
         for mode in ("disabled", "direct"):
-            with self.subTest(mode=mode), patch.dict(os.environ, {"MCP_CREATE_MODE": mode}):
+            with (
+                self.subTest(mode=mode),
+                patch.dict(os.environ, {"MCP_CREATE_MODE": mode}),
+            ):
                 result = lifecycle.prepare_submit(
                     {"doctype": "Sales Invoice", "name": "SINV-001"}, "sales"
                 )
@@ -588,6 +598,49 @@ class LifecycleServiceTests(unittest.TestCase):
             confirm_doc.native_calls,
             ["set_missing_values", "calculate_taxes_and_totals", "validate"],
         )
+
+    def test_native_validation_exception_is_logged_and_sanitized(self):
+        purchase_order = FakePurchaseOrderDocument()
+        purchase_order.run_method = Mock(
+            side_effect=RuntimeError("SQL password=private diagnostic")
+        )
+        lifecycle.frappe.get_doc.return_value = purchase_order
+        with patch("mcp_erpnext.observability._log_tool_failure") as log_failure:
+            result = lifecycle.prepare_update(
+                {"doctype": "Purchase Order", "name": "PO-001"},
+                [{"field": "schedule_date", "value": "2026-09-12"}],
+                "purchase",
+            )
+
+        self.assertEqual(result["code"], "LIFECYCLE_VALIDATION_FAILED")
+        self.assertEqual(
+            result["message"],
+            PUBLIC_ERROR_DEFINITIONS["LIFECYCLE_VALIDATION_FAILED"].message,
+        )
+        self.assertNotIn("SQL password", result["message"])
+        self.assertEqual(log_failure.call_args.kwargs["reference"], result["reference"])
+        self.assertEqual(log_failure.call_args.kwargs["code"], result["code"])
+
+    def test_linked_document_exception_is_logged_and_sanitized(self):
+        doc = FakeDocument()
+        doc.delete = Mock(
+            side_effect=lifecycle.frappe.LinkExistsError("linked name=private diagnostic")
+        )
+        with (
+            patch.dict(os.environ, {"MCP_DELETE_MODE": "direct"}, clear=False),
+            patch("mcp_erpnext.observability._log_tool_failure") as log_failure,
+        ):
+            result = lifecycle._apply_mutation(
+                "delete", {"plan": "delete"}, doc, "sales"
+            )
+
+        self.assertEqual(result["code"], "LINKED_DOCUMENT")
+        self.assertEqual(
+            result["message"], PUBLIC_ERROR_DEFINITIONS["LINKED_DOCUMENT"].message
+        )
+        self.assertNotIn("private diagnostic", result["message"])
+        self.assertEqual(log_failure.call_args.kwargs["reference"], result["reference"])
+        self.database.rollback.assert_called_once_with()
 
     def test_purchase_order_update_rejects_system_commercial_child_and_non_draft_changes(
         self,
@@ -948,12 +1001,12 @@ class LifecycleServiceTests(unittest.TestCase):
                 (
                     "cancel",
                     "CANCEL_DISABLED",
-                    "Document cancellation is disabled by server policy.",
+                    "Cancelling this document is unavailable in the current setup.",
                 ),
                 (
                     "delete",
                     "DELETE_DISABLED",
-                    "Document deletion is disabled by server policy.",
+                    "Deleting this document is unavailable in the current setup.",
                 ),
             ):
                 with self.subTest(action=action):
@@ -1059,8 +1112,9 @@ class LifecycleServiceTests(unittest.TestCase):
             os.environ["MCP_CANCEL_MODE"] = "approval_required"
             return result
 
-        with patch.dict(os.environ, {"MCP_CANCEL_MODE": "direct"}, clear=False), patch.object(
-            lifecycle, "_plan_action", side_effect=plan_and_flip
+        with (
+            patch.dict(os.environ, {"MCP_CANCEL_MODE": "direct"}, clear=False),
+            patch.object(lifecycle, "_plan_action", side_effect=plan_and_flip),
         ):
             result = lifecycle.execute_cancel(
                 {"doctype": "Sales Order", "name": "SO-001"}, "sales"
@@ -1079,8 +1133,9 @@ class LifecycleServiceTests(unittest.TestCase):
             os.environ["MCP_DELETE_MODE"] = "approval_required"
             return result
 
-        with patch.dict(os.environ, {"MCP_DELETE_MODE": "direct"}, clear=False), patch.object(
-            lifecycle, "_plan_action", side_effect=plan_and_flip
+        with (
+            patch.dict(os.environ, {"MCP_DELETE_MODE": "direct"}, clear=False),
+            patch.object(lifecycle, "_plan_action", side_effect=plan_and_flip),
         ):
             result = lifecycle.execute_delete(
                 {"doctype": "Sales Order", "name": "SO-001"}, "sales"
@@ -1114,7 +1169,9 @@ class LifecycleServiceTests(unittest.TestCase):
         prepare_doc = FakeDocument(docstatus=1)
         confirm_doc = FakeDocument(docstatus=1)
         lifecycle.frappe.get_doc.side_effect = [prepare_doc, confirm_doc]
-        with patch.dict(os.environ, {"MCP_CANCEL_MODE": "approval_required"}, clear=False):
+        with patch.dict(
+            os.environ, {"MCP_CANCEL_MODE": "approval_required"}, clear=False
+        ):
             prepared = lifecycle.prepare_cancel(
                 {"doctype": "Sales Order", "name": "SO-001"}, "sales"
             )
@@ -1126,10 +1183,14 @@ class LifecycleServiceTests(unittest.TestCase):
             return result
 
         with (
-            patch.dict(os.environ, {"MCP_CANCEL_MODE": "approval_required"}, clear=False),
+            patch.dict(
+                os.environ, {"MCP_CANCEL_MODE": "approval_required"}, clear=False
+            ),
             patch.object(lifecycle, "_revalidate", side_effect=revalidate_and_flip),
         ):
-            result = lifecycle.confirm("cancel", prepared["approval_token"], True, "sales")
+            result = lifecycle.confirm(
+                "cancel", prepared["approval_token"], True, "sales"
+            )
         self.assertEqual(result["code"], "DIRECT_EXECUTION_REQUIRED")
         self.assertEqual(confirm_doc.cancel_calls, 0)
         self.database.commit.assert_not_called()
