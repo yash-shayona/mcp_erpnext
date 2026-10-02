@@ -98,6 +98,24 @@ staleness, capability/configuration, and temporary failures.
   permission, not found, ambiguous/duplicate selection, business-state block,
   approval/interaction, stale state, configuration/capability, temporary
   operation, and unexpected failure. Codes were preserved during ER-04.
+- **ER-05 local review:** repository scans found standard error envelope
+  construction centralized in `public_errors.py` and `observability.py`, and
+  no runtime public `str(error)`/`repr(error)` path beyond the Sales Invoice
+  prerequisite classifier described above. Its native text is not returned. A
+  producer scan found and registered `CHILD_ROW_NOT_FOUND`. Direct and REST
+  presentation has representative parity coverage for every catalog category,
+  and the five-field `ToolError` contract remains covered. Unexpected
+  exceptions from non-read tools are non-retryable. Contact create/link/update
+  and primary Contact promotion failures tell clients to check the record
+  before retrying.
+- **ER-05 live boundary:** a connected Direct MCP read returned a raw Frappe
+  `datetime` that failed the typed string output contract. Runtime result
+  normalization now converts nested datetimes to ISO strings before output
+  validation, but the connected process was not reloaded with this change, so
+  the live read remains unverified. A disabled-delete live check was rejected
+  by automatic review because invoking a deletion tool carried irreversible
+  risk. ER-05 remains pending until safe Direct MCP checks run against the
+  updated runtime.
 
 ## Residual risks and migration map
 
@@ -110,8 +128,9 @@ staleness, capability/configuration, and temporary failures.
 - Write-policy public wording comes from the catalog while the policy module
   retains write-mode authorization semantics. Capability restrictions and
   permission denials remain distinct.
-- ER-05 must verify Direct/REST presentation parity and scan for remaining
-  legacy message overrides and raw exception paths across the repository.
+- ER-05 repository scans and local parity checks are covered by PATCH version
+  `4.0.6`; overall closure still requires live Direct MCP validation against
+  the updated runtime.
 
 | Phase | Ownership |
 | --- | --- |
@@ -155,5 +174,6 @@ present standard errors. It preserves the five-field `ToolError`, stable codes,
 permission and approval semantics, Contact relationship rules, credential
 secrecy/email safeguards, Tea Entry transaction behavior, and structured
 non-error states. The PATCH version is `4.0.5` after the `PROFILE_MISMATCH`
-business-wording correction. ER-05 remains repository-wide
-residual scanning, Direct/REST parity, and live Direct-MCP validation.
+business-wording correction. ER-05 repository scans and local parity checks
+are covered by PATCH version `4.0.6`; live Direct-MCP validation remains
+pending.

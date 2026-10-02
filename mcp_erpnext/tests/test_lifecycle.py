@@ -624,7 +624,9 @@ class LifecycleServiceTests(unittest.TestCase):
     def test_linked_document_exception_is_logged_and_sanitized(self):
         doc = FakeDocument()
         doc.delete = Mock(
-            side_effect=lifecycle.frappe.LinkExistsError("linked name=private diagnostic")
+            side_effect=lifecycle.frappe.LinkExistsError(
+                "linked name=private diagnostic"
+            )
         )
         with (
             patch.dict(os.environ, {"MCP_DELETE_MODE": "direct"}, clear=False),
@@ -976,6 +978,19 @@ class LifecycleServiceTests(unittest.TestCase):
                 "purchase",
             )["code"],
             "INVALID_DOCUMENT_STATE",
+        )
+        self.doc = FakePurchaseOrderDocument()
+        lifecycle.frappe.get_doc.return_value = self.doc
+        missing_row = lifecycle.prepare_child_remove(
+            {"doctype": "Purchase Order", "name": "PO-001"},
+            "items",
+            {"row_name": "missing-row"},
+            "purchase",
+        )
+        self.assertEqual(missing_row["code"], "CHILD_ROW_NOT_FOUND")
+        self.assertEqual(
+            missing_row["message"],
+            PUBLIC_ERROR_DEFINITIONS["CHILD_ROW_NOT_FOUND"].message,
         )
         prepare_doc = FakePurchaseOrderDocument()
         changed_doc = FakePurchaseOrderDocument()

@@ -191,6 +191,9 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
         ErrorCategory.AMBIGUOUS_SELECTION,
         "More than one matching item row was found. Select a specific row.",
     ),
+    "CHILD_ROW_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND, "The selected item row was not found."
+    ),
     "CHILD_TARGET_NOT_ALLOWED": PublicErrorDefinition(
         ErrorCategory.CAPABILITY_UNAVAILABLE,
         "This item row cannot be changed through this operation.",
@@ -623,7 +626,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "CONTACT_CREATE_FAILED": PublicErrorDefinition(
         ErrorCategory.TEMPORARY_FAILURE,
-        "The Contact could not be created. Please try again later.",
+        "The Contact creation result could not be confirmed. Check the Contact before trying again.",
     ),
     "CONTACT_DUPLICATE_SUSPECTED": PublicErrorDefinition(
         ErrorCategory.AMBIGUOUS_SELECTION,
@@ -658,7 +661,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "CONTACT_LINK_FAILED": PublicErrorDefinition(
         ErrorCategory.TEMPORARY_FAILURE,
-        "The Contact could not be linked to the Customer. Please try again.",
+        "The Contact link result could not be confirmed. Check the Contact before trying again.",
     ),
     "CONTACT_LINK_STALE_STATE": PublicErrorDefinition(
         ErrorCategory.STALE_STATE,
@@ -701,7 +704,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "CONTACT_UPDATE_FAILED": PublicErrorDefinition(
         ErrorCategory.TEMPORARY_FAILURE,
-        "The Contact could not be updated. Please try again later.",
+        "The Contact update result could not be confirmed. Check the Contact before trying again.",
     ),
     "CREDENTIAL_INACTIVE": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,
@@ -781,7 +784,7 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "PRIMARY_CONTACT_PROMOTION_FAILED": PublicErrorDefinition(
         ErrorCategory.TEMPORARY_FAILURE,
-        "The Customer's primary Contact could not be updated. Please try again.",
+        "The primary Contact update result could not be confirmed. Check the Customer before trying again.",
     ),
     "PRIMARY_CONTACT_PROMOTION_UNSAFE": PublicErrorDefinition(
         ErrorCategory.BUSINESS_RULE_BLOCKED,

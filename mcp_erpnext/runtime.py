@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import frappe
 from mcp_identity.identity import (
@@ -29,6 +30,19 @@ if TYPE_CHECKING:
 
 
 ResultT = TypeVar("ResultT")
+
+
+def _normalize_tool_result(value: Any) -> Any:
+    """Convert nested Frappe datetimes before typed MCP output validation."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _normalize_tool_result(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_tool_result(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_normalize_tool_result(item) for item in value)
+    return value
 
 
 def ensure_context(site: str | None = None, user: str | None = None) -> dict[str, str]:
@@ -55,32 +69,44 @@ def execute_tool_with_context(
     settings = MCPSettings.from_environment()
     if settings.backend == "rest":
         if rest_arguments is None:
-            return execute_tool(
+            return _normalize_tool_result(
+                execute_tool(
+                    tool_name,
+                    lambda: (_ for _ in ()).throw(
+                        RuntimeError("The REST operation payload is unavailable.")
+                    ),
+                )
+            )
+        return _normalize_tool_result(
+            execute_tool(
                 tool_name,
-                lambda: (_ for _ in ()).throw(
-                    RuntimeError("The REST operation payload is unavailable.")
+                lambda: ERPNextRestClient(settings).execute(
+                    operation=tool_name,
+                    profile=settings.profile.value,
+                    arguments=rest_arguments,
                 ),
             )
-        return execute_tool(
-            tool_name,
-            lambda: ERPNextRestClient(settings).execute(
-                operation=tool_name,
-                profile=settings.profile.value,
-                arguments=rest_arguments,
-            ),
         )
     if settings.transport == "stdio":
-        return execute_tool(tool_name, lambda: _run_stdio_tool(settings, operation))
-    if settings.transport == "streamable-http":
-        return execute_tool(
-            tool_name,
-            lambda: _run_configured_http_tool(settings, context, operation),
+        return _normalize_tool_result(
+            execute_tool(tool_name, lambda: _run_stdio_tool(settings, operation))
         )
-    return execute_tool(
-        tool_name,
-        lambda: (_ for _ in ()).throw(
-            RuntimeError("MCP_TRANSPORT must be either 'stdio' or 'streamable-http'.")
-        ),
+    if settings.transport == "streamable-http":
+        return _normalize_tool_result(
+            execute_tool(
+                tool_name,
+                lambda: _run_configured_http_tool(settings, context, operation),
+            )
+        )
+    return _normalize_tool_result(
+        execute_tool(
+            tool_name,
+            lambda: (_ for _ in ()).throw(
+                RuntimeError(
+                    "MCP_TRANSPORT must be either 'stdio' or 'streamable-http'."
+                )
+            ),
+        )
     )
 
 

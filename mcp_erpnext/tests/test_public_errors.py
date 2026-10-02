@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import ast
+import re
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
+from mcp_erpnext import observability
 from mcp_erpnext.contracts.common import ToolError
 from mcp_erpnext.instructions.base import BASE_INSTRUCTIONS
 from mcp_erpnext.approvals import confirmation_failure
@@ -79,6 +83,7 @@ class PublicErrorFoundationTests(unittest.TestCase):
             "PDF_RENDER_FAILED",
             "ACTION_MISMATCH",
             "AMBIGUOUS_CHILD_TARGET",
+            "CHILD_ROW_NOT_FOUND",
             "CHILD_TARGET_NOT_ALLOWED",
             "CONFIRMATION_REQUIRED",
             "DELETE_BLOCKED",
@@ -167,6 +172,16 @@ class PublicErrorFoundationTests(unittest.TestCase):
             "TEA_ENTRY_WRITE_FAILED",
         }
         self.assertLessEqual(codes, PUBLIC_ERROR_DEFINITIONS.keys())
+        for code in {
+            "CONTACT_CREATE_FAILED",
+            "CONTACT_LINK_FAILED",
+            "CONTACT_UPDATE_FAILED",
+            "PRIMARY_CONTACT_PROMOTION_FAILED",
+        }:
+            with self.subTest(non_retryable_write=code):
+                result = defined_error(code)
+                self.assertFalse(result["retryable"])
+                self.assertIn("before trying again", result["message"])
         for code in codes:
             with self.subTest(code=code):
                 result = defined_error(code)
@@ -420,6 +435,112 @@ class PublicErrorFoundationTests(unittest.TestCase):
         self.assertEqual(remote["message"], direct["message"])
         self.assertEqual(remote["retryable"], direct["retryable"])
 
+    def test_runtime_error_producer_literals_are_registered(self):
+        runtime_root = Path(__file__).resolve().parents[1]
+        code_pattern = re.compile(r"^[A-Z][A-Z0-9_]{2,}$")
+        code_argument = {
+            "logged_defined_error": 1,
+            "logged_public_error": 1,
+        }
+        runtime_codes = set()
+
+        for path in runtime_root.rglob("*.py"):
+            if "tests" in path.parts:
+                continue
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                name = (
+                    node.func.id
+                    if isinstance(node.func, ast.Name)
+                    else (
+                        node.func.attr if isinstance(node.func, ast.Attribute) else None
+                    )
+                )
+                if name not in {
+                    "defined_error",
+                    "logged_defined_error",
+                    "public_error",
+                    "logged_public_error",
+                    "_error",
+                    "_confirmation_error",
+                }:
+                    continue
+                index = code_argument.get(name, 0)
+                if len(node.args) <= index:
+                    continue
+                runtime_codes.update(
+                    child.value
+                    for child in ast.walk(node.args[index])
+                    if isinstance(child, ast.Constant)
+                    and isinstance(child.value, str)
+                    and code_pattern.fullmatch(child.value)
+                )
+
+        missing = runtime_codes - PUBLIC_ERROR_DEFINITIONS.keys()
+        self.assertEqual(missing, set())
+        fallback = PUBLIC_ERROR_DEFINITIONS["ERP_REQUEST_FAILED"]
+        for code in runtime_codes:
+            with self.subTest(code=code):
+                self.assertIsNot(definition_for(code), fallback)
+
+    def test_catalog_messages_avoid_internal_implementation_wording(self):
+        forbidden_phrases = (
+            "server policy",
+            "mcp profile",
+            "backend",
+            "redis",
+            "traceback",
+            "sql",
+            "approval token",
+            "direct execution",
+            "native",
+        )
+        implementation_token = re.compile(r"\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b")
+        for code, definition in PUBLIC_ERROR_DEFINITIONS.items():
+            message = definition.message
+            lowered = message.lower()
+            with self.subTest(code=code):
+                for phrase in forbidden_phrases:
+                    self.assertNotIn(phrase, lowered)
+                self.assertIsNone(implementation_token.search(message))
+
+    def test_direct_and_rest_errors_match_across_semantic_categories(self):
+        cases = {
+            ErrorCategory.CAPABILITY_UNAVAILABLE: "DELETE_DISABLED",
+            ErrorCategory.PERMISSION_DENIED: "ERP_PERMISSION_DENIED",
+            ErrorCategory.APPROVAL_REQUIRED: "APPROVAL_REQUIRED",
+            ErrorCategory.INTERACTION_REQUIRED: "DIRECT_EXECUTION_REQUIRED",
+            ErrorCategory.INVALID_REQUEST: "INVALID_TARGET",
+            ErrorCategory.NOT_FOUND: "DOCUMENT_NOT_FOUND",
+            ErrorCategory.AMBIGUOUS_SELECTION: "CONTACT_EMAIL_AMBIGUOUS",
+            ErrorCategory.BUSINESS_RULE_BLOCKED: "SOURCE_NOT_READY",
+            ErrorCategory.STALE_STATE: "STALE_CONFIRMATION",
+            ErrorCategory.CONFIGURATION_UNAVAILABLE: "EMAIL_ACCOUNT_NOT_CONFIGURED",
+            ErrorCategory.TEMPORARY_FAILURE: "EMAIL_QUEUE_FAILED",
+            ErrorCategory.UNEXPECTED_FAILURE: "ERP_REQUEST_FAILED",
+        }
+        with (
+            patch("mcp_erpnext.observability._log_tool_failure"),
+            patch(
+                "mcp_erpnext.observability.new_error_reference",
+                return_value="MCP-ERR-ABCDEF12",
+            ),
+        ):
+            for category, code in cases.items():
+                with self.subTest(category=category):
+                    direct = observability.execute_tool(
+                        "query_sales_orders",
+                        lambda selected=code: defined_error(selected),
+                    )
+                    remote = _safe_error(code)
+                    self.assertEqual(definition_for(code).category, category)
+                    self.assertEqual(
+                        (direct["code"], direct["message"], direct["retryable"]),
+                        (remote["code"], remote["message"], remote["retryable"]),
+                    )
+
     def test_explicit_retry_override_is_deterministic(self):
         self.assertFalse(
             defined_error("ERP_REQUEST_FAILED", retryable=False)["retryable"]
@@ -461,7 +582,11 @@ class PublicErrorFoundationTests(unittest.TestCase):
             "machine error codes",
             "correlation",
             "capability",
+            "denied access",
             "required approval",
+            "environment-variable names",
+            "server-policy details",
+            "technical troubleshooting",
             "do not invent",
         ):
             with self.subTest(expected=expected):

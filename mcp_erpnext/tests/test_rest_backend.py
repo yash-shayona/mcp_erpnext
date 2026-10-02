@@ -504,7 +504,10 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                     ),
                     (
                         "execute_customer_service_credential_email",
-                        {"credential_name": "CSC-1", "recipient_email": "a@example.com"},
+                        {
+                            "credential_name": "CSC-1",
+                            "recipient_email": "a@example.com",
+                        },
                     ),
                 ):
                     with (
@@ -537,7 +540,11 @@ class RemoteOperationRegistryTests(unittest.TestCase):
             remote_operations.execute_remote_operation(
                 "execute_customer_service_credential_email",
                 "all",
-                {"credential_name": "CSC-1", "recipient_email": "a@example.com", "mode": "direct"},
+                {
+                    "credential_name": "CSC-1",
+                    "recipient_email": "a@example.com",
+                    "mode": "direct",
+                },
             )
 
     def test_document_email_execute_is_a_fixed_profile_aware_remote_operation(self):
@@ -556,13 +563,20 @@ class RemoteOperationRegistryTests(unittest.TestCase):
                 },
             )
         self.assertEqual(result["status"], "queued")
-        self.assertEqual(execute.call_args.args[:3], ("Purchase Order", "PO-001", "purchase"))
+        self.assertEqual(
+            execute.call_args.args[:3], ("Purchase Order", "PO-001", "purchase")
+        )
         for invalid in (
             {"doctype": "Purchase Order", "name": "PO-001", "policy": "direct"},
             {"doctype": "Purchase Order", "name": "PO-001", "approval_token": "opaque"},
         ):
-            with self.subTest(invalid=invalid), self.assertRaises(remote_operations.RemoteOperationError):
-                remote_operations.execute_remote_operation("execute_document_email", "purchase", invalid)
+            with (
+                self.subTest(invalid=invalid),
+                self.assertRaises(remote_operations.RemoteOperationError),
+            ):
+                remote_operations.execute_remote_operation(
+                    "execute_document_email", "purchase", invalid
+                )
 
     def test_remote_prepare_enforces_executor_update_policy_before_load(self):
         with (
@@ -793,18 +807,14 @@ class RemoteOperationRegistryTests(unittest.TestCase):
         "mcp_erpnext.remote_operations.purchase_order_to_purchase_receipt.prepare_purchase_order_to_purchase_receipt"
     )
     def test_purchase_receipt_conversion_preserves_catalog_error(self, prepare):
-        expected = defined_error(
-            "QUANTITY_EXCEEDS_REMAINING", reference="MCP-ERR-TEST"
-        )
+        expected = defined_error("QUANTITY_EXCEEDS_REMAINING", reference="MCP-ERR-TEST")
         prepare.return_value = expected
         result = remote_operations.execute_remote_operation(
             "prepare_purchase_order_to_purchase_receipt",
             "purchase",
             {
                 "purchase_order": "PUR-ORD-0001",
-                "lines": [
-                    {"purchase_order_item": "PO-ITEM-0001", "accepted_qty": 1}
-                ],
+                "lines": [{"purchase_order_item": "PO-ITEM-0001", "accepted_qty": 1}],
             },
         )
         self.assertEqual(result, expected)
@@ -1095,6 +1105,37 @@ class RESTClientTests(unittest.TestCase):
                 profile="sales",
                 arguments={"query": "Acme"},
             )
+
+    @patch("mcp_erpnext.observability.get_app_logger")
+    @patch("mcp_erpnext.runtime.MCPSettings.from_environment")
+    def test_uncertain_mutation_timeout_is_not_retried_or_reported_as_success(
+        self, from_environment, get_app_logger
+    ):
+        get_app_logger.return_value = Mock()
+        from_environment.return_value = _settings()
+
+        class Opener:
+            calls = 0
+
+            def open(self, _request, *, timeout):
+                self.calls += 1
+                self.timeout = timeout
+                raise TimeoutError("remote commit outcome is unknown")
+
+        opener = Opener()
+        with patch("mcp_erpnext.rest_client.build_opener", return_value=opener):
+            result = runtime.execute_tool_with_context(
+                Mock(),
+                "confirm_sales_order",
+                Mock(),
+                rest_arguments={"approval_token": "opaque", "confirm": True},
+            )
+
+        self.assertEqual(opener.calls, 1)
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["code"], "ORDER_CREATE_UNAVAILABLE")
+        self.assertFalse(result["retryable"])
+        self.assertNotIn("remote commit outcome is unknown", result["message"])
 
     @patch("mcp_erpnext.remote_operations.item.search_all_items")
     def test_all_profile_item_lookup_uses_explicit_fixed_handler(self, search):

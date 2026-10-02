@@ -145,6 +145,17 @@ def _error_code_for_exception(tool_name: str, error: Exception) -> str:
     return _error_code_for_tool(tool_name)
 
 
+def _unexpected_failure_retryable(tool_name: str) -> bool:
+    """Only read-only and resolution tools may advertise a retry after exceptions."""
+    from .contracts.registry import SideEffectClass, TOOL_CONTRACTS
+
+    contract = TOOL_CONTRACTS.get(tool_name)
+    return bool(
+        contract
+        and contract.side_effect in {SideEffectClass.READ, SideEffectClass.RESOLVE}
+    )
+
+
 def _fingerprint(value: object) -> str:
     if not value:
         return "missing"
@@ -217,4 +228,8 @@ def execute_tool(tool_name: str, operation: Callable[[], ResultT]) -> ResultT:
             site=site,
             user=user,
         )
-        return defined_error(code, reference=reference)
+        return defined_error(
+            code,
+            reference=reference,
+            retryable=(None if _unexpected_failure_retryable(tool_name) else False),
+        )

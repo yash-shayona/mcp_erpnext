@@ -68,7 +68,7 @@ def _meta(*, missing: str | None = None, wrong: tuple[str, str] | None = None):
 
 class TeaEntryContractTests(unittest.TestCase):
     def test_version_and_safe_schema_message(self):
-        self.assertEqual(mcp_erpnext.__version__, "4.0.5")
+        self.assertEqual(mcp_erpnext.__version__, "4.0.6")
         result = defined_error("TEA_ENTRY_SCHEMA_UNAVAILABLE", reference="MCP-ERR-TEST")
         self.assertEqual(
             result["message"],

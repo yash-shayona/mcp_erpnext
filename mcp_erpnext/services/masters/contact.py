@@ -12,16 +12,16 @@ from ...contracts.interaction import approval_directive
 from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from ..common.write_policy import (
-	approval_entry_failure,
-	current_mode,
-	disabled_failure,
-	direct_entry_failure,
-	exact_mode_failure,
+    approval_entry_failure,
+    current_mode,
+    disabled_failure,
+    direct_entry_failure,
+    exact_mode_failure,
 )
 from ...settings import WriteMode
 from .customer_contact import (
-	_projection,
-	_search_contacts,
+    _projection,
+    _search_contacts,
 )
 
 _ACTION = "contact_create"
@@ -29,219 +29,240 @@ _PROFILE = "sales"
 
 
 def _error(code: str, *, retryable: bool = False) -> dict[str, Any]:
-	return defined_error(code, retryable=retryable)
+    return defined_error(code, retryable=retryable)
 
 
 def _current_user() -> str:
-	user = getattr(frappe.session, "user", None)
-	if not user or user in {"Guest", "guest"}:
-		frappe.throw("An authenticated Frappe user is required.", frappe.PermissionError)
-	return user
+    user = getattr(frappe.session, "user", None)
+    if not user or user in {"Guest", "guest"}:
+        frappe.throw(
+            "An authenticated Frappe user is required.", frappe.PermissionError
+        )
+    return user
 
 
 def _clean(value: Any) -> str | None:
-	if not isinstance(value, str):
-		return None
-	value = value.strip()
-	return value or None
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value or None
 
 
 def _permission_error() -> dict[str, Any]:
-	return defined_error("PERMISSION_DENIED")
+    return defined_error("PERMISSION_DENIED")
 
 
 def _validate_input(values: dict[str, Any]) -> dict[str, Any] | None:
-	if not any(values.get(fieldname) for fieldname in ("first_name", "last_name", "company_name")):
-		return _error("CONTACT_INVALID_IDENTITY")
-	if values.get("email"):
-		parsed = validate_email_address(values["email"], throw=False)
-		if not parsed or "," in parsed:
-			return _error("CONTACT_INVALID_EMAIL")
-		values["email"] = parsed
-	for fieldname in ("mobile", "phone"):
-		if values.get(fieldname) and not validate_phone_number(values[fieldname], throw=False):
-			return _error("CONTACT_INVALID_PHONE")
-	return None
+    if not any(
+        values.get(fieldname)
+        for fieldname in ("first_name", "last_name", "company_name")
+    ):
+        return _error("CONTACT_INVALID_IDENTITY")
+    if values.get("email"):
+        parsed = validate_email_address(values["email"], throw=False)
+        if not parsed or "," in parsed:
+            return _error("CONTACT_INVALID_EMAIL")
+        values["email"] = parsed
+    for fieldname in ("mobile", "phone"):
+        if values.get(fieldname) and not validate_phone_number(
+            values[fieldname], throw=False
+        ):
+            return _error("CONTACT_INVALID_PHONE")
+    return None
 
 
 def _full_name(values: dict[str, Any]) -> str:
-	person_name = " ".join(
-		value
-		for fieldname in ("first_name", "middle_name", "last_name")
-		if (value := values.get(fieldname))
-	)
-	return person_name or str(values["company_name"])
+    person_name = " ".join(
+        value
+        for fieldname in ("first_name", "middle_name", "last_name")
+        if (value := values.get(fieldname))
+    )
+    return person_name or str(values["company_name"])
 
 
 def _contact_payload(values: dict[str, Any]) -> dict[str, Any]:
-	payload: dict[str, Any] = {"doctype": "Contact"}
-	for fieldname in (
-		"first_name",
-		"middle_name",
-		"last_name",
-		"company_name",
-		"designation",
-		"department",
-	):
-		if values.get(fieldname):
-			payload[fieldname] = values[fieldname]
-	if values.get("email"):
-		payload["email_ids"] = [{"email_id": values["email"], "is_primary": 1}]
-	if values.get("mobile"):
-		payload.setdefault("phone_nos", []).append(
-			{"phone": values["mobile"], "is_primary_mobile_no": 1, "is_primary_phone": 0}
-		)
-	if values.get("phone"):
-		payload.setdefault("phone_nos", []).append(
-			{"phone": values["phone"], "is_primary_phone": 1, "is_primary_mobile_no": 0}
-		)
-	return payload
+    payload: dict[str, Any] = {"doctype": "Contact"}
+    for fieldname in (
+        "first_name",
+        "middle_name",
+        "last_name",
+        "company_name",
+        "designation",
+        "department",
+    ):
+        if values.get(fieldname):
+            payload[fieldname] = values[fieldname]
+    if values.get("email"):
+        payload["email_ids"] = [{"email_id": values["email"], "is_primary": 1}]
+    if values.get("mobile"):
+        payload.setdefault("phone_nos", []).append(
+            {
+                "phone": values["mobile"],
+                "is_primary_mobile_no": 1,
+                "is_primary_phone": 0,
+            }
+        )
+    if values.get("phone"):
+        payload.setdefault("phone_nos", []).append(
+            {"phone": values["phone"], "is_primary_phone": 1, "is_primary_mobile_no": 0}
+        )
+    return payload
 
 
 def _duplicate_contacts(values: dict[str, Any]) -> list[dict[str, Any]]:
-	candidates: dict[str, Any] = {}
-	for fieldname, match in (("email", "email"), ("mobile", "phone"), ("phone", "phone")):
-		value = values.get(fieldname)
-		if not value:
-			continue
-		for contact in _search_contacts(value, None, match):
-			candidates[str(contact.get("name"))] = contact
-	return [_projection(contact) for contact in candidates.values()]
+    candidates: dict[str, Any] = {}
+    for fieldname, match in (
+        ("email", "email"),
+        ("mobile", "phone"),
+        ("phone", "phone"),
+    ):
+        value = values.get(fieldname)
+        if not value:
+            continue
+        for contact in _search_contacts(value, None, match):
+            candidates[str(contact.get("name"))] = contact
+    return [_projection(contact) for contact in candidates.values()]
 
 
 def _preview(values: dict[str, Any]) -> dict[str, Any]:
-	return {
-		"action": "create",
-		"full_name": _full_name(values),
-		"company_name": values.get("company_name"),
-		"designation": values.get("designation"),
-		"department": values.get("department"),
-		"email": values.get("email"),
-		"mobile": values.get("mobile"),
-		"phone": values.get("phone"),
-		"linked_to_customer": False,
-		"link_count": 0,
-	}
+    return {
+        "action": "create",
+        "full_name": _full_name(values),
+        "company_name": values.get("company_name"),
+        "designation": values.get("designation"),
+        "department": values.get("department"),
+        "email": values.get("email"),
+        "mobile": values.get("mobile"),
+        "phone": values.get("phone"),
+        "linked_to_customer": False,
+        "link_count": 0,
+    }
 
 
 def _confirmation_failure(state: str) -> dict[str, Any]:
-	code, _message, retryable = confirmation_failure(state, "standalone Contact")
-	return defined_error(code, retryable=retryable)
+    code, _message, retryable = confirmation_failure(state, "standalone Contact")
+    return defined_error(code, retryable=retryable)
 
 
-def _plan_contact(request: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-	"""Validate the bounded standalone Contact request without approval state."""
-	_current_user()
-	if not frappe.has_permission("Contact", "create"):
-		return None, _permission_error()
-	input_values = request.get("contact") or {}
-	values = {
-		fieldname: _clean(input_values.get(fieldname))
-		for fieldname in (
-			"first_name",
-			"middle_name",
-			"last_name",
-			"company_name",
-			"designation",
-			"department",
-			"email",
-			"mobile",
-			"phone",
-		)
-	}
-	if validation_failure := _validate_input(values):
-		return None, validation_failure
-	if duplicates := _duplicate_contacts(values):
-		return None, _error("CONTACT_DUPLICATE_SUSPECTED") | {"candidates": duplicates}
-	return values, None
+def _plan_contact(
+    request: dict[str, Any],
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Validate the bounded standalone Contact request without approval state."""
+    _current_user()
+    if not frappe.has_permission("Contact", "create"):
+        return None, _permission_error()
+    input_values = request.get("contact") or {}
+    values = {
+        fieldname: _clean(input_values.get(fieldname))
+        for fieldname in (
+            "first_name",
+            "middle_name",
+            "last_name",
+            "company_name",
+            "designation",
+            "department",
+            "email",
+            "mobile",
+            "phone",
+        )
+    }
+    if validation_failure := _validate_input(values):
+        return None, validation_failure
+    if duplicates := _duplicate_contacts(values):
+        return None, _error("CONTACT_DUPLICATE_SUSPECTED") | {"candidates": duplicates}
+    return values, None
 
 
 def _create_contact(values: dict[str, Any], expected_mode: WriteMode) -> dict[str, Any]:
-	"""Apply a validated standalone Contact through normal Frappe permissions."""
-	if not frappe.has_permission("Contact", "create"):
-		return _permission_error()
-	if validation_failure := _validate_input(values):
-		return validation_failure
-	if duplicates := _duplicate_contacts(values):
-		return _error("CONTACT_DUPLICATE_SUSPECTED") | {"candidates": duplicates}
-	try:
-		contact = frappe.get_doc(_contact_payload(values))
-		if failure := exact_mode_failure("create", expected_mode):
-			return _error(failure.code)
-		contact.insert(ignore_permissions=False)
-		frappe.db.commit()
-	except frappe.PermissionError:
-		frappe.db.rollback()
-		return _permission_error()
-	except Exception:
-		frappe.db.rollback()
-		return _error("CONTACT_CREATE_FAILED", retryable=True)
-	return {"status": "created", "contact": _projection(contact), "idempotent": False}
+    """Apply a validated standalone Contact through normal Frappe permissions."""
+    if not frappe.has_permission("Contact", "create"):
+        return _permission_error()
+    if validation_failure := _validate_input(values):
+        return validation_failure
+    if duplicates := _duplicate_contacts(values):
+        return _error("CONTACT_DUPLICATE_SUSPECTED") | {"candidates": duplicates}
+    try:
+        contact = frappe.get_doc(_contact_payload(values))
+        if failure := exact_mode_failure("create", expected_mode):
+            return _error(failure.code)
+        contact.insert(ignore_permissions=False)
+        frappe.db.commit()
+    except frappe.PermissionError:
+        frappe.db.rollback()
+        return _permission_error()
+    except Exception:
+        frappe.db.rollback()
+        return _error("CONTACT_CREATE_FAILED", retryable=False)
+    return {"status": "created", "contact": _projection(contact), "idempotent": False}
 
 
 def prepare_contact(request: dict[str, Any]) -> dict[str, Any]:
-	"""Prepare a standalone Contact preview and token only in approval mode."""
-	if failure := disabled_failure("create"):
-		return _error(failure.code)
-	values, failure = _plan_contact(request)
-	if failure:
-		return failure
-	assert values is not None
-	preview = _preview(values)
-	if current_mode("create") is WriteMode.DIRECT:
-		return {"status": "preview", "preview": preview}
-	approvals.prune_expired()
-	user = _current_user()
-	fingerprint = stable_fingerprint(
-		{
-			"action": _ACTION,
-			"profile": _PROFILE,
-			"input": values,
-			"duplicates": [],
-		}
-	)
-	approval_payload = {
-		"action": _ACTION,
-		"profile": _PROFILE,
-		"values": values,
-		"fingerprint": fingerprint,
-	}
-	token = approvals.create(action=_ACTION, site=frappe.local.site, user=user, payload=approval_payload)
-	return {
-		"status": "ready",
-		"approval_token": token,
-		"expires_in_seconds": APPROVAL_TTL_SECONDS,
-		"preview": preview,
-		"interaction": approval_directive().model_dump(mode="json"),
-	}
+    """Prepare a standalone Contact preview and token only in approval mode."""
+    if failure := disabled_failure("create"):
+        return _error(failure.code)
+    values, failure = _plan_contact(request)
+    if failure:
+        return failure
+    assert values is not None
+    preview = _preview(values)
+    if current_mode("create") is WriteMode.DIRECT:
+        return {"status": "preview", "preview": preview}
+    approvals.prune_expired()
+    user = _current_user()
+    fingerprint = stable_fingerprint(
+        {
+            "action": _ACTION,
+            "profile": _PROFILE,
+            "input": values,
+            "duplicates": [],
+        }
+    )
+    approval_payload = {
+        "action": _ACTION,
+        "profile": _PROFILE,
+        "values": values,
+        "fingerprint": fingerprint,
+    }
+    token = approvals.create(
+        action=_ACTION, site=frappe.local.site, user=user, payload=approval_payload
+    )
+    return {
+        "status": "ready",
+        "approval_token": token,
+        "expires_in_seconds": APPROVAL_TTL_SECONDS,
+        "preview": preview,
+        "interaction": approval_directive().model_dump(mode="json"),
+    }
 
 
 def confirm_contact(approval_token: str, confirm: bool) -> dict[str, Any]:
-	"""Claim and execute exactly one approved native standalone Contact insert."""
-	if failure := approval_entry_failure("create"):
-		return _error(failure.code)
-	user = _current_user()
-	if not confirm:
-		approvals.cancel(approval_token, action=_ACTION, site=frappe.local.site, user=user)
-		return _error("CONFIRMATION_REQUIRED")
-	approval, state = approvals.claim_for_confirm_write(
-		approval_token, action=_ACTION, site=frappe.local.site, user=user
-	)
-	if state != "available" or approval is None:
-		return _confirmation_failure(state)
-	payload = approval.payload
-	if payload.get("profile") != _PROFILE or payload.get("action") != _ACTION:
-		return _error("PROFILE_MISMATCH")
-	values = dict(payload.get("values") or {})
-	return _create_contact(values, WriteMode.APPROVAL_REQUIRED)
+    """Claim and execute exactly one approved native standalone Contact insert."""
+    if failure := approval_entry_failure("create"):
+        return _error(failure.code)
+    user = _current_user()
+    if not confirm:
+        approvals.cancel(
+            approval_token, action=_ACTION, site=frappe.local.site, user=user
+        )
+        return _error("CONFIRMATION_REQUIRED")
+    approval, state = approvals.claim_for_confirm_write(
+        approval_token, action=_ACTION, site=frappe.local.site, user=user
+    )
+    if state != "available" or approval is None:
+        return _confirmation_failure(state)
+    payload = approval.payload
+    if payload.get("profile") != _PROFILE or payload.get("action") != _ACTION:
+        return _error("PROFILE_MISMATCH")
+    values = dict(payload.get("values") or {})
+    return _create_contact(values, WriteMode.APPROVAL_REQUIRED)
 
 
 def execute_contact(request: dict[str, Any]) -> dict[str, Any]:
-	"""Create a standalone Contact from a fresh request in direct mode."""
-	if failure := direct_entry_failure("create"):
-		return _error(failure.code)
-	values, failure = _plan_contact(request)
-	if failure:
-		return failure
-	assert values is not None
-	return _create_contact(values, WriteMode.DIRECT)
+    """Create a standalone Contact from a fresh request in direct mode."""
+    if failure := direct_entry_failure("create"):
+        return _error(failure.code)
+    values, failure = _plan_contact(request)
+    if failure:
+        return failure
+    assert values is not None
+    return _create_contact(values, WriteMode.DIRECT)
