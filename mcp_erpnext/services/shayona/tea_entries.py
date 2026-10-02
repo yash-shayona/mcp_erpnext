@@ -395,7 +395,7 @@ def _update_error(
         return logged_public_error(tool, "TEA_ENTRY_SCHEMA_UNAVAILABLE")
     if isinstance(error, frappe.PermissionError):
         return logged_public_error(tool, "ERP_PERMISSION_DENIED")
-    if stale:
+    if stale and isinstance(error, (frappe.ValidationError, ValueError)):
         return public_error(
             "STALE_CONFIRMATION",
             message="The approved Tea Entry state changed. Prepare it again.",
@@ -431,7 +431,7 @@ def _apply_tea_entry_update(
                 )
             return {"status": "not_found", "tea_entry_name": request.tea_entry_name}
         doc.check_permission("write")
-        if approved and (
+        if (
             str(doc.modified) != plan.modified
             or stable_fingerprint(_update_state(doc).model_dump())
             != stable_fingerprint(TeaEntryUpdateState.model_validate_json(plan.before_json).model_dump())
@@ -439,7 +439,7 @@ def _apply_tea_entry_update(
             frappe.db.rollback()
             return public_error(
                 "STALE_CONFIRMATION",
-                message="The approved Tea Entry state changed. Prepare it again.",
+                message="The Tea Entry state changed after planning. Prepare it again.",
             )
         for field, value in request.changes.model_dump(exclude_unset=True).items():
             doc.set(field, value)

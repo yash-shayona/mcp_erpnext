@@ -431,153 +431,6 @@ class TeaEntryCreateTests(unittest.TestCase):
         explicit = tea_entries.prepare_tea_entry(self.request | {"date": "2026-09-01", "vendor": "Vendor"})
         self.assertEqual(explicit["preview"]["date"], date(2026, 9, 1))
 
-
-class TeaEntryUpdateTests(unittest.TestCase):
-    def setUp(self):
-        self.stack = ExitStack()
-        self.addCleanup(self.stack.close)
-        self.stack.enter_context(patch.dict(os.environ, {"MCP_UPDATE_MODE": "approval_required"}))
-        self.backend = FakeSharedApprovalBackend()
-        self.store = ApprovalStore(ApprovalMode.AGENT_DELEGATED, backend=self.backend)
-        self.stack.enter_context(patch.object(tea_entries, "approvals", self.store))
-        self.db = SimpleNamespace(commit=Mock(), rollback=Mock())
-        self.doc = SimpleNamespace(
-            name="TEA-1", date=date(2026, 10, 1), no_of_cups=10,
-            rate_per_cup=Decimal("15"), total_amount=Decimal("150"),
-            vendor="Vendor A", modified="2026-10-01 10:00:00",
-            permission=True, duplicate=False, save_error=None,
-        )
-        self.doc.set = lambda field, value: setattr(self.doc, field, value)
-        self.doc.check_permission = lambda _permission: (
-            None if self.doc.permission else (_ for _ in ()).throw(frappe.PermissionError())
-        )
-        self.validation_hook = lambda: None
-        def validate(_method):
-            if self.doc.duplicate:
-                raise frappe.ValidationError("RAW-SENTINEL")
-            self.doc.total_amount = Decimal(self.doc.no_of_cups) * Decimal(self.doc.rate_per_cup)
-            self.validation_hook()
-        self.doc.run_method = validate
-        def save(**kwargs):
-            self.assertEqual(kwargs, {"ignore_permissions": False})
-            if self.doc.save_error:
-                raise self.doc.save_error
-            self.doc.modified = "2026-10-02 11:00:00"
-            return self.doc
-        self.doc.save = Mock(side_effect=save)
-        self.fake = SimpleNamespace(
-            session=SimpleNamespace(user="test@example.com"),
-            local=SimpleNamespace(site="test.localhost"),
-            get_meta=Mock(return_value=_meta()),
-            get_doc=Mock(return_value=self.doc),
-            PermissionError=frappe.PermissionError,
-            ValidationError=frappe.ValidationError,
-            DoesNotExistError=frappe.DoesNotExistError,
-            db=self.db,
-        )
-        self.stack.enter_context(patch.object(tea_entries, "frappe", self.fake))
-        self.stack.enter_context(patch.object(
-            tea_entries, "logged_public_error",
-            side_effect=lambda tool, code, **kw: public_error(code, **kw),
-        ))
-        self.request = {
-            "tea_entry_name": "TEA-1",
-            "changes": {"no_of_cups": 12},
-        }
-
-    def test_bounded_contract_requires_supported_non_null_change(self):
-        TeaEntryUpdateInput.model_validate(self.request)
-        for value in (
-            {"tea_entry_name": "TEA-1", "changes": {}},
-            self.request | {"total_amount": 999},
-            {"tea_entry_name": "TEA-1", "changes": {"no_of_cups": 0}},
-            {"tea_entry_name": "TEA-1", "changes": {"rate_per_cup": "NaN"}},
-            {"tea_entry_name": "TEA-1", "changes": {"vendor": " "}},
-            {"tea_entry_name": "TEA-1", "changes": {"vendor": None}},
-            {"tea_entry_name": "TEA-1", "changes": {"date": "2026-10-02", "owner": "x"}},
-            self.request | {"ignore_permissions": True},
-            self.request | {"MCP_UPDATE_MODE": "direct"},
-        ):
-            with self.subTest(value=value), self.assertRaises(ValidationError):
-                TeaEntryUpdateInput.model_validate(value)
-
-    def test_prepare_binds_fixed_before_after_and_native_total_without_saving(self):
-        result = tea_entries.prepare_tea_entry_update(self.request)
-        TeaEntryUpdatePrepareOutput.model_validate(result)
-        self.assertEqual(result["status"], "ready")
-        preview = result["preview"]
-        self.assertEqual(preview["before"]["total_amount"], Decimal("150"))
-        self.assertEqual(preview["after"]["total_amount"], Decimal("180"))
-        self.assertEqual(preview["after"]["no_of_cups"], 12)
-        self.assertNotIn("modified", str(preview))
-        self.doc.save.assert_not_called()
-        self.db.commit.assert_not_called()
-        approval, state = self.store.lookup(
-            result["approval_token"], action="update_tea_entry",
-            site="test.localhost", user="test@example.com",
-        )
-        self.assertEqual(state, "available")
-        self.assertEqual(set(approval.payload), {"request_json", "before_json", "preview_json", "modified"})
-
-    def test_confirm_and_direct_execute_save_normally(self):
-        ready = tea_entries.prepare_tea_entry_update(self.request)
-        result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
-        TeaEntryUpdateOutput.model_validate(result)
-        self.assertEqual(result["status"], "updated")
-        self.doc.save.assert_called_once_with(ignore_permissions=False)
-        self.db.commit.assert_called_once()
-
-        self.doc.save.reset_mock()
-        self.db.commit.reset_mock()
-        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}), patch.object(tea_entries, "approvals") as store:
-            preview = tea_entries.prepare_tea_entry_update(self.request)
-            TeaEntryUpdatePrepareOutput.model_validate(preview)
-            self.assertEqual(preview["status"], "preview")
-            self.assertNotIn("approval_token", preview)
-            result = tea_entries.execute_tea_entry_update(self.request)
-            TeaEntryUpdateOutput.model_validate(result)
-            self.assertEqual(result["status"], "updated")
-            self.assertEqual(store.mock_calls, [])
-        self.doc.save.assert_called_once_with(ignore_permissions=False)
-        self.db.commit.assert_called_once()
-
-    def test_policy_rejections_and_final_mode_switches_do_not_save(self):
-        for mode, expected in (
-            ("disabled", "UPDATE_DISABLED"),
-            ("approval_required", "APPROVAL_REQUIRED"),
-        ):
-            with patch.dict(os.environ, {"MCP_UPDATE_MODE": mode}):
-                result = tea_entries.execute_tea_entry_update(self.request)
-                self.assertEqual(result["code"], expected)
-        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}), patch.object(tea_entries, "approvals") as store:
-            self.validation_hook = lambda: os.environ.__setitem__("MCP_UPDATE_MODE", "disabled")
-            result = tea_entries.execute_tea_entry_update(self.request)
-            self.assertEqual(result["code"], "UPDATE_DISABLED")
-            self.assertEqual(store.mock_calls, [])
-        self.assertEqual(self.doc.save.call_count, 0)
-        self.db.commit.assert_not_called()
-
-    def test_stale_and_native_failure_paths_rollback(self):
-        ready = tea_entries.prepare_tea_entry_update(self.request)
-        self.doc.modified = "2026-10-02 10:00:00"
-        self.assertEqual(
-            tea_entries.confirm_tea_entry_update(ready["approval_token"], True)["code"],
-            "STALE_CONFIRMATION",
-        )
-        self.assertEqual(self.doc.save.call_count, 0)
-        self.db.commit.assert_not_called()
-
-        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}):
-            self.doc.duplicate = True
-            result = tea_entries.execute_tea_entry_update(self.request)
-            self.assertEqual(result["code"], "TEA_ENTRY_VALIDATION_FAILED")
-            self.assertNotIn("RAW-SENTINEL", str(result))
-        self.assertEqual(self.doc.save.call_count, 0)
-
-
-class TeaEntryCreateRegressionTests(TeaEntryCreateTests):
-    pass
-
     def test_disabled_and_wrong_entry_modes_never_plan_or_touch_approvals(self):
         for mode, expected in (("disabled", "CREATE_DISABLED"), ("direct", "DIRECT_EXECUTION_REQUIRED")):
             with patch.dict(os.environ, {"MCP_CREATE_MODE": mode}), patch.object(tea_entries, "approvals") as store:
@@ -735,6 +588,219 @@ class TeaEntryCreateRegressionTests(TeaEntryCreateTests):
         mutate_record(self.store, self.backend, token, lambda row: row.payload.update({"values_json": "{}"}))
         self.assertEqual(tea_entries.confirm_tea_entry(token, True)["code"], "CONFIRMATION_UNAVAILABLE")
         self.assert_no_write()
+
+
+class TeaEntryUpdateTests(unittest.TestCase):
+    def setUp(self):
+        self.stack = ExitStack()
+        self.addCleanup(self.stack.close)
+        self.stack.enter_context(patch.dict(os.environ, {"MCP_UPDATE_MODE": "approval_required"}))
+        self.backend = FakeSharedApprovalBackend()
+        self.store = ApprovalStore(ApprovalMode.AGENT_DELEGATED, backend=self.backend)
+        self.stack.enter_context(patch.object(tea_entries, "approvals", self.store))
+        self.db = SimpleNamespace(commit=Mock(), rollback=Mock())
+        self.source = dict(
+            name="TEA-1", date=date(2026, 10, 1), no_of_cups=10,
+            rate_per_cup=Decimal("15"), total_amount=Decimal("150"),
+            vendor="Vendor A", modified="2026-10-01 10:00:00", permission=True,
+        )
+        self.documents = []
+        self.duplicate = False
+        self.save_error = None
+        self.validation_hook = lambda: None
+
+        def load_doc(_doctype, _name):
+            doc = SimpleNamespace(**self.source)
+            doc.set = lambda field, value: setattr(doc, field, value)
+            doc.check_permission = lambda _permission: (
+                None if doc.permission else (_ for _ in ()).throw(frappe.PermissionError())
+            )
+            def validate(_method):
+                if self.duplicate:
+                    raise frappe.ValidationError("RAW-SENTINEL")
+                doc.total_amount = Decimal(doc.no_of_cups) * Decimal(doc.rate_per_cup)
+                self.validation_hook()
+            doc.run_method = validate
+            def save(**kwargs):
+                self.assertEqual(kwargs, {"ignore_permissions": False})
+                if self.save_error:
+                    raise self.save_error
+                doc.modified = "2026-10-02 11:00:00"
+                self.source.update({key: getattr(doc, key) for key in (
+                    "date", "no_of_cups", "rate_per_cup", "total_amount", "vendor", "modified",
+                )})
+                return doc
+            doc.save = Mock(side_effect=save)
+            self.documents.append(doc)
+            self.doc = doc
+            return doc
+
+        self.doc = load_doc("Tea Entry", "TEA-1")
+        self.fake = SimpleNamespace(
+            session=SimpleNamespace(user="test@example.com"),
+            local=SimpleNamespace(site="test.localhost"),
+            get_meta=Mock(return_value=_meta()),
+            get_doc=Mock(side_effect=load_doc),
+            PermissionError=frappe.PermissionError,
+            ValidationError=frappe.ValidationError,
+            DoesNotExistError=frappe.DoesNotExistError,
+            db=self.db,
+        )
+        self.stack.enter_context(patch.object(tea_entries, "frappe", self.fake))
+        self.stack.enter_context(patch.object(
+            tea_entries, "logged_public_error",
+            side_effect=lambda tool, code, **kw: public_error(code, **kw),
+        ))
+        self.request = {
+            "tea_entry_name": "TEA-1",
+            "changes": {"no_of_cups": 12},
+        }
+
+    def _reset_source(self):
+        self.source.update({
+            "date": date(2026, 10, 1), "no_of_cups": 10,
+            "rate_per_cup": Decimal("15"), "total_amount": Decimal("150"),
+            "vendor": "Vendor A", "modified": "2026-10-01 10:00:00",
+        })
+
+    def test_bounded_contract_requires_supported_non_null_change(self):
+        TeaEntryUpdateInput.model_validate(self.request)
+        for value in (
+            {"tea_entry_name": "TEA-1", "changes": {}},
+            self.request | {"total_amount": 999},
+            {"tea_entry_name": "TEA-1", "changes": {"no_of_cups": 0}},
+            {"tea_entry_name": "TEA-1", "changes": {"rate_per_cup": "NaN"}},
+            {"tea_entry_name": "TEA-1", "changes": {"vendor": " "}},
+            {"tea_entry_name": "TEA-1", "changes": {"vendor": None}},
+            {"tea_entry_name": "TEA-1", "changes": {"date": "2026-10-02", "owner": "x"}},
+            self.request | {"ignore_permissions": True},
+            self.request | {"MCP_UPDATE_MODE": "direct"},
+        ):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                TeaEntryUpdateInput.model_validate(value)
+
+    def test_prepare_binds_fixed_before_after_and_native_total_without_saving(self):
+        result = tea_entries.prepare_tea_entry_update(self.request)
+        TeaEntryUpdatePrepareOutput.model_validate(result)
+        self.assertEqual(result["status"], "ready")
+        preview = result["preview"]
+        self.assertEqual(preview["before"]["total_amount"], Decimal("150"))
+        self.assertEqual(preview["after"]["total_amount"], Decimal("180"))
+        self.assertEqual(preview["after"]["no_of_cups"], 12)
+        self.assertNotIn("modified", str(preview))
+        self.doc.save.assert_not_called()
+        self.db.commit.assert_not_called()
+        approval, state = self.store.lookup(
+            result["approval_token"], action="update_tea_entry",
+            site="test.localhost", user="test@example.com",
+        )
+        self.assertEqual(state, "available")
+        self.assertEqual(set(approval.payload), {"request_json", "before_json", "preview_json", "modified"})
+
+    def test_confirm_and_direct_execute_save_normally(self):
+        ready = tea_entries.prepare_tea_entry_update(self.request)
+        self._reset_source()
+        result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+        TeaEntryUpdateOutput.model_validate(result)
+        self.assertEqual(result["status"], "updated")
+        self.doc.save.assert_called_once_with(ignore_permissions=False)
+        self.db.commit.assert_called_once()
+
+        self.doc.save.reset_mock()
+        self.db.commit.reset_mock()
+        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}), patch.object(tea_entries, "approvals") as store:
+            preview = tea_entries.prepare_tea_entry_update(self.request)
+            TeaEntryUpdatePrepareOutput.model_validate(preview)
+            self.assertEqual(preview["status"], "preview")
+            self.assertNotIn("approval_token", preview)
+            self._reset_source()
+            result = tea_entries.execute_tea_entry_update(self.request)
+            TeaEntryUpdateOutput.model_validate(result)
+            self.assertEqual(result["status"], "updated")
+            self.assertEqual(store.mock_calls, [])
+        self.doc.save.assert_called_once_with(ignore_permissions=False)
+        self.db.commit.assert_called_once()
+
+    def test_policy_rejections_and_final_mode_switches_do_not_save(self):
+        for mode, expected in (
+            ("disabled", "UPDATE_DISABLED"),
+            ("approval_required", "APPROVAL_REQUIRED"),
+        ):
+            with patch.dict(os.environ, {"MCP_UPDATE_MODE": mode}):
+                result = tea_entries.execute_tea_entry_update(self.request)
+                self.assertEqual(result["code"], expected)
+        transitions = (
+            ("direct", "approval_required", "APPROVAL_REQUIRED"),
+            ("direct", "disabled", "UPDATE_DISABLED"),
+            ("approval_required", "direct", "DIRECT_EXECUTION_REQUIRED"),
+            ("approval_required", "disabled", "UPDATE_DISABLED"),
+        )
+        for entry, target, expected in transitions:
+            with self.subTest(entry=entry, target=target), patch.dict(os.environ, {"MCP_UPDATE_MODE": entry}):
+                self.validation_hook = lambda: None
+                if entry == "approval_required":
+                    ready = tea_entries.prepare_tea_entry_update(self.request)
+                    self._reset_source()
+                    self.validation_hook = lambda: os.environ.__setitem__("MCP_UPDATE_MODE", target)
+                    result = tea_entries.confirm_tea_entry_update(ready["approval_token"], True)
+                else:
+                    calls = []
+                    def switch_mode():
+                        calls.append(True)
+                        if len(calls) == 1:
+                            self._reset_source()
+                        if len(calls) == 2:
+                            os.environ["MCP_UPDATE_MODE"] = target
+                    self.validation_hook = switch_mode
+                    with patch.object(tea_entries, "approvals") as store:
+                        result = tea_entries.execute_tea_entry_update(self.request)
+                        self.assertEqual(store.mock_calls, [])
+                self.assertEqual(result["code"], expected)
+        self.assertEqual(self.doc.save.call_count, 0)
+        self.db.commit.assert_not_called()
+
+    def test_disabled_and_wrong_path_modes_reject_before_document_or_store_access(self):
+        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "disabled"}), patch.object(
+            tea_entries.frappe, "get_doc"
+        ) as get_doc, patch.object(tea_entries, "approvals") as store:
+            self.assertEqual(tea_entries.prepare_tea_entry_update(self.request)["code"], "UPDATE_DISABLED")
+            self.assertEqual(tea_entries.confirm_tea_entry_update("token", True)["code"], "UPDATE_DISABLED")
+            self.assertEqual(tea_entries.execute_tea_entry_update(self.request)["code"], "UPDATE_DISABLED")
+            get_doc.assert_not_called()
+            self.assertEqual(store.mock_calls, [])
+        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}), patch.object(
+            tea_entries, "approvals"
+        ) as store:
+            self.assertEqual(tea_entries.confirm_tea_entry_update("token", True)["code"], "DIRECT_EXECUTION_REQUIRED")
+            self.assertEqual(store.mock_calls, [])
+        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "approval_required"}):
+            self.assertEqual(tea_entries.execute_tea_entry_update(self.request)["code"], "APPROVAL_REQUIRED")
+
+    def test_stale_and_native_failure_paths_rollback(self):
+        ready = tea_entries.prepare_tea_entry_update(self.request)
+        self.source["modified"] = "2026-10-02 10:00:00"
+        self.assertEqual(
+            tea_entries.confirm_tea_entry_update(ready["approval_token"], True)["code"],
+            "STALE_CONFIRMATION",
+        )
+        self.assertEqual(self.doc.save.call_count, 0)
+        self.db.commit.assert_not_called()
+
+        ready = tea_entries.prepare_tea_entry_update(self.request)
+        self.source["no_of_cups"] = 11
+        self.source["total_amount"] = Decimal("165")
+        self.assertEqual(
+            tea_entries.confirm_tea_entry_update(ready["approval_token"], True)["code"],
+            "STALE_CONFIRMATION",
+        )
+        self.assertEqual(self.doc.save.call_count, 0)
+
+        with patch.dict(os.environ, {"MCP_UPDATE_MODE": "direct"}):
+            self.duplicate = True
+            result = tea_entries.execute_tea_entry_update(self.request)
+            self.assertEqual(result["code"], "TEA_ENTRY_VALIDATION_FAILED")
+            self.assertNotIn("RAW-SENTINEL", str(result))
+        self.assertEqual(self.doc.save.call_count, 0)
 
 
 if __name__ == "__main__":
