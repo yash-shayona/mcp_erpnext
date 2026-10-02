@@ -66,7 +66,15 @@ class ToolRoutingTests(unittest.TestCase):
     def test_every_registered_tool_uses_its_contract_governed_description(self):
         tools_by_profile = self._tools_by_profile()
         names = set().union(*(tools.keys() for tools in tools_by_profile.values()))
-        self.assertEqual(names, set(TOOL_CONTRACTS))
+        dormant_names = {
+            "prepare_document_cancel",
+            "confirm_document_cancel",
+            "execute_document_cancel",
+            "prepare_document_delete",
+            "confirm_document_delete",
+            "execute_document_delete",
+        }
+        self.assertEqual(names, set(TOOL_CONTRACTS) - dormant_names)
         for tools in tools_by_profile.values():
             for name, tool in tools.items():
                 with self.subTest(name=name):

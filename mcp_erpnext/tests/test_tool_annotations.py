@@ -26,7 +26,15 @@ class ToolAnnotationTests(unittest.TestCase):
     def test_every_profile_tool_publishes_its_contract_annotations(self):
         tools_by_profile = self._tools_by_profile()
         registered_names = set().union(*(tools.keys() for tools in tools_by_profile.values()))
-        self.assertEqual(registered_names, set(TOOL_CONTRACTS))
+        dormant_names = {
+            "prepare_document_cancel",
+            "confirm_document_cancel",
+            "execute_document_cancel",
+            "prepare_document_delete",
+            "confirm_document_delete",
+            "execute_document_delete",
+        }
+        self.assertEqual(registered_names, set(TOOL_CONTRACTS) - dormant_names)
 
         required_hints = {
             "readOnlyHint",
@@ -46,9 +54,7 @@ class ToolAnnotationTests(unittest.TestCase):
                     )
                     self.assertEqual(tool.meta, TOOL_CONTRACTS[name].mcp_meta())
                     self.assertTrue(
-                        required_hints.issubset(
-                            tool.annotations.model_dump(by_alias=True, exclude_none=True)
-                        )
+                        required_hints.issubset(tool.annotations.model_dump(by_alias=True, exclude_none=True))
                     )
 
     def test_read_resolve_prepare_and_confirm_defaults_are_truthful(self):
@@ -99,8 +105,6 @@ class ToolAnnotationTests(unittest.TestCase):
             "confirm_contact_update",
             "confirm_document_update",
             "confirm_document_submit",
-            "confirm_document_cancel",
-            "confirm_document_delete",
             "confirm_customer_payment_reconciliation",
         ):
             with self.subTest(name=name):
@@ -109,7 +113,8 @@ class ToolAnnotationTests(unittest.TestCase):
         self.assertTrue(tools["confirm_document_email"].annotations.openWorldHint)
         self.assertFalse(tools["prepare_document_email"].annotations.openWorldHint)
         self.assertFalse(tools["confirm_sales_order"].annotations.openWorldHint)
-        self.assertEqual(
-            tools["confirm_document_delete"].meta,
-            TOOL_CONTRACTS["confirm_document_delete"].mcp_meta(),
+        self.assertTrue(
+            TOOL_CONTRACTS["confirm_document_delete"]
+            .mcp_annotations()
+            .destructiveHint
         )

@@ -292,9 +292,11 @@ def register_lifecycle_tools(mcp: Any, profile: str) -> None:
         )(execute_document_child_remove)
     prepare("prepare_document_submit", "submit")
     confirm_tool("confirm_document_submit", "submit")
-    prepare("prepare_document_cancel", "cancel")
-    confirm_tool("confirm_document_cancel", "cancel")
-    execute_tool("execute_document_cancel", "cancel")
-    prepare("prepare_document_delete", "delete")
-    confirm_tool("confirm_document_delete", "delete")
-    execute_tool("execute_document_delete", "delete")
+    # Cancel/Delete public MCP exposure is temporarily disabled; retain the
+    # registration block so these capabilities can be re-enabled deliberately.
+    # prepare("prepare_document_cancel", "cancel")
+    # confirm_tool("confirm_document_cancel", "cancel")
+    # execute_tool("execute_document_cancel", "cancel")
+    # prepare("prepare_document_delete", "delete")
+    # confirm_tool("confirm_document_delete", "delete")
+    # execute_tool("execute_document_delete", "delete")

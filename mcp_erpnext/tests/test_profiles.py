@@ -145,12 +145,6 @@ class ProfileRegistrationTests(unittest.TestCase):
                 "execute_document_child_remove",
                 "prepare_document_submit",
                 "confirm_document_submit",
-                "prepare_document_cancel",
-                "confirm_document_cancel",
-                "execute_document_cancel",
-                "prepare_document_delete",
-                "confirm_document_delete",
-                "execute_document_delete",
                 "search_purchase_orders",
                 "render_document_pdf",
                 "prepare_document_email",
@@ -263,35 +257,48 @@ class ProfileRegistrationTests(unittest.TestCase):
             inventories.append(names)
         self.assertTrue(all(names == inventories[0] for names in inventories))
 
-    def test_update_cancel_delete_tools_remain_static_across_policy_modes(self):
+    def test_cancel_delete_tools_stay_absent_across_policy_modes(self):
         disabled = _settings(MCPProfile.SALES)
-        enabled = replace(
-            disabled,
-            update_mode=LifecycleActionMode.APPROVAL_REQUIRED,
-            cancel_mode=LifecycleActionMode.APPROVAL_REQUIRED,
-            delete_mode=LifecycleActionMode.APPROVAL_REQUIRED,
-        )
-        disabled_names = [
-            tool.name for tool in asyncio.run(create_mcp(disabled).list_tools())
-        ]
-        enabled_names = [
-            tool.name for tool in asyncio.run(create_mcp(enabled).list_tools())
-        ]
-        self.assertEqual(disabled_names, enabled_names)
-        for name in (
-            "prepare_document_update",
-            "confirm_document_update",
-            "execute_document_update",
-            "execute_document_child_add",
-            "execute_document_child_remove",
+        names_to_hide = {
             "prepare_document_cancel",
             "confirm_document_cancel",
             "execute_document_cancel",
             "prepare_document_delete",
             "confirm_document_delete",
             "execute_document_delete",
-        ):
-            self.assertIn(name, disabled_names)
+        }
+        inventories = []
+        for cancel_mode in LifecycleActionMode:
+            for delete_mode in LifecycleActionMode:
+                settings = replace(
+                    disabled, cancel_mode=cancel_mode, delete_mode=delete_mode
+                )
+                names = {
+                    tool.name for tool in asyncio.run(create_mcp(settings).list_tools())
+                }
+                self.assertTrue(names_to_hide.isdisjoint(names))
+                self.assertTrue(
+                    {
+                        "prepare_document_update",
+                        "confirm_document_update",
+                        "execute_document_update",
+                    }.issubset(names)
+                )
+                inventories.append(names)
+        self.assertTrue(all(names == inventories[0] for names in inventories))
+
+    def test_cancel_delete_tools_are_absent_from_every_profile(self):
+        hidden = {
+            "prepare_document_cancel",
+            "confirm_document_cancel",
+            "execute_document_cancel",
+            "prepare_document_delete",
+            "confirm_document_delete",
+            "execute_document_delete",
+        }
+        for profile in MCPProfile:
+            with self.subTest(profile=profile):
+                self.assertTrue(hidden.isdisjoint(self._tool_names(profile)))
 
     def test_create_tools_remain_static_across_policy_modes(self):
         base = _settings(MCPProfile.SALES)
@@ -408,12 +415,6 @@ class ProfileRegistrationTests(unittest.TestCase):
                     "aggregate_payment_entries",
                     "prepare_document_submit",
                     "confirm_document_submit",
-                    "prepare_document_cancel",
-                    "confirm_document_cancel",
-                    "execute_document_cancel",
-                    "prepare_document_delete",
-                    "confirm_document_delete",
-                    "execute_document_delete",
                 ],
             )
             self.assertNotIn("prepare_sales_invoice", names)

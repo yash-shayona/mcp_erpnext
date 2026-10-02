@@ -90,12 +90,6 @@ class ToolRegistrationTests(unittest.TestCase):
                 "execute_document_child_remove",
                 "prepare_document_submit",
                 "confirm_document_submit",
-                "prepare_document_cancel",
-                "confirm_document_cancel",
-                "execute_document_cancel",
-                "prepare_document_delete",
-                "confirm_document_delete",
-                "execute_document_delete",
                 "get_sales_order",
                 "query_sales_orders",
                 "aggregate_sales_orders",
@@ -122,6 +116,16 @@ class ToolRegistrationTests(unittest.TestCase):
             ],
         )
         self.assertNotIn("search_sales_orders", mcp.tool_names)
+        self.assertTrue(
+            {
+                "prepare_document_cancel",
+                "confirm_document_cancel",
+                "execute_document_cancel",
+                "prepare_document_delete",
+                "confirm_document_delete",
+                "execute_document_delete",
+            }.isdisjoint(mcp.tool_names)
+        )
         for name, kwargs in mcp.tool_kwargs.items():
             with self.subTest(name=name):
                 self.assertIn("mcp_erpnext", kwargs["meta"])
