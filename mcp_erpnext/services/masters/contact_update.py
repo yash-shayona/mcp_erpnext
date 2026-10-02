@@ -9,7 +9,7 @@ import frappe
 from frappe.utils import validate_email_address, validate_phone_number
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from .customer_contact import (
 	_customer_reference,
@@ -32,8 +32,8 @@ _COMMUNICATION_ACTIONS = {
 }
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-	return {"status": "error", "code": code, "message": message, "reference": new_error_reference(), "retryable": retryable}
+def _error(code: str, *, retryable: bool = False) -> dict[str, Any]:
+	return defined_error(code, retryable=retryable)
 
 
 def _current_user() -> str:
@@ -74,17 +74,14 @@ def _relationship_state(contact: Any, customer_name: str) -> list[dict[str, str]
 
 def _shared_failure(contact: Any, customer_name: str) -> dict[str, Any] | None:
 	if _relationship_state(contact, customer_name):
-		return _error("CONTACT_SHARED_WITH_OTHER_PARTIES", "The selected Contact is shared with another party and cannot be updated in V1.")
+		return _error("CONTACT_SHARED_WITH_OTHER_PARTIES")
 	return None
 
 
 def _standalone_scope_failure(contact: Any) -> dict[str, Any] | None:
 	"""Require an explicit Customer scope for every linked Contact."""
 	if _links(contact):
-		return _error(
-			"CONTACT_SCOPE_REQUIRED",
-			"The selected Contact is linked to a party; provide the exact Customer scope.",
-		)
+		return _error("CONTACT_SCOPE_REQUIRED")
 	return None
 
 
@@ -144,27 +141,27 @@ def _find_phone_rows(contact: Any, value: str, *, flag: str | None = None) -> li
 	]
 
 
-def _permission_error(doctype: str, action: str) -> dict[str, Any]:
-	return _error("PERMISSION_DENIED", f"The authenticated user cannot {action} this {doctype}.")
+def _permission_error() -> dict[str, Any]:
+	return _error("PERMISSION_DENIED")
 
 
 def _validate_email(value: str) -> dict[str, Any] | None:
 	parsed = validate_email_address(value, throw=False)
 	if not parsed or "," in parsed:
-		return _error("CONTACT_INVALID_EMAIL", "The Contact email is invalid.")
+		return _error("CONTACT_INVALID_EMAIL")
 	return None
 
 
 def _validate_phone(value: str) -> dict[str, Any] | None:
 	if not validate_phone_number(value, throw=False):
-		return _error("CONTACT_INVALID_PHONE", "The Contact phone is invalid.")
+		return _error("CONTACT_INVALID_PHONE")
 	return None
 
 
 def _duplicate_failure(customer: Any, contact: Any, value: str, match: str) -> dict[str, Any] | None:
 	for candidate in _search_contacts(value, customer, match):
 		if _value(candidate, "name") != _value(contact, "name"):
-			return _error("CONTACT_DUPLICATE_SUSPECTED", "A visible Contact in this Customer scope already matches the requested communication value.")
+			return _error("CONTACT_DUPLICATE_SUSPECTED")
 	return None
 
 
@@ -217,7 +214,7 @@ def _prepare_operation(contact: Any, customer: Any, operation: dict[str, Any]) -
 	action = operation.get("action")
 	if action == "set_details":
 		if not any(field in operation and operation[field] is not None for field in _DETAIL_FIELDS):
-			return _error("CONTACT_INVALID_REQUEST", "At least one Contact detail field is required."), None, None, None
+			return _error("CONTACT_INVALID_REQUEST"), None, None, None
 		invalid = {field: operation[field] for field in _DETAIL_FIELDS if field in operation and operation[field] is not None and operation[field] == _value(contact, field)}
 		changed = {field: value for field, value in operation.items() if field in _DETAIL_FIELDS and value is not None and value != _value(contact, field)}
 		return None, _operation_preview(contact, customer, operation, idempotent=not changed), None, None
@@ -237,7 +234,7 @@ def _prepare_operation(contact: Any, customer: Any, operation: dict[str, Any]) -
 			return failure, None, None, None
 		matches = _find_email_rows(contact, requested)
 		if len(matches) > 1:
-			return _error("CONTACT_EMAIL_AMBIGUOUS", "More than one matching Contact email exists."), None, None, None
+			return _error("CONTACT_EMAIL_AMBIGUOUS"), None, None, None
 		selected = matches[0] if matches else None
 		idempotent = selected is not None and (not operation.get("make_primary") or bool(_value(selected, "is_primary", 0)))
 	elif action == "add_phone":
@@ -245,7 +242,7 @@ def _prepare_operation(contact: Any, customer: Any, operation: dict[str, Any]) -
 			return failure, None, None, None
 		matches = _find_phone_rows(contact, requested)
 		if len(matches) > 1:
-			return _error("CONTACT_PHONE_AMBIGUOUS", "More than one matching Contact phone exists."), None, None, None
+			return _error("CONTACT_PHONE_AMBIGUOUS"), None, None, None
 		selected = matches[0] if matches else None
 		idempotent = selected is not None and (not operation.get("make_primary") or bool(_value(selected, "is_primary_phone" if operation["kind"] == "phone" else "is_primary_mobile_no", 0)))
 	else:
@@ -263,10 +260,10 @@ def _prepare_operation(contact: Any, customer: Any, operation: dict[str, Any]) -
 			matches = _find_phone_rows(contact, requested)
 		if not matches:
 			code = "CONTACT_EMAIL_NOT_FOUND" if "email" in action else "CONTACT_PHONE_NOT_FOUND"
-			return _error(code, "The selected Contact communication row was not found."), None, None, None
+			return _error(code), None, None, None
 		if len(matches) > 1:
 			code = "CONTACT_EMAIL_AMBIGUOUS" if "email" in action else "CONTACT_PHONE_AMBIGUOUS"
-			return _error(code, "More than one matching Contact communication row exists."), None, None, None
+			return _error(code), None, None, None
 		selected = matches[0]
 		if failure := _duplicate_failure(customer, contact, requested, "email" if "email" in action else "phone"):
 			return failure, None, None, None
@@ -337,12 +334,12 @@ def _apply_operation(contact: Any, operation: dict[str, Any]) -> None:
 
 
 def _confirmation_failure(state: str) -> dict[str, Any]:
-	code, message, retryable = confirmation_failure(state, "Customer Contact update")
-	return _error(code, message, retryable=retryable)
+	code, _message, retryable = confirmation_failure(state, "Customer Contact update")
+	return _error(code, retryable=retryable)
 
 
-def _stale(message: str = "The Contact or Customer changed after preparation. Please prepare again.") -> dict[str, Any]:
-	return _error("CONTACT_STALE_STATE", message, retryable=True)
+def _stale() -> dict[str, Any]:
+	return _error("CONTACT_STALE_STATE", retryable=True)
 
 
 def prepare_contact_update(request: dict[str, Any]) -> dict[str, Any]:
@@ -351,9 +348,9 @@ def prepare_contact_update(request: dict[str, Any]) -> dict[str, Any]:
 	customer_ref = request.get("customer")
 	contact_ref = request.get("contact") or {}
 	if customer_ref is not None and customer_ref.get("doctype") != "Customer":
-		return _error("CUSTOMER_NOT_FOUND", "Only Customer references are supported.")
+		return _error("CUSTOMER_NOT_FOUND")
 	if contact_ref.get("doctype") != "Contact":
-		return _error("CONTACT_NOT_FOUND", "Only Contact references are supported.")
+		return _error("CONTACT_NOT_FOUND")
 	customer = None
 	if customer_ref is not None:
 		customer, failure = _load_customer(customer_ref.get("name", ""))
@@ -364,7 +361,7 @@ def prepare_contact_update(request: dict[str, Any]) -> dict[str, Any]:
 		return failure
 	assert contact is not None
 	if not contact.has_permission("write"):
-		return _permission_error("Contact", "write")
+		return _permission_error()
 	if customer is None:
 		if failure := _standalone_scope_failure(contact):
 			return failure
@@ -372,12 +369,12 @@ def prepare_contact_update(request: dict[str, Any]) -> dict[str, Any]:
 		relationship_state = []
 	else:
 		if not _has_customer_link(contact, _value(customer, "name")):
-			return _error("CONTACT_NOT_LINKED_TO_CUSTOMER", "The selected Contact is not linked to the selected Customer.")
+			return _error("CONTACT_NOT_LINKED_TO_CUSTOMER")
 		if shared := _shared_failure(contact, _value(customer, "name")):
 			return shared
 		primary = _customer_primary(customer, contact)
 		if primary and not customer.has_permission("write"):
-			return _error("CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED", "Customer write permission is required to refresh its Contact projections.")
+			return _error("CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED")
 		relationship_state = _relationship_state(contact, _value(customer, "name"))
 	operation = dict(request.get("operation") or {})
 	failure, preview, selected, _value_field = _prepare_operation(contact, customer, operation)
@@ -410,17 +407,17 @@ def prepare_contact_update(request: dict[str, Any]) -> dict[str, Any]:
 
 def confirm_contact_update(approval_token: str, confirm: bool) -> dict[str, Any]:
 	if not confirm:
-		return _error("CONFIRMATION_REQUIRED", "Review the Contact update before confirming it.")
+		return _error("CONFIRMATION_REQUIRED")
 	user = _current_user()
 	approval, state = approvals.claim_for_confirm_write(approval_token, action=_ACTION, site=frappe.local.site, user=user)
 	if state != "available" or approval is None:
 		return _confirmation_failure(state)
 	payload = approval.payload
 	if payload.get("profile") != _PROFILE:
-		return _error("CONFIRMATION_UNAVAILABLE", "This Contact update belongs to another profile.")
+		return _error("CONFIRMATION_UNAVAILABLE")
 	scope = payload.get("scope")
 	if scope not in {"standalone", "customer"}:
-		return _error("CONFIRMATION_UNAVAILABLE", "This Contact update has no valid scope.")
+		return _error("CONFIRMATION_UNAVAILABLE")
 	customer = None
 	if scope == "customer":
 		customer, failure = _load_customer(payload.get("customer_name", ""))
@@ -431,22 +428,22 @@ def confirm_contact_update(approval_token: str, confirm: bool) -> dict[str, Any]
 		return failure
 	assert contact is not None
 	if not contact.has_permission("write"):
-		return _permission_error("Contact", "write")
+		return _permission_error()
 	if scope == "standalone":
 		if _links(contact):
-			return _stale("The standalone Contact became linked after preparation.")
+			return _stale()
 		primary = False
 	else:
 		assert customer is not None
 		if not _has_customer_link(contact, payload["customer_name"]):
-			return _stale("The Customer link was removed after preparation.")
+			return _stale()
 		if shared := _shared_failure(contact, payload["customer_name"]):
-			return _stale("The Contact became shared after preparation.") | {"reference": shared["reference"]}
+			return _stale() | {"reference": shared["reference"]}
 		primary = _customer_primary(customer, contact)
 		if primary != payload.get("customer_primary"):
-			return _stale("The Customer primary Contact changed after preparation.")
+			return _stale()
 		if primary and not customer.has_permission("write"):
-			return _error("CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED", "Customer write permission is required to refresh its Contact projections.")
+			return _error("CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED")
 		if str(_value(customer, "modified")) != payload.get("customer_modified"):
 			return _stale()
 	if str(_value(contact, "modified")) != payload.get("contact_modified"):
@@ -454,10 +451,10 @@ def confirm_contact_update(approval_token: str, confirm: bool) -> dict[str, Any]
 	if scope == "customer" and stable_fingerprint(_relationship_state(contact, payload["customer_name"])) != stable_fingerprint(payload["relationship_state"]):
 		return _stale()
 	if stable_fingerprint(_affected_state(contact, payload["operation"]["action"])) != payload.get("child_fingerprint"):
-		return _error("CONTACT_CHILD_STALE_STATE", "The selected Contact communication rows changed after preparation.", retryable=True)
+		return _error("CONTACT_CHILD_STALE_STATE", retryable=True)
 	failure, preview, _selected, _value_field = _prepare_operation(contact, customer, payload["operation"])
 	if failure:
-		return _stale("The approved Contact update is no longer applicable.") if failure.get("code") in {"CONTACT_DUPLICATE_SUSPECTED", "CONTACT_EMAIL_AMBIGUOUS", "CONTACT_PHONE_AMBIGUOUS"} else failure
+		return _stale() if failure.get("code") in {"CONTACT_DUPLICATE_SUSPECTED", "CONTACT_EMAIL_AMBIGUOUS", "CONTACT_PHONE_AMBIGUOUS"} else failure
 	assert preview is not None
 	try:
 		if not preview["idempotent"]:
@@ -468,10 +465,10 @@ def confirm_contact_update(approval_token: str, confirm: bool) -> dict[str, Any]
 		frappe.db.commit()
 	except frappe.PermissionError:
 		frappe.db.rollback()
-		return _permission_error("Contact", "write")
+		return _permission_error()
 	except Exception:
 		frappe.db.rollback()
-		return _error("CONTACT_UPDATE_FAILED", "Native Contact update failed.", retryable=True)
+		return _error("CONTACT_UPDATE_FAILED", retryable=True)
 	preview["full_name_after"] = _clean(_value(contact, "full_name")) or str(_value(contact, "name"))
 	preview.update(_primary_values(contact))
 	return {"status": "updated", "customer": _customer_reference(customer) if customer is not None else None, "contact": _projection(contact, _value(customer, "name") if customer is not None else None), "preview": preview, "idempotent": bool(preview["idempotent"])}

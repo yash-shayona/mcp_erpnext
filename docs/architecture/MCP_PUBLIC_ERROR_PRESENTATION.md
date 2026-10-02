@@ -1,6 +1,6 @@
 # MCP Public Error Presentation
 
-Status: ER-01 complete; ER-02 complete; ER-03 complete; ER-04 pending; ER-05 pending.
+Status: ER-01 complete; ER-02 complete; ER-03 complete; ER-04 complete; ER-05 pending.
 
 ## Frozen public contract
 
@@ -69,19 +69,19 @@ in each row share the message and migration notes shown.
 | `mcp_erpnext/services/selling/`: `sales_order.py`, `sales_order_read.py`, `sales_invoice.py`, `sales_invoice_read.py`, `quotation.py`, `quotation_read.py`, `delivery_note_read.py`, `terms.py`, `payment_terms.py`, `sales_order_to_delivery_note.py`, `sales_order_to_sales_invoice.py`, `sales_invoice_to_delivery_note.py`, `quotation_to_sales_order.py`, `delivery_note_to_sales_invoice.py` | Domain error envelopes use catalog-owned `PublicErrorDefinition` messages through `defined_error(...)`; confirmation failures retain shared ApprovalStore codes and retryability. | `sales_invoice.py` still inspects `str(error)` only to classify the existing native prerequisite outcome; no native text is returned. This classification-only check remains for ER-05 review. | `ER-03_COMPLETE` |
 | `mcp_erpnext/services/buying/`: `purchase_order.py`, `purchase_order_read.py`, `purchase_order_to_purchase_receipt.py`, `purchase_receipt_read.py`, `commercial_terms.py` | Domain error envelopes use catalog-owned messages; Purchase Receipt source, row, quantity, and warehouse distinctions remain separate. | Shared `needs_input` and other non-error response messages remain workflow guidance, not `ToolError` overrides. | `ER-03_COMPLETE` |
 | `mcp_erpnext/services/accounts/`: `customer_payment_entry.py`, `customer_payment_reconciliation.py`, `multi_invoice_customer_receipt.py`, `payment_entry_read.py`, `sales_invoice_payment.py`, `sales_order_advance_payment.py` | Domain error envelopes use catalog-owned messages for payment creation, allocation, account/party/company compatibility, outstanding state, and reconciliation failures. | Accounting calculations, native validation, permissions, and transaction boundaries remain authoritative and unchanged. | `ER-03_COMPLETE` |
-| `mcp_erpnext/services/masters/`: `contact.py`, `contact_update.py`, `customer.py`, `customer_contact.py`, `customer_primary_contact.py`, `customer_read.py`, `item.py`, `item_read.py`, `supplier_read.py` | Local `_error` helpers, direct error maps, and shared public error helpers. Codes cover permission, invalid input/identity, duplicates/ambiguity, link/scope, primary-contact consistency, not-found, and stale state. | Contact relationship boundaries and native save semantics must be preserved while messages are centralized. | `ER-04 / MIGRATE_REMAINING_DOMAINS` |
-| `mcp_erpnext/services/shayona/`: `credential_email.py`, `credentials.py`, `tea_entries.py` | Credential/email and Tea Entry domain errors; typed exceptions are converted to public codes/messages at tool/service boundaries. Codes include capability/schema unavailable, permission, validation, email/configuration, and stale confirmation. | `credential_email.py` uses a service-local message catalog; exception causes are wrapped, while raw cause text is not the intended public response. Verify every catch boundary during migration. | `MIGRATE_REMAINING_DOMAINS` |
-| `mcp_erpnext/services/buying/terms.py`, `mcp_erpnext/services/masters/selection.py`, `mcp_erpnext/services/masters/supplier.py`, `mcp_erpnext/services/integrations/india_compliance_customer.py`, `mcp_erpnext/services/integrations/india_compliance_item.py`, `mcp_erpnext/services/sales_order_service.py`, `mcp_erpnext/services/common/aggregate.py`, `mcp_erpnext/services/common/creation_contract.py`, `mcp_erpnext/services/common/entity_resolution.py`, `mcp_erpnext/services/common/effective_requirements.py`, `mcp_erpnext/services/common/field_value_resolver.py`, `mcp_erpnext/services/common/fingerprint.py`, `mcp_erpnext/services/common/terms_resolution.py` | Shared operations/resolvers either raise typed/domain errors or return failures consumed by producer rows above; no independent standard error-envelope builder was found in these files during the producer-pattern scan. | Confirm their callers when each owning domain is migrated; preserve resolver states (`ambiguous`, `not_found`, `error`) and typed distinctions. | `VERIFY_ONLY` |
+| `mcp_erpnext/services/masters/`: `contact.py`, `contact_update.py`, `customer.py`, `customer_contact.py`, `customer_primary_contact.py`, `customer_read.py`, `item.py`, `item_read.py`, `supplier_read.py` | Standard Master errors use `defined_error()` and central catalog messages. Stable codes cover permission, invalid input/identity, duplicates/ambiguity, link/scope, primary-contact consistency, not-found, and stale state. | Contact relationship boundaries, native save semantics, and permission checks remain owned by Frappe/ERPNext. | `ER-04_COMPLETE` |
+| `mcp_erpnext/services/shayona/`: `credential_email.py`, `credentials.py`, `tea_entries.py` | Credential/email and Tea Entry errors use central `defined_error()` / `logged_defined_error()` definitions. | Credential secrets, recipient/template/email security, approval binding, Tea Entry rollback, and structured not-found/preview/ready states remain unchanged. Typed exceptions carry stable codes only. | `ER-04_COMPLETE` |
+| `mcp_erpnext/services/buying/terms.py`, `mcp_erpnext/services/masters/selection.py`, `mcp_erpnext/services/masters/supplier.py`, `mcp_erpnext/services/integrations/india_compliance_customer.py`, `mcp_erpnext/services/integrations/india_compliance_item.py`, `mcp_erpnext/services/sales_order_service.py`, `mcp_erpnext/services/common/aggregate.py`, `mcp_erpnext/services/common/creation_contract.py`, `mcp_erpnext/services/common/entity_resolution.py`, `mcp_erpnext/services/common/effective_requirements.py`, `mcp_erpnext/services/common/field_value_resolver.py`, `mcp_erpnext/services/common/fingerprint.py`, `mcp_erpnext/services/common/terms_resolution.py` | Shared operations/resolvers either raise typed/domain errors or return failures consumed by producer rows above; Master-owned India Compliance codes are defined centrally. No independent standard error-envelope builder or raw public error forwarding was found in the inspected helper/integration paths. | Preserve resolver states (`ambiguous`, `not_found`, `error`) and typed distinctions; public presentation remains at the owning Master boundary. | `VERIFY_ONLY_COMPLETE` |
 | `mcp_erpnext/approvals.py`, `mcp_erpnext/services/common/write_policy.py` | Approval storage and write policy raise typed operational errors or return `PolicyFailure(code, message)`; central definitions own the public wording. | Policy and approval semantics remain fail-closed; public messages no longer reveal server-policy/session wording. | `ER-02_COMPLETE` |
 | `mcp_erpnext/contracts/accounts/`: `customer_payment_entry.py`, `customer_payment_reconciliation.py`, `multi_invoice_customer_receipt.py`, `payment_entry_read.py`, `sales_invoice_payment.py`, `sales_order_advance_payment.py`; `mcp_erpnext/contracts/buying/`: `purchase_order.py`, `purchase_order_read.py`, `purchase_receipt.py`, `purchase_receipt_read.py`; `mcp_erpnext/contracts/masters/`: `contact.py`, `customer.py`, `customer_read.py`, `item.py`, `item_read.py`, `resolution.py`, `supplier_read.py`; `mcp_erpnext/contracts/selling/`: `delivery_note.py`, `delivery_note_read.py`, `delivery_note_to_sales_invoice.py`, `payment_terms.py`, `quotation.py`, `quotation_read.py`, `quotation_to_sales_order.py`, `sales_invoice.py`, `sales_invoice_read.py`, `sales_invoice_to_delivery_note.py`, `sales_order.py`, `sales_order_read.py`, `sales_order_to_sales_invoice.py`, `terms.py`; `mcp_erpnext/contracts/shayona/`: `credential_email.py`, `credentials.py`, `tea_entries.py`; and `mcp_erpnext/contracts/`: `common.py`, `email.py`, `pdf.py`, `read.py` | These schema consumers use the shared `ToolError` from `contracts/common.py`; there are also tool-specific error state models (for example Sales Order states). No contract field additions are made. | Contract/schema surface is the five-field envelope plus existing typed state unions. Keep client compatibility and review any bespoke error model alongside its tool. | `FOUNDATION_ONLY` |
 | `mcp_erpnext/tools/**`, `mcp_erpnext/remote_operations.py`, `mcp_erpnext/runtime.py` | Tool wrappers route service results and exceptions through declared output unions and `execute_tool`; remote operations normalize REST service results. | No separate competing envelope registry found. Verify each wrapper preserves the same shape and code/message semantics for Direct and REST. | `VERIFY_ONLY` |
 
 The service-local code inventory is discoverable at each row's listed source
-paths. Common stable code groups include `*_DISABLED`, `APPROVAL_REQUIRED`,
-`DIRECT_EXECUTION_REQUIRED`, `PERMISSION_DENIED`/`ERP_PERMISSION_DENIED`,
-`*_NOT_FOUND`, `INVALID_*`, `*_UNAVAILABLE`, `*_FAILED`, and
-`STALE_CONFIRMATION`; literal codes are intentionally not duplicated into a
-second registry until their owning migration registers safe definitions.
+paths. All standard Master and Shayona error codes found in ER-04 resolve to an
+explicit definition in `mcp_erpnext/public_errors.py`; no second registry owns
+their public wording. The code families remain distinct for permission, invalid
+input, not found, ambiguous selection, business-state blocks, approvals,
+staleness, capability/configuration, and temporary failures.
 
 ### Explicit exposure findings
 
@@ -90,42 +90,35 @@ second registry until their owning migration registers safe definitions.
   failures now return central messages and log with a correlation reference.
   `services/selling/sales_invoice.py` still reads `str(error)` only to classify
   a native prerequisite failure, then returns a bounded business result.
-- **Technical wording returned publicly: no** in migrated lifecycle/write-policy
-  paths. **Potentially yes** in local
-  service messages that describe native failures, configuration, or backend
-  availability; these remain assigned to their listed migration phases and
-  are not declared safe merely because they are not raw tracebacks. The
-  centralized fallback and registered definitions contain bounded messages.
-- **Semantic category coverage:** current local codes are grouped by invalid
-  input, permission, not found, ambiguous/duplicate selection, business-state
-  block, approval/interaction, stale state, configuration/capability, temporary
-  operation, and unexpected failure. The literal code values remain in their
-  owning service paths until their migration phase; no cosmetic renaming is
-  part of the inventory task.
+- **Technical wording returned publicly:** the ER-04 Master and Shayona standard
+  error paths use central messages; their former inline wording and Credential
+  Email message map are removed. ER-05 must independently scan the entire
+  repository and compare Direct/REST behavior before overall closure.
+- **Semantic category coverage:** stable codes remain grouped by invalid input,
+  permission, not found, ambiguous/duplicate selection, business-state block,
+  approval/interaction, stale state, configuration/capability, temporary
+  operation, and unexpected failure. Codes were preserved during ER-04.
 
 ## Residual risks and migration map
 
 - ER-02 removes the previously confirmed lifecycle exception-text exposure for
   `LIFECYCLE_VALIDATION_FAILED` and `LINKED_DOCUMENT`. Remaining raw-exception
   checks belong to ER-03 through ER-05.
-- Service-local `_error` helpers and direct dictionaries remain throughout the
-  inventory. The legacy `message=` override also remains for compatibility.
-- Write-policy public wording now comes from the catalog while the policy
-  module retains write-mode authorization semantics.
-- A disabled capability and a permission denial are distinct. Keep their codes,
-  categories, and user explanations distinct during later migration.
-- Direct and REST must continue to return the same public envelope. No
-  backend-specific error semantics or client-detection branches are permitted.
-- Native framework messages can contain document, configuration, or internal
-  details. Migrations should map known cases to safe messages and log only
-  bounded operational context with the existing correlation reference.
+- Thin service-local adapters may remain where they delegate to the catalog;
+  they do not accept or own public message text. The legacy observability
+  `message=` parameter remains only for compatibility outside migrated callers.
+- Write-policy public wording comes from the catalog while the policy module
+  retains write-mode authorization semantics. Capability restrictions and
+  permission denials remain distinct.
+- ER-05 must verify Direct/REST presentation parity and scan for remaining
+  legacy message overrides and raw exception paths across the repository.
 
 | Phase | Ownership |
 | --- | --- |
 | ER-01 | Foundation, shared instructions, inventory, compatibility tests. |
 | ER-02 | Core/security/common and write-policy/lifecycle producers. |
 | ER-03 | Sales, Buying, Accounts business-domain producers (complete). |
-| ER-04 | Masters, Shayona, integrations, and remaining domain producers (pending). |
+| ER-04 | Masters, Shayona, integrations, and remaining domain producers (complete). |
 | ER-05 | Full-surface parity, raw-exception, and contract verification (pending). |
 
 ## ER-01 scope and version
@@ -152,6 +145,14 @@ ER-05 verifies full-surface parity and residual raw-exception paths.
 ER-03 migrates Sales, Buying, and Accounts error envelopes to catalog-owned
 messages while preserving the five-field `ToolError`, stable codes, approval
 semantics, permission behavior, accounting/conversion rules, and structured
-non-error states. The PATCH version is `4.0.2`. ER-04 still covers Masters,
-Shayona, integrations, and remaining domain producers; ER-05 still covers
-repository-wide residual scans and live Direct-MCP validation.
+non-error states. The PATCH version is `4.0.2`.
+
+## ER-04 scope and version
+
+ER-04 migrates Master and Shayona standard error envelopes to catalog-owned
+messages and verifies that India Compliance/helper paths do not independently
+present standard errors. It preserves the five-field `ToolError`, stable codes,
+permission and approval semantics, Contact relationship rules, credential
+secrecy/email safeguards, Tea Entry transaction behavior, and structured
+non-error states. The PATCH version is `4.0.4`. ER-05 remains repository-wide
+residual scanning, Direct/REST parity, and live Direct-MCP validation.

@@ -9,7 +9,7 @@ from frappe.utils import validate_email_address, validate_phone_number
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from ..common.write_policy import (
 	approval_entry_failure,
@@ -28,14 +28,8 @@ _ACTION = "contact_create"
 _PROFILE = "sales"
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-	return {
-		"status": "error",
-		"code": code,
-		"message": message,
-		"reference": new_error_reference(),
-		"retryable": retryable,
-	}
+def _error(code: str, *, retryable: bool = False) -> dict[str, Any]:
+	return defined_error(code, retryable=retryable)
 
 
 def _current_user() -> str:
@@ -53,23 +47,20 @@ def _clean(value: Any) -> str | None:
 
 
 def _permission_error() -> dict[str, Any]:
-	return _error("PERMISSION_DENIED", "The authenticated user cannot create this Contact.")
+	return defined_error("PERMISSION_DENIED")
 
 
 def _validate_input(values: dict[str, Any]) -> dict[str, Any] | None:
 	if not any(values.get(fieldname) for fieldname in ("first_name", "last_name", "company_name")):
-		return _error(
-			"CONTACT_INVALID_IDENTITY",
-			"A standalone Contact needs first_name, last_name, or company_name.",
-		)
+		return _error("CONTACT_INVALID_IDENTITY")
 	if values.get("email"):
 		parsed = validate_email_address(values["email"], throw=False)
 		if not parsed or "," in parsed:
-			return _error("CONTACT_INVALID_EMAIL", "The Contact email is invalid.")
+			return _error("CONTACT_INVALID_EMAIL")
 		values["email"] = parsed
 	for fieldname in ("mobile", "phone"):
 		if values.get(fieldname) and not validate_phone_number(values[fieldname], throw=False):
-			return _error("CONTACT_INVALID_PHONE", "The Contact phone number is invalid.")
+			return _error("CONTACT_INVALID_PHONE")
 	return None
 
 
@@ -134,8 +125,8 @@ def _preview(values: dict[str, Any]) -> dict[str, Any]:
 
 
 def _confirmation_failure(state: str) -> dict[str, Any]:
-	code, message, retryable = confirmation_failure(state, "standalone Contact")
-	return _error(code, message, retryable=retryable)
+	code, _message, retryable = confirmation_failure(state, "standalone Contact")
+	return defined_error(code, retryable=retryable)
 
 
 def _plan_contact(request: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
@@ -161,10 +152,7 @@ def _plan_contact(request: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[
 	if validation_failure := _validate_input(values):
 		return None, validation_failure
 	if duplicates := _duplicate_contacts(values):
-		return None, _error(
-			"CONTACT_DUPLICATE_SUSPECTED",
-			"An exact visible Contact already matches this identity.",
-		) | {"candidates": duplicates}
+		return None, _error("CONTACT_DUPLICATE_SUSPECTED") | {"candidates": duplicates}
 	return values, None
 
 
@@ -175,14 +163,11 @@ def _create_contact(values: dict[str, Any], expected_mode: WriteMode) -> dict[st
 	if validation_failure := _validate_input(values):
 		return validation_failure
 	if duplicates := _duplicate_contacts(values):
-		return _error(
-			"CONTACT_DUPLICATE_SUSPECTED",
-			"An exact visible Contact appeared after preparation.",
-		) | {"candidates": duplicates}
+		return _error("CONTACT_DUPLICATE_SUSPECTED") | {"candidates": duplicates}
 	try:
 		contact = frappe.get_doc(_contact_payload(values))
 		if failure := exact_mode_failure("create", expected_mode):
-			return _error(failure.code, failure.message)
+			return _error(failure.code)
 		contact.insert(ignore_permissions=False)
 		frappe.db.commit()
 	except frappe.PermissionError:
@@ -190,14 +175,14 @@ def _create_contact(values: dict[str, Any], expected_mode: WriteMode) -> dict[st
 		return _permission_error()
 	except Exception:
 		frappe.db.rollback()
-		return _error("CONTACT_CREATE_FAILED", "Native Contact creation failed.", retryable=True)
+		return _error("CONTACT_CREATE_FAILED", retryable=True)
 	return {"status": "created", "contact": _projection(contact), "idempotent": False}
 
 
 def prepare_contact(request: dict[str, Any]) -> dict[str, Any]:
 	"""Prepare a standalone Contact preview and token only in approval mode."""
 	if failure := disabled_failure("create"):
-		return _error(failure.code, failure.message)
+		return _error(failure.code)
 	values, failure = _plan_contact(request)
 	if failure:
 		return failure
@@ -234,11 +219,11 @@ def prepare_contact(request: dict[str, Any]) -> dict[str, Any]:
 def confirm_contact(approval_token: str, confirm: bool) -> dict[str, Any]:
 	"""Claim and execute exactly one approved native standalone Contact insert."""
 	if failure := approval_entry_failure("create"):
-		return _error(failure.code, failure.message)
+		return _error(failure.code)
 	user = _current_user()
 	if not confirm:
 		approvals.cancel(approval_token, action=_ACTION, site=frappe.local.site, user=user)
-		return _error("CONFIRMATION_REQUIRED", "Review the Contact operation before confirming it.")
+		return _error("CONFIRMATION_REQUIRED")
 	approval, state = approvals.claim_for_confirm_write(
 		approval_token, action=_ACTION, site=frappe.local.site, user=user
 	)
@@ -246,7 +231,7 @@ def confirm_contact(approval_token: str, confirm: bool) -> dict[str, Any]:
 		return _confirmation_failure(state)
 	payload = approval.payload
 	if payload.get("profile") != _PROFILE or payload.get("action") != _ACTION:
-		return _error("PROFILE_MISMATCH", "The prepared Contact operation belongs to another profile.")
+		return _error("PROFILE_MISMATCH")
 	values = dict(payload.get("values") or {})
 	return _create_contact(values, WriteMode.APPROVAL_REQUIRED)
 
@@ -254,7 +239,7 @@ def confirm_contact(approval_token: str, confirm: bool) -> dict[str, Any]:
 def execute_contact(request: dict[str, Any]) -> dict[str, Any]:
 	"""Create a standalone Contact from a fresh request in direct mode."""
 	if failure := direct_entry_failure("create"):
-		return _error(failure.code, failure.message)
+		return _error(failure.code)
 	values, failure = _plan_contact(request)
 	if failure:
 		return failure

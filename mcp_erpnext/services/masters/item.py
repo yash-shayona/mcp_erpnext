@@ -8,7 +8,7 @@ import frappe
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...config.masters import item as item_config
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.creation_contract import missing_input_response, resolve_creation_contract
 from ..common.entity_resolution import (
     find_candidates,
@@ -52,14 +52,8 @@ def _clean_text(value: Any) -> str | None:
     return value or None
 
 
-def _confirmation_error(code: str, message: str, *, retryable: bool) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+def _confirmation_error(code: str, *, retryable: bool) -> dict[str, Any]:
+	return defined_error(code, retryable=retryable)
 
 
 def _reference(candidate: dict[str, Any]) -> dict[str, str | None]:
@@ -230,9 +224,7 @@ def resolve_all_item_for_workflow(query: str) -> dict[str, Any]:
 def _item_data(item: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Map the intentionally narrow, non-pricing Item creation contract."""
     if not isinstance(item, dict):
-        return None, _confirmation_error(
-            "INVALID_ITEM_DETAILS", "Item details must be an object.", retryable=False
-        )
+        return None, _confirmation_error("INVALID_ITEM_DETAILS", retryable=False)
 
     provided = {
         fieldname: item[fieldname]
@@ -324,11 +316,7 @@ def _runtime_requirement_response(result: RequirementResult) -> dict[str, Any]:
             ],
             "message": requirement.guidance,
         }
-    return _confirmation_error(
-        "ITEM_RUNTIME_REQUIREMENT_UNAVAILABLE",
-        "Item creation requirements could not be safely determined. Ask an authorized administrator or support team to check the site configuration.",
-        retryable=True,
-    )
+    return _confirmation_error("ITEM_RUNTIME_REQUIREMENT_UNAVAILABLE", retryable=True)
 
 
 def _duplicate_matches(item_code: str) -> list[dict[str, Any]]:
@@ -404,7 +392,7 @@ def _create_item(data: dict[str, Any], expected_mode: WriteMode) -> dict[str, An
     try:
         doc = frappe.get_doc(data)
         if failure := exact_mode_failure("create", expected_mode):
-            return _confirmation_error(failure.code, failure.message, retryable=False)
+            return _confirmation_error(failure.code, retryable=False)
         doc.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
         frappe.db.commit()
     except frappe.PermissionError:
@@ -429,7 +417,7 @@ def _create_item(data: dict[str, Any], expected_mode: WriteMode) -> dict[str, An
 def prepare_item(item: dict[str, Any]) -> dict[str, Any]:
     """Validate a new sales Item and optionally issue a private confirmation token."""
     if failure := disabled_failure("create"):
-        return _confirmation_error(failure.code, failure.message, retryable=False)
+        return _confirmation_error(failure.code, retryable=False)
     data, failure = _plan_item(item)
     if failure:
         return failure
@@ -456,23 +444,19 @@ def prepare_item(item: dict[str, Any]) -> dict[str, Any]:
 def confirm_item(approval_token: str, confirm: bool) -> dict[str, Any]:
     """Create the prepared Item only for the original site and authenticated user."""
     if failure := approval_entry_failure("create"):
-        return _confirmation_error(failure.code, failure.message, retryable=False)
+        return _confirmation_error(failure.code, retryable=False)
     user = _current_user()
     if not confirm:
         approvals.cancel(
             approval_token, action=_ACTION, site=frappe.local.site, user=user
         )
-        return _confirmation_error(
-            "CONFIRMATION_REQUIRED",
-            "Review the Item preview before confirming it.",
-            retryable=False,
-        )
+        return _confirmation_error("CONFIRMATION_REQUIRED", retryable=False)
     approval, state = approvals.claim_for_confirm_write(
         approval_token, action=_ACTION, site=frappe.local.site, user=user
     )
     if state != "available" or approval is None:
-        code, message, retryable = confirmation_failure(state, "Item")
-        return _confirmation_error(code, message, retryable=retryable)
+        code, _message, retryable = confirmation_failure(state, "Item")
+        return _confirmation_error(code, retryable=retryable)
     if not frappe.has_permission("Item", "create"):
         return _permission_denied()
     if duplicates := _duplicate_matches(approval.payload["item_code"]):
@@ -484,7 +468,7 @@ def confirm_item(approval_token: str, confirm: bool) -> dict[str, Any]:
 def execute_item(item: dict[str, Any]) -> dict[str, Any]:
     """Create an Item directly only after fresh planning under direct policy."""
     if failure := direct_entry_failure("create"):
-        return _confirmation_error(failure.code, failure.message, retryable=False)
+        return _confirmation_error(failure.code, retryable=False)
     data, failure = _plan_item(item)
     if failure:
         return failure

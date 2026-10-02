@@ -8,7 +8,7 @@ import frappe
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...config.masters import customer as customer_config
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.creation_contract import missing_input_response, resolve_creation_contract
 from ..common.entity_resolution import find_candidates, resolve_candidate, search_status
 from ..common.field_value_resolver import resolve_contract_values
@@ -32,14 +32,7 @@ def _requires_structured_query(query: str) -> bool:
 
 
 def _structured_query_required(query: str) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": "CUSTOMER_STRUCTURED_QUERY_REQUIRED",
-        "message": "Email-shaped input must use query_customers with the exact email_id filter.",
-        "reference": new_error_reference(),
-        "retryable": False,
-    }
-
+    return defined_error("CUSTOMER_STRUCTURED_QUERY_REQUIRED")
 
 def _current_user() -> str:
     user = getattr(frappe.session, "user", None)
@@ -80,14 +73,8 @@ def _clean_text(value: Any) -> str | None:
     return value or None
 
 
-def _confirmation_error(code: str, message: str, *, retryable: bool) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+def _confirmation_error(code: str, *, retryable: bool) -> dict[str, Any]:
+	return defined_error(code, retryable=retryable)
 
 
 def search_customers(query: str) -> dict[str, Any]:
@@ -220,11 +207,7 @@ def _customer_data(
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Validate and map the narrow Customer input contract without writing."""
     if not isinstance(customer, dict):
-        return None, _confirmation_error(
-            "INVALID_CUSTOMER_DETAILS",
-            "Customer details must be an object.",
-            retryable=False,
-        )
+        return None, _confirmation_error("INVALID_CUSTOMER_DETAILS", retryable=False)
 
     provided = {
         fieldname: value
@@ -258,11 +241,7 @@ def _customer_data(
     contact = customer.get("contact") or {}
     address = customer.get("address") or {}
     if not isinstance(contact, dict) or not isinstance(address, dict):
-        return None, _confirmation_error(
-            "INVALID_CUSTOMER_DETAILS",
-            "Contact and address details must be objects.",
-            retryable=False,
-        )
+        return None, _confirmation_error("INVALID_CUSTOMER_DETAILS", retryable=False)
 
     for source, target in customer_config.CONTACT_FIELD_MAP.items():
         if value := _clean_text(contact.get(source)):
@@ -271,11 +250,7 @@ def _customer_data(
     gstin = _clean_text(customer.get("gstin"))
     if gstin:
         if not _customer_has_field("gstin"):
-            return None, _confirmation_error(
-                "GSTIN_UNSUPPORTED",
-                "GSTIN is not configured for Customer on this site.",
-                retryable=False,
-            )
+            return None, _confirmation_error("GSTIN_UNSUPPORTED", retryable=False)
         data["gstin"] = _normalise_identifier("gstin", gstin)
 
     address_data: dict[str, Any] | None = None
@@ -302,11 +277,7 @@ def _customer_data(
             address_data["gstin"] = data["gstin"]
 
         if capabilities.installed and not capabilities.native_gst_prepare:
-            return None, _confirmation_error(
-                "INDIA_COMPLIANCE_GST_UNAVAILABLE",
-                "India Compliance GST validation is unavailable for safe Customer preparation on this site.",
-                retryable=False,
-            )
+            return None, _confirmation_error("INDIA_COMPLIANCE_GST_UNAVAILABLE", retryable=False)
 
         if capabilities.installed:
             india_compliance_customer.prepare_customer_gst(
@@ -324,11 +295,7 @@ def _customer_data(
             )
     else:
         if capabilities.installed and not capabilities.native_gst_prepare:
-            return None, _confirmation_error(
-                "INDIA_COMPLIANCE_GST_UNAVAILABLE",
-                "India Compliance GST validation is unavailable for safe Customer preparation on this site.",
-                retryable=False,
-            )
+            return None, _confirmation_error("INDIA_COMPLIANCE_GST_UNAVAILABLE", retryable=False)
         india_compliance_customer.prepare_customer_gst(
             data,
             capabilities=capabilities,
@@ -336,11 +303,7 @@ def _customer_data(
 
     if address_data:
         if capabilities.installed and not capabilities.transient_primary_address:
-            return None, _confirmation_error(
-                "INDIA_COMPLIANCE_ADDRESS_BRIDGE_UNAVAILABLE",
-                "India Compliance primary Address handling is unavailable for safe Customer preparation on this site.",
-                retryable=False,
-            )
+            return None, _confirmation_error("INDIA_COMPLIANCE_ADDRESS_BRIDGE_UNAVAILABLE", retryable=False)
         # India Compliance deliberately maps its Quick Entry address through this
         # transient property; core ERPNext uses address_line1 directly.
         address_field = (
@@ -438,7 +401,7 @@ def _create_customer(data: dict[str, Any], expected_mode: WriteMode) -> dict[str
     try:
         doc = frappe.get_doc(data)
         if failure := exact_mode_failure("create", expected_mode):
-            return _confirmation_error(failure.code, failure.message, retryable=False)
+            return _confirmation_error(failure.code, retryable=False)
         doc.insert(ignore_permissions=False, ignore_links=False, ignore_mandatory=False)
         frappe.db.commit()
     except frappe.PermissionError:
@@ -461,7 +424,7 @@ def _create_customer(data: dict[str, Any], expected_mode: WriteMode) -> dict[str
 def prepare_customer(customer: dict[str, Any]) -> dict[str, Any]:
     """Validate a proposed Customer and optionally issue a private token."""
     if failure := disabled_failure("create"):
-        return _confirmation_error(failure.code, failure.message, retryable=False)
+        return _confirmation_error(failure.code, retryable=False)
     data, failure = _plan_customer(customer)
     if failure:
         return failure
@@ -484,23 +447,19 @@ def prepare_customer(customer: dict[str, Any]) -> dict[str, Any]:
 def confirm_customer(approval_token: str, confirm: bool) -> dict[str, Any]:
     """Create the reviewed Customer only for its original site and authenticated user."""
     if failure := approval_entry_failure("create"):
-        return _confirmation_error(failure.code, failure.message, retryable=False)
+        return _confirmation_error(failure.code, retryable=False)
     user = _current_user()
     if not confirm:
         approvals.cancel(
             approval_token, action=_ACTION, site=frappe.local.site, user=user
         )
-        return _confirmation_error(
-            "CONFIRMATION_REQUIRED",
-            "Review the Customer preview before confirming it.",
-            retryable=False,
-        )
+        return _confirmation_error("CONFIRMATION_REQUIRED", retryable=False)
     approval, state = approvals.claim_for_confirm_write(
         approval_token, action=_ACTION, site=frappe.local.site, user=user
     )
     if state != "available" or approval is None:
-        code, message, retryable = confirmation_failure(state, "Customer")
-        return _confirmation_error(code, message, retryable=retryable)
+        code, _message, retryable = confirmation_failure(state, "Customer")
+        return _confirmation_error(code, retryable=retryable)
     if missing := _create_permissions(approval.payload):
         return _permission_denied(missing)
     if duplicates := _duplicate_matches(approval.payload):
@@ -512,7 +471,7 @@ def confirm_customer(approval_token: str, confirm: bool) -> dict[str, Any]:
 def execute_customer(customer: dict[str, Any]) -> dict[str, Any]:
     """Create a fresh, bounded Customer only when server policy is direct."""
     if failure := direct_entry_failure("create"):
-        return _confirmation_error(failure.code, failure.message, retryable=False)
+        return _confirmation_error(failure.code, retryable=False)
     data, failure = _plan_customer(customer)
     if failure:
         return failure

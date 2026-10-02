@@ -7,7 +7,7 @@ from typing import Any
 
 import frappe
 
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.aggregate import (
     build_aggregate_field,
     build_aggregate_fields,
@@ -59,14 +59,8 @@ _DIRECT_FILTER_FIELDS = (
 )
 
 
-def _error(code: str, message: str) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": message,
-        "reference": new_error_reference(),
-        "retryable": False,
-    }
+def _error(code: str, *, retryable: bool = False) -> dict[str, Any]:
+	return defined_error(code, retryable=retryable)
 
 
 def _date(value: date | None) -> str | None:
@@ -147,9 +141,7 @@ def get_item(
     except frappe.DoesNotExistError:
         return {"status": "not_found", "item": item}
     if not doc.has_permission("read"):
-        return _error(
-            "PERMISSION_DENIED", "The authenticated user cannot read that Item."
-        )
+        return _error("PERMISSION_DENIED")
     if purchase_only and (doc.get("disabled") or not doc.get("is_purchase_item")):
         return {"status": "not_found", "item": item}
     return {"status": "ok", "document": _project(doc, fields)}

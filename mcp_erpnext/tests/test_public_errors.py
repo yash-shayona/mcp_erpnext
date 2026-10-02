@@ -79,6 +79,32 @@ class PublicErrorFoundationTests(unittest.TestCase):
         }
         self.assertLessEqual(codes, PUBLIC_ERROR_DEFINITIONS.keys())
 
+    def test_catalog_covers_masters_and_shayona_codes(self):
+        codes = {
+            "CONTACT_CHILD_STALE_STATE", "CONTACT_CREATE_FAILED", "CONTACT_DUPLICATE_SUSPECTED",
+            "CONTACT_EMAIL_AMBIGUOUS", "CONTACT_EMAIL_NOT_FOUND", "CONTACT_INVALID_DATA",
+            "CONTACT_INVALID_EMAIL", "CONTACT_INVALID_IDENTITY", "CONTACT_INVALID_PHONE",
+            "CONTACT_INVALID_REQUEST", "CONTACT_LINK_FAILED", "CONTACT_LINK_STALE_STATE",
+            "CONTACT_NOT_FOUND", "CONTACT_NOT_LINKED_TO_CUSTOMER", "CONTACT_PHONE_AMBIGUOUS",
+            "CONTACT_PHONE_NOT_FOUND", "CONTACT_PRIMARY_STATE_INCONSISTENT",
+            "CONTACT_PRIMARY_UNSUPPORTED", "CONTACT_SCOPE_REQUIRED", "CONTACT_SHARED_WITH_OTHER_PARTIES",
+            "CONTACT_STALE_STATE", "CONTACT_UPDATE_FAILED", "CREDENTIAL_INACTIVE", "CREDENTIAL_NOT_FOUND",
+            "CREDENTIAL_READ_FAILED", "CREDENTIAL_SECRET_UNAVAILABLE", "CUSTOMER_EMAIL_UNAVAILABLE",
+            "CUSTOMER_PRIMARY_CONTACT_STALE", "CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED",
+            "CUSTOMER_STRUCTURED_QUERY_REQUIRED", "EMAIL_RENDER_FAILED", "EMAIL_TEMPLATE_INVALID",
+            "EMAIL_TEMPLATE_NOT_CONFIGURED", "EMAIL_TEMPLATE_NOT_FOUND", "EMAIL_TEMPLATE_UNSAFE",
+            "GSTIN_UNSUPPORTED", "INDIA_COMPLIANCE_ADDRESS_BRIDGE_UNAVAILABLE",
+            "INDIA_COMPLIANCE_GST_UNAVAILABLE", "INVALID_CUSTOMER_DETAILS", "ITEM_RUNTIME_REQUIREMENT_UNAVAILABLE",
+            "OPERATOR_EMAIL_UNAVAILABLE", "PRIMARY_CONTACT_PROMOTION_FAILED", "PRIMARY_CONTACT_PROMOTION_UNSAFE",
+            "TEA_ENTRY_VALIDATION_FAILED", "TEA_ENTRY_WRITE_FAILED",
+        }
+        self.assertLessEqual(codes, PUBLIC_ERROR_DEFINITIONS.keys())
+        for code in codes:
+            with self.subTest(code=code):
+                result = defined_error(code)
+                self.assertEqual(result["message"], PUBLIC_ERROR_DEFINITIONS[code].message)
+                self.assertEqual(set(result), {"status", "code", "message", "reference", "retryable"})
+
     def test_catalog_covers_sales_buying_and_accounts_codes(self):
         codes = {
             "ACCOUNT_MISMATCH",

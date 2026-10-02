@@ -17,7 +17,8 @@ from ...contracts.shayona.tea_entries import (
     TeaEntryUpdatePreview,
     TeaEntryUpdateState,
 )
-from ...observability import logged_public_error, public_error
+from ...observability import logged_defined_error
+from ...public_errors import defined_error
 from ...settings import WriteMode
 from ..common.fingerprint import stable_fingerprint
 from ..common.write_policy import (
@@ -117,7 +118,7 @@ def _schema_error(tool_name: str) -> dict[str, Any] | None:
     try:
         tea_entry_schema()
     except TeaEntrySchemaUnavailableError:
-        return logged_public_error(tool_name, "TEA_ENTRY_SCHEMA_UNAVAILABLE")
+        return logged_defined_error(tool_name, "TEA_ENTRY_SCHEMA_UNAVAILABLE")
     return None
 
 
@@ -250,19 +251,14 @@ def _create_error(
     tool: str, error: Exception, *, applying: bool = False, approved: bool = False,
 ) -> dict[str, Any]:
     if isinstance(error, TeaEntrySchemaUnavailableError):
-        return logged_public_error(tool, "TEA_ENTRY_SCHEMA_UNAVAILABLE")
+        return logged_defined_error(tool, "TEA_ENTRY_SCHEMA_UNAVAILABLE")
     if isinstance(error, frappe.PermissionError):
-        return logged_public_error(tool, "ERP_PERMISSION_DENIED")
+        return logged_defined_error(tool, "ERP_PERMISSION_DENIED")
     if isinstance(error, (frappe.ValidationError, ValueError)):
         code = "STALE_CONFIRMATION" if approved else "TEA_ENTRY_VALIDATION_FAILED"
-        message = (
-            "The approved Tea Entry state changed. Prepare it again."
-            if approved else "Native Tea Entry validation failed. Review the request."
-        )
     else:
         code = "TEA_ENTRY_WRITE_FAILED" if applying else "TEA_ENTRY_VALIDATION_FAILED"
-        message = "The Tea Entry operation could not be completed."
-    return logged_public_error(tool, code, message=message)
+    return logged_defined_error(tool, code)
 
 
 def _apply_tea_entry(plan: TeaEntryPlan, expected_mode: WriteMode) -> dict[str, Any]:
@@ -274,10 +270,10 @@ def _apply_tea_entry(plan: TeaEntryPlan, expected_mode: WriteMode) -> dict[str, 
             stable_fingerprint(_native_preview(doc).model_dump()) != stable_fingerprint(plan.preview())
         ):
             frappe.db.rollback()
-            return public_error("STALE_CONFIRMATION", message="The approved Tea Entry state changed. Prepare it again.")
+            return defined_error("STALE_CONFIRMATION")
         if failure := exact_mode_failure("create", expected_mode):
             frappe.db.rollback()
-            return public_error(failure.code, message=failure.message)
+            return defined_error(failure.code)
         doc.insert(ignore_permissions=False)
         result = {"status": "created", "tea_entry": _project(doc)}
         frappe.db.commit()
@@ -289,7 +285,7 @@ def _apply_tea_entry(plan: TeaEntryPlan, expected_mode: WriteMode) -> dict[str, 
 
 def prepare_tea_entry(request: dict[str, Any]) -> dict[str, Any]:
     if failure := disabled_failure("create"):
-        return public_error(failure.code, message=failure.message)
+        return defined_error(failure.code)
     try:
         plan = _plan_tea_entry(request)
     except Exception as error:
@@ -298,7 +294,7 @@ def prepare_tea_entry(request: dict[str, Any]) -> dict[str, Any]:
     if current_mode("create") is WriteMode.DIRECT:
         return {"status": "preview", "preview": plan.preview()}
     if failure := approval_entry_failure("create"):
-        return public_error(failure.code, message=failure.message)
+        return defined_error(failure.code)
     approvals.prune_expired()
     token = approvals.create(
         action=_CREATE_ACTION, site=frappe.local.site, user=_current_user(),
@@ -313,23 +309,23 @@ def prepare_tea_entry(request: dict[str, Any]) -> dict[str, Any]:
 
 def confirm_tea_entry(approval_token: str, confirm: bool) -> dict[str, Any]:
     if failure := approval_entry_failure("create"):
-        return public_error(failure.code, message=failure.message)
+        return defined_error(failure.code)
     user = _current_user()
     if not confirm:
         approvals.cancel(approval_token, action=_CREATE_ACTION, site=frappe.local.site, user=user)
-        return public_error("CONFIRMATION_REQUIRED", message="Review the Tea Entry before confirming it.")
+        return defined_error("CONFIRMATION_REQUIRED")
     approval, state = approvals.claim_for_confirm_write(
         approval_token, action=_CREATE_ACTION, site=frappe.local.site, user=user,
     )
     if state != "available" or approval is None:
-        code, message, retryable = confirmation_failure(state, "Tea Entry")
-        return public_error(code, message=message, retryable=retryable)
+        code, _message, retryable = confirmation_failure(state, "Tea Entry")
+        return defined_error(code, retryable=retryable)
     return _apply_tea_entry(TeaEntryPlan(**approval.payload), WriteMode.APPROVAL_REQUIRED)
 
 
 def execute_tea_entry(request: dict[str, Any]) -> dict[str, Any]:
     if failure := direct_entry_failure("create"):
-        return public_error(failure.code, message=failure.message)
+        return defined_error(failure.code)
     try:
         plan = _plan_tea_entry(request)
     except Exception as error:
@@ -392,22 +388,15 @@ def _update_error(
     tool: str, error: Exception, *, applying: bool = False, stale: bool = False,
 ) -> dict[str, Any]:
     if isinstance(error, TeaEntrySchemaUnavailableError):
-        return logged_public_error(tool, "TEA_ENTRY_SCHEMA_UNAVAILABLE")
+        return logged_defined_error(tool, "TEA_ENTRY_SCHEMA_UNAVAILABLE")
     if isinstance(error, frappe.PermissionError):
-        return logged_public_error(tool, "ERP_PERMISSION_DENIED")
+        return logged_defined_error(tool, "ERP_PERMISSION_DENIED")
     if stale and isinstance(error, (frappe.ValidationError, ValueError)):
-        return public_error(
-            "STALE_CONFIRMATION",
-            message="The approved Tea Entry state changed. Prepare it again.",
-        )
+        return defined_error("STALE_CONFIRMATION")
     if isinstance(error, (frappe.ValidationError, ValueError)):
-        return logged_public_error(
-            tool,
-            "TEA_ENTRY_VALIDATION_FAILED",
-            message="Native Tea Entry validation failed. Review the request.",
-        )
+        return logged_defined_error(tool, "TEA_ENTRY_VALIDATION_FAILED")
     code = "TEA_ENTRY_WRITE_FAILED" if applying else "TEA_ENTRY_VALIDATION_FAILED"
-    return logged_public_error(tool, code)
+    return logged_defined_error(tool, code)
 
 
 def _apply_tea_entry_update(
@@ -425,10 +414,7 @@ def _apply_tea_entry_update(
             doc = frappe.get_doc(TEA_ENTRY_DOCTYPE, request.tea_entry_name)
         except frappe.DoesNotExistError:
             if approved:
-                return public_error(
-                    "STALE_CONFIRMATION",
-                    message="The approved Tea Entry state changed. Prepare it again.",
-                )
+                return defined_error("STALE_CONFIRMATION")
             return {"status": "not_found", "tea_entry_name": request.tea_entry_name}
         doc.check_permission("write")
         if (
@@ -437,10 +423,7 @@ def _apply_tea_entry_update(
             != stable_fingerprint(TeaEntryUpdateState.model_validate_json(plan.before_json).model_dump())
         ):
             frappe.db.rollback()
-            return public_error(
-                "STALE_CONFIRMATION",
-                message="The Tea Entry state changed after planning. Prepare it again.",
-            )
+            return defined_error("STALE_CONFIRMATION")
         for field, value in request.changes.model_dump(exclude_unset=True).items():
             doc.set(field, value)
         doc.run_method("validate")
@@ -449,17 +432,11 @@ def _apply_tea_entry_update(
         ):
             frappe.db.rollback()
             if approved:
-                return public_error(
-                    "STALE_CONFIRMATION",
-                    message="The approved Tea Entry state changed. Prepare it again.",
-                )
-            return public_error(
-                "TEA_ENTRY_VALIDATION_FAILED",
-                message="Native Tea Entry validation changed the update preview.",
-            )
+                return defined_error("STALE_CONFIRMATION")
+            return defined_error("TEA_ENTRY_VALIDATION_FAILED")
         if failure := exact_mode_failure("update", expected_mode):
             frappe.db.rollback()
-            return public_error(failure.code, message=failure.message)
+            return defined_error(failure.code)
         doc.save(ignore_permissions=False)
         result = {"status": "updated", "tea_entry": _project(doc)}
         frappe.db.commit()
@@ -471,7 +448,7 @@ def _apply_tea_entry_update(
 
 def prepare_tea_entry_update(request: dict[str, Any]) -> dict[str, Any]:
     if failure := disabled_failure("update"):
-        return public_error(failure.code, message=failure.message)
+        return defined_error(failure.code)
     try:
         plan = _plan_tea_entry_update(request)
     except Exception as error:
@@ -482,7 +459,7 @@ def prepare_tea_entry_update(request: dict[str, Any]) -> dict[str, Any]:
     if current_mode("update") is WriteMode.DIRECT:
         return {"status": "preview", "preview": plan.preview()}
     if failure := approval_entry_failure("update"):
-        return public_error(failure.code, message=failure.message)
+        return defined_error(failure.code)
     try:
         token = approvals.create(
             action=_UPDATE_ACTION,
@@ -508,28 +485,25 @@ def prepare_tea_entry_update(request: dict[str, Any]) -> dict[str, Any]:
 
 def confirm_tea_entry_update(approval_token: str, confirm: bool) -> dict[str, Any]:
     if failure := approval_entry_failure("update"):
-        return public_error(failure.code, message=failure.message)
+        return defined_error(failure.code)
     user = _current_user()
     if not confirm:
         approvals.cancel(
             approval_token, action=_UPDATE_ACTION, site=frappe.local.site, user=user
         )
-        return public_error(
-            "CONFIRMATION_REQUIRED",
-            message="Review the Tea Entry update before confirming it.",
-        )
+        return defined_error("CONFIRMATION_REQUIRED")
     approval, state = approvals.claim_for_confirm_write(
         approval_token, action=_UPDATE_ACTION, site=frappe.local.site, user=user
     )
     if state != "available" or approval is None:
-        code, message, retryable = confirmation_failure(state, "Tea Entry update")
-        return public_error(code, message=message, retryable=retryable)
+        code, _message, retryable = confirmation_failure(state, "Tea Entry update")
+        return defined_error(code, retryable=retryable)
     return _apply_tea_entry_update(TeaEntryUpdatePlan(**approval.payload), WriteMode.APPROVAL_REQUIRED, approved=True)
 
 
 def execute_tea_entry_update(request: dict[str, Any]) -> dict[str, Any]:
     if failure := direct_entry_failure("update"):
-        return public_error(failure.code, message=failure.message)
+        return defined_error(failure.code)
     try:
         plan = _plan_tea_entry_update(request)
     except Exception as error:

@@ -8,19 +8,19 @@ import frappe
 from frappe.contacts.doctype.contact.contact import get_contacts_linking_to
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.fingerprint import stable_fingerprint
 from .customer_contact import _customer_reference, _error, _load_contact, _load_customer, _projection
 
 _ACTION = "customer_primary_contact"
 
 
-def _stale(message: str = "The Customer primary Contact state changed after preparation. Please prepare again.") -> dict[str, Any]:
-	return _error("CUSTOMER_PRIMARY_CONTACT_STALE", message, retryable=True)
+def _stale() -> dict[str, Any]:
+	return _error("CUSTOMER_PRIMARY_CONTACT_STALE", retryable=True)
 
 
-def _permission(doctype: str, action: str) -> dict[str, Any]:
-	return _error("PERMISSION_DENIED", f"The authenticated user cannot {action} this {doctype}.")
+def _permission() -> dict[str, Any]:
+	return defined_error("PERMISSION_DENIED")
 
 
 def _current_user() -> str:
@@ -62,7 +62,7 @@ def _linked_contacts(customer: Any) -> tuple[list[Any], dict[str, Any] | None]:
 	try:
 		rows = get_contacts_linking_to("Customer", customer.name, fields=["name"])
 	except frappe.PermissionError:
-		return [], _permission("Contact", "read")
+		return [], _permission()
 	contacts = []
 	for row in rows:
 		name = _value(row, "name")
@@ -93,35 +93,35 @@ def _validate_state(customer: Any, selected: Any, contacts: list[Any]) -> tuple[
 	customer_name = str(_value(customer, "name"))
 	selected_name = str(_value(selected, "name"))
 	if not selected.has_link("Customer", customer_name):
-		return None, False, _error("CONTACT_NOT_LINKED_TO_CUSTOMER", "The selected Contact is not linked to this Customer.")
+		return None, False, _error("CONTACT_NOT_LINKED_TO_CUSTOMER")
 	if not _single_customer_link(selected, customer_name):
-		return None, False, _error("CONTACT_SHARED_WITH_OTHER_PARTIES", "The selected Contact has additional relationships and cannot be promoted in V1.")
+		return None, False, _error("CONTACT_SHARED_WITH_OTHER_PARTIES")
 
 	primaries, _ = _primary_state(customer, contacts)
 	pointer = _value(customer, "customer_primary_contact")
 	by_name = {str(_value(contact, "name")): contact for contact in contacts}
 	if len(primaries) > 1:
-		return None, False, _error("CONTACT_PRIMARY_STATE_INCONSISTENT", "The Customer has multiple primary Contacts.", retryable=True)
+		return None, False, _error("CONTACT_PRIMARY_STATE_INCONSISTENT", retryable=True)
 	if not pointer:
 		if primaries:
-			return None, False, _error("CONTACT_PRIMARY_STATE_INCONSISTENT", "The Customer has a primary Contact but no primary pointer.", retryable=True)
+			return None, False, _error("CONTACT_PRIMARY_STATE_INCONSISTENT", retryable=True)
 		return None, False, None
 	if pointer == selected_name:
 		if by_name.get(pointer) is not selected or not bool(_value(selected, "is_primary_contact", 0)) or len(primaries) != 1:
-			return None, False, _error("CONTACT_PRIMARY_STATE_INCONSISTENT", "The Customer primary pointer and Contact primary flag disagree.", retryable=True)
+			return None, False, _error("CONTACT_PRIMARY_STATE_INCONSISTENT", retryable=True)
 		return None, True, None
 
 	old = by_name.get(str(pointer))
 	if old is None or not old.has_link("Customer", customer_name) or not bool(_value(old, "is_primary_contact", 0)) or len(primaries) != 1:
-		return None, False, _error("CONTACT_PRIMARY_STATE_INCONSISTENT", "The Customer primary pointer does not identify a coherent linked primary Contact.", retryable=True)
+		return None, False, _error("CONTACT_PRIMARY_STATE_INCONSISTENT", retryable=True)
 	if not _single_customer_link(old, customer_name):
-		return None, False, _error("PRIMARY_CONTACT_PROMOTION_UNSAFE", "The current primary Contact has additional relationships and cannot be safely demoted in V1.", retryable=True)
+		return None, False, _error("PRIMARY_CONTACT_PROMOTION_UNSAFE", retryable=True)
 	return old, False, None
 
 
 def _confirm_failure(state: str) -> dict[str, Any]:
-	code, message, retryable = confirmation_failure(state, "Customer primary Contact")
-	return _error(code, message, retryable=retryable)
+	code, _message, retryable = confirmation_failure(state, "Customer primary Contact")
+	return defined_error(code, retryable=retryable)
 
 
 def _result(customer: Any, selected: Any, old: Any | None, *, idempotent: bool) -> dict[str, Any]:
@@ -144,19 +144,19 @@ def prepare_customer_primary_contact(request: dict[str, Any]) -> dict[str, Any]:
 	approvals.prune_expired()
 	user = _current_user()
 	if request.get("customer", {}).get("doctype") != "Customer" or request.get("contact", {}).get("doctype") != "Contact":
-		return _error("CUSTOMER_NOT_FOUND", "Customer and Contact references are required.")
+		return _error("CUSTOMER_NOT_FOUND")
 	customer, failure = _load_customer(request["customer"].get("name", ""))
 	if failure:
 		return failure
 	assert customer is not None
 	if not customer.has_permission("write"):
-		return _permission("Customer", "write")
+		return _permission()
 	selected, failure = _load_contact(request["contact"].get("name", ""), "read")
 	if failure:
 		return failure
 	assert selected is not None
 	if not selected.has_permission("write"):
-		return _permission("Contact", "write")
+		return _permission()
 	contacts, failure = _linked_contacts(customer)
 	if failure:
 		return failure
@@ -166,7 +166,7 @@ def prepare_customer_primary_contact(request: dict[str, Any]) -> dict[str, Any]:
 	if failure:
 		return failure
 	if old is not None and not old.has_permission("read"):
-		return _permission("Contact", "read")
+		return _permission()
 	_, state_fingerprint = _primary_state(customer, contacts)
 	approval_payload = {
 		"customer": {"name": str(_value(customer, "name")), "modified": str(_value(customer, "modified", "")), "primary": _value(customer, "customer_primary_contact")},
@@ -198,7 +198,7 @@ def confirm_customer_primary_contact(approval_token: str, confirm: bool) -> dict
 	user = _current_user()
 	if not confirm:
 		approvals.cancel(approval_token, action=_ACTION, site=frappe.local.site, user=user)
-		return _error("CONFIRMATION_REQUIRED", "Review the Customer primary Contact operation before confirming it.")
+		return _error("CONFIRMATION_REQUIRED")
 	approval, state = approvals.claim_for_confirm_write(approval_token, action=_ACTION, site=frappe.local.site, user=user)
 	if state != "available" or approval is None:
 		return _confirm_failure(state)
@@ -208,13 +208,13 @@ def confirm_customer_primary_contact(approval_token: str, confirm: bool) -> dict
 		return failure
 	assert customer is not None
 	if not customer.has_permission("write"):
-		return _permission("Customer", "write")
+		return _permission()
 	selected, failure = _load_contact(payload["selected"]["name"], "read")
 	if failure:
 		return failure
 	assert selected is not None
 	if not selected.has_permission("write"):
-		return _permission("Contact", "write")
+		return _permission()
 	contacts, failure = _linked_contacts(customer)
 	if failure:
 		return failure
@@ -242,17 +242,17 @@ def confirm_customer_primary_contact(approval_token: str, confirm: bool) -> dict
 			fresh_old, old_failure = _load_contact(old.name, "read")
 			if old_failure or fresh_old is None or bool(_value(fresh_old, "is_primary_contact", 0)):
 				frappe.db.rollback()
-				return _error("PRIMARY_CONTACT_PROMOTION_UNSAFE", "Native Contact promotion did not demote the previous primary Contact.", retryable=True)
+				return _error("PRIMARY_CONTACT_PROMOTION_UNSAFE", retryable=True)
 		customer.customer_primary_contact = selected.name
 		customer.save(ignore_permissions=False)
 		if not bool(_value(selected, "is_primary_contact", 0)) or _value(customer, "customer_primary_contact") != selected.name:
 			frappe.db.rollback()
-			return _error("PRIMARY_CONTACT_PROMOTION_UNSAFE", "Native promotion did not produce the expected primary state.", retryable=True)
+			return _error("PRIMARY_CONTACT_PROMOTION_UNSAFE", retryable=True)
 		frappe.db.commit()
 	except frappe.PermissionError:
 		frappe.db.rollback()
-		return _permission("Contact", "write")
+		return _permission()
 	except Exception:
 		frappe.db.rollback()
-		return _error("PRIMARY_CONTACT_PROMOTION_FAILED", "Native Customer primary Contact promotion failed.", retryable=True)
+		return _error("PRIMARY_CONTACT_PROMOTION_FAILED", retryable=True)
 	return _result(customer, selected, old, idempotent=False)

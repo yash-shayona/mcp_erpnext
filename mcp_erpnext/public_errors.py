@@ -86,11 +86,11 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     ),
     "CREDENTIAL_SCHEMA_UNAVAILABLE": PublicErrorDefinition(
         ErrorCategory.CAPABILITY_UNAVAILABLE,
-        "Customer Service Credential capability is unavailable on this site.",
+        "Customer Service Credential information is unavailable in the current setup.",
     ),
     "TEA_ENTRY_SCHEMA_UNAVAILABLE": PublicErrorDefinition(
         ErrorCategory.CAPABILITY_UNAVAILABLE,
-        "Tea Entry capability is unavailable on this site.",
+        "Tea Entry information is unavailable in the current setup.",
     ),
     "CREATE_DISABLED": PublicErrorDefinition(
         ErrorCategory.CAPABILITY_UNAVAILABLE,
@@ -616,6 +616,184 @@ PUBLIC_ERROR_DEFINITIONS: dict[str, PublicErrorDefinition] = {
     "WAREHOUSE_REQUIRED": PublicErrorDefinition(
         ErrorCategory.INVALID_REQUEST,
         "A warehouse is required for the accepted receipt quantity.",
+    ),
+    "CONTACT_CHILD_STALE_STATE": PublicErrorDefinition(
+        ErrorCategory.STALE_STATE,
+        "The selected Contact details changed. Review them and prepare again.",
+    ),
+    "CONTACT_CREATE_FAILED": PublicErrorDefinition(
+        ErrorCategory.TEMPORARY_FAILURE,
+        "The Contact could not be created. Please try again later.",
+    ),
+    "CONTACT_DUPLICATE_SUSPECTED": PublicErrorDefinition(
+        ErrorCategory.AMBIGUOUS_SELECTION,
+        "A Contact with matching details already exists. Review the matches.",
+    ),
+    "CONTACT_EMAIL_AMBIGUOUS": PublicErrorDefinition(
+        ErrorCategory.AMBIGUOUS_SELECTION,
+        "More than one matching email address was found. Select one Contact.",
+    ),
+    "CONTACT_EMAIL_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND,
+        "The selected email address was not found on this Contact.",
+    ),
+    "CONTACT_INVALID_DATA": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "The Contact details are not valid. Review the information and try again.",
+    ),
+    "CONTACT_INVALID_EMAIL": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Provide one valid email address for the Contact.",
+    ),
+    "CONTACT_INVALID_IDENTITY": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Provide a first name, last name, or company name for the Contact.",
+    ),
+    "CONTACT_INVALID_PHONE": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST, "Provide a valid phone number for the Contact."
+    ),
+    "CONTACT_INVALID_REQUEST": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Provide the Contact information required for this operation.",
+    ),
+    "CONTACT_LINK_FAILED": PublicErrorDefinition(
+        ErrorCategory.TEMPORARY_FAILURE,
+        "The Contact could not be linked to the Customer. Please try again.",
+    ),
+    "CONTACT_LINK_STALE_STATE": PublicErrorDefinition(
+        ErrorCategory.STALE_STATE,
+        "The Contact changed after preparation. Review it and prepare the link again.",
+    ),
+    "CONTACT_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND, "The requested Contact was not found."
+    ),
+    "CONTACT_NOT_LINKED_TO_CUSTOMER": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "This Contact is not linked to the selected Customer.",
+    ),
+    "CONTACT_PHONE_AMBIGUOUS": PublicErrorDefinition(
+        ErrorCategory.AMBIGUOUS_SELECTION,
+        "More than one matching phone number was found. Select one Contact.",
+    ),
+    "CONTACT_PHONE_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND,
+        "The selected phone number was not found on this Contact.",
+    ),
+    "CONTACT_PRIMARY_STATE_INCONSISTENT": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The Customer's primary Contact details are inconsistent. Review them before continuing.",
+    ),
+    "CONTACT_PRIMARY_UNSUPPORTED": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "This Contact relationship cannot be used as the Customer's primary Contact.",
+    ),
+    "CONTACT_SCOPE_REQUIRED": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Specify the Customer associated with this Contact before continuing.",
+    ),
+    "CONTACT_SHARED_WITH_OTHER_PARTIES": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "This Contact is linked to another party and cannot be changed through this operation.",
+    ),
+    "CONTACT_STALE_STATE": PublicErrorDefinition(
+        ErrorCategory.STALE_STATE,
+        "The Contact or Customer changed after preparation. Review the details and prepare again.",
+    ),
+    "CONTACT_UPDATE_FAILED": PublicErrorDefinition(
+        ErrorCategory.TEMPORARY_FAILURE,
+        "The Contact could not be updated. Please try again later.",
+    ),
+    "CREDENTIAL_INACTIVE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "This Customer Service Credential is inactive.",
+    ),
+    "CREDENTIAL_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.NOT_FOUND,
+        "The requested Customer Service Credential was not found.",
+    ),
+    "CREDENTIAL_READ_FAILED": PublicErrorDefinition(
+        ErrorCategory.TEMPORARY_FAILURE,
+        "The Customer Service Credential could not be read. Please try again later.",
+    ),
+    "CREDENTIAL_SECRET_UNAVAILABLE": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "The credential information needed for this email is unavailable.",
+    ),
+    "CUSTOMER_EMAIL_UNAVAILABLE": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "A valid primary email address is not available for this Customer.",
+    ),
+    "CUSTOMER_PRIMARY_CONTACT_STALE": PublicErrorDefinition(
+        ErrorCategory.STALE_STATE,
+        "The Customer's primary Contact changed after preparation. Review and prepare again.",
+    ),
+    "CUSTOMER_PROJECTION_REFRESH_PERMISSION_REQUIRED": PublicErrorDefinition(
+        ErrorCategory.PERMISSION_DENIED,
+        "You need permission to update the Customer's Contact details.",
+    ),
+    "CUSTOMER_STRUCTURED_QUERY_REQUIRED": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "For an email search, use the Customer search filters and enter the exact email address.",
+    ),
+    "EMAIL_RENDER_FAILED": PublicErrorDefinition(
+        ErrorCategory.TEMPORARY_FAILURE,
+        "The credential email could not be prepared. Please try again later.",
+    ),
+    "EMAIL_TEMPLATE_INVALID": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "The configured credential email template cannot be used.",
+    ),
+    "EMAIL_TEMPLATE_NOT_CONFIGURED": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "A credential email template has not been configured.",
+    ),
+    "EMAIL_TEMPLATE_NOT_FOUND": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "The configured credential email template is unavailable.",
+    ),
+    "EMAIL_TEMPLATE_UNSAFE": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "The configured credential email template cannot be used for security reasons.",
+    ),
+    "GSTIN_UNSUPPORTED": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The provided GST identification number is not supported.",
+    ),
+    "INDIA_COMPLIANCE_ADDRESS_BRIDGE_UNAVAILABLE": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "Customer address details cannot be prepared in the current setup.",
+    ),
+    "INDIA_COMPLIANCE_GST_UNAVAILABLE": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "GST details cannot be prepared in the current setup.",
+    ),
+    "INVALID_CUSTOMER_DETAILS": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Review the Customer details and provide the required information.",
+    ),
+    "ITEM_RUNTIME_REQUIREMENT_UNAVAILABLE": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "Required Item details are unavailable in the current setup.",
+    ),
+    "OPERATOR_EMAIL_UNAVAILABLE": PublicErrorDefinition(
+        ErrorCategory.CONFIGURATION_UNAVAILABLE,
+        "Your user account does not have a valid email address for this operation.",
+    ),
+    "PRIMARY_CONTACT_PROMOTION_FAILED": PublicErrorDefinition(
+        ErrorCategory.TEMPORARY_FAILURE,
+        "The Customer's primary Contact could not be updated. Please try again.",
+    ),
+    "PRIMARY_CONTACT_PROMOTION_UNSAFE": PublicErrorDefinition(
+        ErrorCategory.BUSINESS_RULE_BLOCKED,
+        "The existing Contact relationships do not allow this primary Contact change.",
+    ),
+    "TEA_ENTRY_VALIDATION_FAILED": PublicErrorDefinition(
+        ErrorCategory.INVALID_REQUEST,
+        "Review the Tea Entry details and correct any invalid information.",
+    ),
+    "TEA_ENTRY_WRITE_FAILED": PublicErrorDefinition(
+        ErrorCategory.TEMPORARY_FAILURE,
+        "The Tea Entry could not be saved. Please try again later.",
     ),
 }
 

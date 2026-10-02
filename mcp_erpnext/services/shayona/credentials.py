@@ -7,7 +7,7 @@ from typing import Any
 
 import frappe
 
-from ...observability import logged_public_error
+from ...observability import logged_defined_error
 
 CREDENTIAL_DOCTYPE = "Customer Service Credential"
 PUBLIC_FIELDS = (
@@ -111,7 +111,7 @@ def _schema_error(tool_name: str) -> dict[str, Any] | None:
     try:
         credential_schema()
     except CredentialSchemaUnavailableError:
-        return logged_public_error(tool_name, "CREDENTIAL_SCHEMA_UNAVAILABLE")
+        return logged_defined_error(tool_name, "CREDENTIAL_SCHEMA_UNAVAILABLE")
     return None
 
 

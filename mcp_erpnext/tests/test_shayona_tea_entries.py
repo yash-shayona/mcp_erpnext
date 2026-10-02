@@ -12,7 +12,7 @@ import frappe
 from pydantic import ValidationError
 
 import mcp_erpnext
-from mcp_erpnext.observability import public_error
+from mcp_erpnext.public_errors import defined_error
 from mcp_erpnext.approvals import ApprovalStore
 from mcp_erpnext.settings import ApprovalMode
 from mcp_erpnext.tests.approval_test_backend import FakeSharedApprovalBackend, mutate_record
@@ -65,12 +65,12 @@ def _meta(*, missing: str | None = None, wrong: tuple[str, str] | None = None):
 
 class TeaEntryContractTests(unittest.TestCase):
     def test_version_and_safe_schema_message(self):
-        self.assertEqual(mcp_erpnext.__version__, "4.0.3")
-        result = public_error(
+        self.assertEqual(mcp_erpnext.__version__, "4.0.4")
+        result = defined_error(
             "TEA_ENTRY_SCHEMA_UNAVAILABLE", reference="MCP-ERR-TEST"
         )
         self.assertEqual(
-            result["message"], "Tea Entry capability is unavailable on this site."
+            result["message"], "Tea Entry information is unavailable in the current setup."
         )
 
     def test_contracts_reject_unbounded_or_mutation_inputs(self):
@@ -137,7 +137,7 @@ class TeaEntryServiceTests(unittest.TestCase):
             ):
                 tea_entries.tea_entry_schema(meta)
 
-    @patch.object(tea_entries, "logged_public_error")
+    @patch.object(tea_entries, "logged_defined_error")
     @patch.object(tea_entries.frappe, "get_list")
     @patch.object(tea_entries.frappe, "get_meta", side_effect=RuntimeError("raw"))
     def test_metadata_failure_is_safe_and_stops_before_read(
@@ -146,7 +146,7 @@ class TeaEntryServiceTests(unittest.TestCase):
         logged_error.return_value = {
             "status": "error",
             "code": "TEA_ENTRY_SCHEMA_UNAVAILABLE",
-            "message": "Tea Entry capability is unavailable on this site.",
+            "message": "Tea Entry information is unavailable in the current setup.",
             "reference": "MCP-ERR-TEST",
             "retryable": False,
         }
@@ -316,7 +316,7 @@ class TeaEntryToolTests(unittest.TestCase):
     @patch.object(tea_entry_tools, "execute_tool_with_context")
     def test_create_adapters_use_json_safe_rest_and_same_service(self, execute):
         for name in ("prepare_tea_entry", "execute_tea_entry", "confirm_tea_entry"):
-            with self.subTest(name=name), patch.object(tea_entries, name, return_value=public_error("CREATE_DISABLED")) as service:
+            with self.subTest(name=name), patch.object(tea_entries, name, return_value=defined_error("CREATE_DISABLED")) as service:
                 def invoke(ctx, tool, callback, *, rest_arguments):
                     self.assertEqual(tool, name)
                     if name != "confirm_tea_entry":
@@ -367,7 +367,7 @@ class TeaEntryCreateTests(unittest.TestCase):
             tea_entries, "make_new_doc", side_effect=lambda doctype: {"doctype": doctype}
         ))
         self.dynamic_defaults = self.stack.enter_context(patch.object(tea_entries, "set_dynamic_default_values"))
-        self.stack.enter_context(patch.object(tea_entries, "logged_public_error", side_effect=lambda tool, code, **kw: public_error(code, **kw)))
+        self.stack.enter_context(patch.object(tea_entries, "logged_defined_error", side_effect=lambda tool, code, **kw: defined_error(code, **kw)))
         self.request = {"no_of_cups": 10, "rate_per_cup": "15"}
 
     def new_doc(self, doctype):
@@ -664,8 +664,8 @@ class TeaEntryUpdateTests(unittest.TestCase):
         )
         self.stack.enter_context(patch.object(tea_entries, "frappe", self.fake))
         self.stack.enter_context(patch.object(
-            tea_entries, "logged_public_error",
-            side_effect=lambda tool, code, **kw: public_error(code, **kw),
+            tea_entries, "logged_defined_error",
+            side_effect=lambda tool, code, **kw: defined_error(code, **kw),
         ))
         self.request = {
             "tea_entry_name": "TEA-1",

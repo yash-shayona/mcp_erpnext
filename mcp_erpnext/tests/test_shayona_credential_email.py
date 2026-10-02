@@ -403,7 +403,7 @@ class ShayonaCredentialEmailTests(unittest.TestCase):
                 self.subTest(code=code),
                 patch.object(
                     credential_email,
-                    "logged_public_error",
+                    "logged_defined_error",
                     return_value={"status": "error", "code": code},
                 ) as logged,
             ):
@@ -414,12 +414,12 @@ class ShayonaCredentialEmailTests(unittest.TestCase):
                 ):
                     credential_email.prepare_customer_service_credential_email()
             self.assertEqual(
-                logged.call_args.kwargs["message"], credential_email._MESSAGES[code]
+                logged.call_args.args[1], code
             )
 
         with patch.object(
             credential_email,
-            "logged_public_error",
+            "logged_defined_error",
             return_value={"status": "error", "code": "UNKNOWN"},
         ) as logged:
             with patch.object(
@@ -428,7 +428,7 @@ class ShayonaCredentialEmailTests(unittest.TestCase):
                 side_effect=credential_email.CredentialEmailError("UNKNOWN"),
             ):
                 credential_email.prepare_customer_service_credential_email()
-        self.assertIsNone(logged.call_args.kwargs["message"])
+        self.assertEqual(logged.call_args.args[1], "UNKNOWN")
 
     def test_approval_claim_failures_are_terminal_before_revalidation_or_secrets(self):
         expected = {
@@ -495,7 +495,7 @@ class ShayonaCredentialEmailTests(unittest.TestCase):
                 self.assertEqual(result["code"], "PREPARED_STATE_CHANGED")
                 self.assertEqual(
                     result["message"],
-                    credential_email._MESSAGES["PREPARED_STATE_CHANGED"],
+                    credential_email.defined_error("PREPARED_STATE_CHANGED")["message"],
                 )
                 password.assert_not_called()
                 sendmail.assert_not_called()

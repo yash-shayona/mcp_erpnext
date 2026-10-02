@@ -9,7 +9,7 @@ from frappe.contacts.doctype.contact.contact import get_contacts_linking_to
 from frappe.utils import validate_email_address, validate_phone_number
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
-from ...observability import new_error_reference
+from ...public_errors import defined_error
 from ..common.entity_resolution import normalize
 from ..common.fingerprint import stable_fingerprint
 from ..common.write_policy import approval_entry_failure, current_mode, direct_entry_failure, disabled_failure, exact_mode_failure
@@ -21,14 +21,8 @@ _MAX_SEARCH_ROWS = 200
 _CONTACT_FIELDS = ["name", "full_name", "company_name", "email_id", "mobile_no", "phone", "is_primary_contact"]
 
 
-def _error(code: str, message: str, *, retryable: bool = False) -> dict[str, Any]:
-	return {
-		"status": "error",
-		"code": code,
-		"message": message,
-		"reference": new_error_reference(),
-		"retryable": retryable,
-	}
+def _error(code: str, *, retryable: bool = False) -> dict[str, Any]:
+	return defined_error(code, retryable=retryable)
 
 
 def _current_user() -> str:
@@ -60,11 +54,11 @@ def _load_customer(name: str) -> tuple[Any | None, dict[str, Any] | None]:
 	try:
 		customer = frappe.get_doc("Customer", name)
 	except frappe.DoesNotExistError:
-		return None, _error("CUSTOMER_NOT_FOUND", "The selected Customer was not found.")
+		return None, _error("CUSTOMER_NOT_FOUND")
 	except frappe.PermissionError:
-		return None, _error("PERMISSION_DENIED", "The authenticated user cannot read this Customer.")
+		return None, _error("PERMISSION_DENIED")
 	if not customer or not customer.has_permission("read"):
-		return None, _error("PERMISSION_DENIED", "The authenticated user cannot read this Customer.")
+		return None, _error("PERMISSION_DENIED")
 	return customer, None
 
 
@@ -72,11 +66,11 @@ def _load_contact(name: str, permission: str = "read") -> tuple[Any | None, dict
 	try:
 		contact = frappe.get_doc("Contact", name)
 	except frappe.DoesNotExistError:
-		return None, _error("CONTACT_NOT_FOUND", "The selected Contact was not found.")
+		return None, _error("CONTACT_NOT_FOUND")
 	except frappe.PermissionError:
-		return None, _error("PERMISSION_DENIED", "The authenticated user cannot read this Contact.")
+		return None, _error("PERMISSION_DENIED")
 	if not contact or not contact.has_permission(permission):
-		return None, _error("PERMISSION_DENIED", "The authenticated user cannot access this Contact.")
+		return None, _error("PERMISSION_DENIED")
 	return contact, None
 
 
@@ -244,7 +238,7 @@ def search_contacts(
 	customer_doc = None
 	if customer is not None:
 		if customer.get("doctype") != "Customer":
-			return _error("CUSTOMER_NOT_FOUND", "Only Customer references are supported.")
+			return _error("CUSTOMER_NOT_FOUND")
 		customer_doc, failure = _load_customer(customer.get("name", ""))
 		if failure:
 			return failure
@@ -266,22 +260,19 @@ def search_contacts(
 
 
 def _permission_error(doctype: str, action: str) -> dict[str, Any]:
-	return _error("PERMISSION_DENIED", f"The authenticated user cannot {action} this {doctype}.")
+	return _error("PERMISSION_DENIED")
 
 
 def _validate_new_contact(values: dict[str, Any]) -> dict[str, Any] | None:
 	if not any(values.get(fieldname) for fieldname in ("first_name", "last_name", "company_name")):
-		return _error(
-			"CONTACT_INVALID_IDENTITY",
-			"A new Contact needs first_name, last_name, or company_name.",
-		)
+		return _error("CONTACT_INVALID_IDENTITY")
 	if values.get("email"):
 		parsed = validate_email_address(values["email"], throw=False)
 		if not parsed or "," in parsed:
-			return _error("CONTACT_INVALID_EMAIL", "The Contact email is invalid.")
+			return _error("CONTACT_INVALID_EMAIL")
 		values["email"] = parsed
 	if values.get("mobile") and not validate_phone_number(values["mobile"], throw=False):
-		return _error("CONTACT_INVALID_PHONE", "The Contact mobile number is invalid.")
+		return _error("CONTACT_INVALID_PHONE")
 	return None
 
 
@@ -311,23 +302,23 @@ def _duplicate_contacts(customer: Any, values: dict[str, Any]) -> list[dict[str,
 	return [_projection(contact, customer.name) for contact in candidates.values()]
 
 
-def _stale(code: str, message: str) -> dict[str, Any]:
-	return _error(code, message, retryable=True)
+def _stale(code: str) -> dict[str, Any]:
+	return _error(code, retryable=True)
 
 
 def _confirmation_failure(state: str) -> dict[str, Any]:
-	code, message, retryable = confirmation_failure(state, "Customer Contact")
-	return _error(code, message, retryable=retryable)
+	code, _message, retryable = confirmation_failure(state, "Customer Contact")
+	return _error(code, retryable=retryable)
 
 
 def prepare_customer_contact(request: dict[str, Any], *, _direct_execution: bool = False) -> dict[str, Any]:
 	"""Prepare a bounded native Contact create or explicit link without writing."""
 	mode = request.get("mode")
 	if mode == "create" and not _direct_execution and (failure := disabled_failure("create")):
-		return _error(failure.code, failure.message)
+		return _error(failure.code)
 	user = _current_user()
 	if request.get("customer", {}).get("doctype") != "Customer":
-		return _error("CUSTOMER_NOT_FOUND", "Only Customer references are supported.")
+		return _error("CUSTOMER_NOT_FOUND")
 	customer, failure = _load_customer(request["customer"].get("name", ""))
 	if failure:
 		return failure
@@ -335,15 +326,12 @@ def prepare_customer_contact(request: dict[str, Any], *, _direct_execution: bool
 	if mode == "link":
 		approvals.prune_expired()
 	if request.get("make_primary"):
-		return _error(
-			"CONTACT_PRIMARY_UNSUPPORTED",
-			"Primary Contact promotion is deferred; create or link the Contact without make_primary.",
-		)
+		return _error("CONTACT_PRIMARY_UNSUPPORTED")
 	if mode == "create":
 		if request.get("existing_contact") is not None or request.get("new_contact") is None:
-			return _error("CONTACT_INVALID_REQUEST", "Create mode requires only new_contact.")
+			return _error("CONTACT_INVALID_REQUEST")
 		if not frappe.has_permission("Contact", "create"):
-			return _permission_error("Contact", "create")
+			return _permission_error()
 		values = {
 			fieldname: _clean(request["new_contact"].get(fieldname))
 			for fieldname in ("first_name", "middle_name", "last_name", "company_name", "email", "mobile")
@@ -351,14 +339,14 @@ def prepare_customer_contact(request: dict[str, Any], *, _direct_execution: bool
 		if validation_failure := _validate_new_contact(values):
 			return validation_failure
 		if duplicates := _duplicate_contacts(customer, values):
-			return _error("CONTACT_DUPLICATE_SUSPECTED", "An exact visible Contact already matches this identity.") | {"candidates": duplicates}
+			return _error("CONTACT_DUPLICATE_SUSPECTED") | {"candidates": duplicates}
 		payload = _new_contact_payload(customer.name, values)
 		# Native validation derives full_name and the parent email/phone projections without a write.
 		try:
 			preview_doc = frappe.get_doc(payload)
 			preview_doc.run_method("validate")
 		except Exception:
-			return _error("CONTACT_INVALID_DATA", "Native Contact validation rejected the proposed Contact.")
+			return _error("CONTACT_INVALID_DATA")
 		fingerprint = stable_fingerprint(
 			{
 				"mode": mode,
@@ -388,18 +376,18 @@ def prepare_customer_contact(request: dict[str, Any], *, _direct_execution: bool
 			return {"status": "preview", "preview": preview}
 	else:
 		if mode != "link" or request.get("new_contact") is not None or request.get("existing_contact") is None:
-			return _error("CONTACT_INVALID_REQUEST", "Link mode requires only existing_contact.")
+			return _error("CONTACT_INVALID_REQUEST")
 		if not frappe.has_permission("Contact", "write"):
-			return _permission_error("Contact", "write")
+			return _permission_error()
 		existing = request["existing_contact"]
 		if existing.get("doctype") != "Contact":
-			return _error("CONTACT_NOT_FOUND", "Only Contact references are supported.")
+			return _error("CONTACT_NOT_FOUND")
 		contact, failure = _load_contact(existing.get("name", ""), "read")
 		if failure:
 			return failure
 		assert contact is not None
 		if not contact.has_permission("write"):
-			return _permission_error("Contact", "write")
+			return _permission_error()
 		already_linked = _has_customer_link(contact, customer.name)
 		approval_payload = {
 			"mode": mode,
@@ -458,13 +446,13 @@ def confirm_customer_contact(approval_token: str, confirm: bool) -> dict[str, An
 	is_create = create_approval is not None and create_state == "available"
 	if is_create:
 		if failure := approval_entry_failure("create"):
-			return _error(failure.code, failure.message)
+			return _error(failure.code)
 	elif link_approval is None or link_state != "available":
 		return _confirmation_failure(create_state if create_state != "unavailable" else link_state)
 	action = _CREATE_ACTION if is_create else _LINK_ACTION
 	if not confirm:
 		approvals.cancel(approval_token, action=action, site=frappe.local.site, user=user)
-		return _error("CONFIRMATION_REQUIRED", "Review the Contact operation before confirming it.")
+		return _error("CONFIRMATION_REQUIRED")
 	approval, state = approvals.claim_for_confirm_write(
 		approval_token, action=action, site=frappe.local.site, user=user
 	)
@@ -477,24 +465,24 @@ def confirm_customer_contact(approval_token: str, confirm: bool) -> dict[str, An
 	assert customer is not None
 	if payload.get("mode") == "create":
 		if not frappe.has_permission("Contact", "create"):
-			return _permission_error("Contact", "create")
+			return _permission_error()
 		if str(customer.modified) != payload.get("customer_modified"):
-			return _stale("CONTACT_STALE_STATE", "The Customer changed after Contact preparation. Please prepare again.")
+			return _stale("CONTACT_STALE_STATE")
 		values = dict(payload.get("new_contact") or {})
 		if duplicates := _duplicate_contacts(customer, values):
-			return _error("CONTACT_DUPLICATE_SUSPECTED", "An exact visible Contact appeared after preparation.") | {"candidates": duplicates}
+			return _error("CONTACT_DUPLICATE_SUSPECTED") | {"candidates": duplicates}
 		try:
 			contact = frappe.get_doc(_new_contact_payload(customer.name, values))
 			if failure := exact_mode_failure("create", WriteMode.APPROVAL_REQUIRED):
-				return _error(failure.code, failure.message)
+				return _error(failure.code)
 			contact.insert(ignore_permissions=False)
 			frappe.db.commit()
 		except frappe.PermissionError:
 			frappe.db.rollback()
-			return _permission_error("Contact", "create")
+			return _permission_error()
 		except Exception:
 			frappe.db.rollback()
-			return _error("CONTACT_CREATE_FAILED", "Native Contact creation failed.", retryable=True)
+			return _error("CONTACT_CREATE_FAILED", retryable=True)
 		return {
 			"status": "created",
 			"customer": _customer_reference(customer),
@@ -508,32 +496,32 @@ def confirm_customer_contact(approval_token: str, confirm: bool) -> dict[str, An
 		return failure
 	assert contact is not None
 	if not contact.has_permission("write"):
-		return _permission_error("Contact", "write")
+		return _permission_error()
 	if _has_customer_link(contact, customer.name):
 		return _link_result(customer, contact, idempotent=True)
 	if str(customer.modified) != payload.get("customer_modified"):
-		return _stale("CONTACT_STALE_STATE", "The Customer changed after Contact preparation. Please prepare again.")
+		return _stale("CONTACT_STALE_STATE")
 	if str(contact.modified) != payload.get("contact_modified"):
-		return _stale("CONTACT_LINK_STALE_STATE", "The Contact changed after link preparation. Please prepare again.")
+		return _stale("CONTACT_LINK_STALE_STATE")
 	try:
 		contact.append("links", {"link_doctype": "Customer", "link_name": customer.name})
 		contact.save(ignore_permissions=False)
 		frappe.db.commit()
 	except frappe.PermissionError:
 		frappe.db.rollback()
-		return _permission_error("Contact", "write")
+		return _permission_error()
 	except Exception:
 		frappe.db.rollback()
-		return _error("CONTACT_LINK_FAILED", "Native Contact linking failed.", retryable=True)
+		return _error("CONTACT_LINK_FAILED", retryable=True)
 	return _link_result(customer, contact, idempotent=False)
 
 
 def execute_customer_contact(request: dict[str, Any]) -> dict[str, Any]:
 	"""Directly create a new Customer-linked Contact after fresh bounded planning."""
 	if request.get("mode") != "create":
-		return _error("DIRECT_EXECUTION_REQUIRED", "Direct execution is available only for Customer Contact creation.")
+		return _error("DIRECT_EXECUTION_REQUIRED")
 	if failure := direct_entry_failure("create"):
-		return _error(failure.code, failure.message)
+		return _error(failure.code)
 	planned = prepare_customer_contact(request, _direct_execution=True)
 	if planned.get("status") != "ready" or "_direct_values" not in planned:
 		return planned
@@ -542,15 +530,15 @@ def execute_customer_contact(request: dict[str, Any]) -> dict[str, Any]:
 	try:
 		contact = frappe.get_doc(_new_contact_payload(customer_name, values))
 		if failure := exact_mode_failure("create", WriteMode.DIRECT):
-			return _error(failure.code, failure.message)
+			return _error(failure.code)
 		contact.insert(ignore_permissions=False)
 		frappe.db.commit()
 	except frappe.PermissionError:
 		frappe.db.rollback()
-		return _permission_error("Contact", "create")
+		return _permission_error()
 	except Exception:
 		frappe.db.rollback()
-		return _error("CONTACT_CREATE_FAILED", "Native Contact creation failed.", retryable=True)
+		return _error("CONTACT_CREATE_FAILED", retryable=True)
 	return {
 		"status": "created",
 		"customer": {"doctype": "Customer", "name": customer_name},

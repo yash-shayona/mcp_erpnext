@@ -12,7 +12,8 @@ from frappe.utils import validate_email_address
 
 from ...approvals import APPROVAL_TTL_SECONDS, approvals, confirmation_failure
 from ...contracts.interaction import approval_directive
-from ...observability import logged_public_error, new_error_reference
+from ...observability import logged_defined_error
+from ...public_errors import defined_error
 from ..common.write_policy import (
     WriteMode,
     approval_entry_failure,
@@ -28,33 +29,6 @@ _SECRET_SUBJECT_FIELDS = re.compile(r"\b(?:username|password)\b")
 _USERNAME_SENTINEL = "__MCP_CREDENTIAL_SECRET_USERNAME__"
 _PASSWORD_SENTINEL = "__MCP_CREDENTIAL_SECRET_PASSWORD__"
 
-_MESSAGES = {
-    "EMAIL_DISABLED": "Email sending is disabled by server policy.",
-    "APPROVAL_REQUIRED": "This operation requires prepare and confirm with an approval token.",
-    "DIRECT_EXECUTION_REQUIRED": "This operation is configured for direct execution; use the execute operation.",
-    "CREDENTIAL_SCHEMA_UNAVAILABLE": "The Customer Service Credential schema is unavailable.",
-    "CREDENTIAL_NOT_FOUND": "The requested credential was not found.",
-    "CREDENTIAL_INACTIVE": "The requested credential is inactive.",
-    "CREDENTIAL_READ_FAILED": "The credential could not be read.",
-    "PERMISSION_DENIED": "The authenticated user cannot use that credential.",
-    "INVALID_RECIPIENT": "recipient_email must contain one valid email address.",
-    "CUSTOMER_EMAIL_UNAVAILABLE": "The Customer primary email is unavailable.",
-    "OPERATOR_EMAIL_UNAVAILABLE": "The authenticated user email is unavailable.",
-    "EMAIL_TEMPLATE_NOT_CONFIGURED": "The credential email template is not configured.",
-    "EMAIL_TEMPLATE_NOT_FOUND": "The configured credential email template was not found.",
-    "EMAIL_TEMPLATE_INVALID": "The configured credential email template is invalid.",
-    "EMAIL_TEMPLATE_UNSAFE": "The configured credential email template is unsafe.",
-    "EMAIL_ACCOUNT_NOT_CONFIGURED": "No outgoing Frappe Email Account is configured.",
-    "CREDENTIAL_SECRET_UNAVAILABLE": "The credential secrets are unavailable.",
-    "EMAIL_RENDER_FAILED": "Frappe could not render the credential email.",
-    "EMAIL_QUEUE_FAILED": "Frappe could not queue the credential email.",
-    "PREPARED_STATE_CHANGED": "The approved credential email state changed. Please prepare it again.",
-    "CONFIRMATION_EXPIRED": "This credential email confirmation has expired. Please prepare it again.",
-    "CONFIRMATION_CONSUMED": "This credential email confirmation has already been used. Please prepare it again.",
-    "CONFIRMATION_UNAVAILABLE": "This credential email confirmation is unavailable.",
-    "TRUSTED_APPROVAL_UNAVAILABLE": "A trusted approval is required before confirmation.",
-}
-
 
 class CredentialEmailError(RuntimeError):
     def __init__(self, public_code: str):
@@ -63,13 +37,7 @@ class CredentialEmailError(RuntimeError):
 
 
 def _error(code: str, *, retryable: bool = False) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "code": code,
-        "message": _MESSAGES.get(code, "The credential email operation failed."),
-        "reference": new_error_reference(),
-        "retryable": retryable,
-    }
+    return defined_error(code, retryable=retryable)
 
 
 def _fail(code: str) -> None:
@@ -386,11 +354,7 @@ def prepare_customer_service_credential_email(**kwargs: Any) -> dict[str, Any]:
             "interaction": approval_directive().model_dump(mode="json"),
         }
     except CredentialEmailError as error:
-        return logged_public_error(
-            "prepare_customer_service_credential_email",
-            error.public_code,
-            message=_MESSAGES.get(error.public_code),
-        )
+        return logged_defined_error("prepare_customer_service_credential_email", error.public_code, retryable=False)
 
 
 def _revalidate(payload: dict[str, Any]) -> tuple[Any, dict[str, Any], Any, str]:
@@ -531,14 +495,8 @@ def _confirm(approval_token: str) -> dict[str, Any]:
         user=user,
     )
     if state != "available" or approval is None:
-        code, message, retryable = confirmation_failure(state, "credential email")
-        return {
-            "status": "error",
-            "code": code,
-            "message": message,
-            "reference": new_error_reference(),
-            "retryable": retryable,
-        }
+        code, _message, retryable = confirmation_failure(state, "credential email")
+        return defined_error(code, retryable=retryable)
     return _apply(approval.payload, WriteMode.APPROVAL_REQUIRED)
 
 
@@ -549,19 +507,11 @@ def execute_customer_service_credential_email(**kwargs: Any) -> dict[str, Any]:
         payload, _preview = _plan(**kwargs)
         return _apply(payload, WriteMode.DIRECT)
     except CredentialEmailError as error:
-        return logged_public_error(
-            "execute_customer_service_credential_email",
-            error.public_code,
-            message=_MESSAGES.get(error.public_code),
-        )
+        return logged_defined_error("execute_customer_service_credential_email", error.public_code, retryable=False)
 
 
 def confirm_customer_service_credential_email(approval_token: str) -> dict[str, Any]:
     try:
         return _confirm(approval_token)
     except CredentialEmailError as error:
-        return logged_public_error(
-            "confirm_customer_service_credential_email",
-            error.public_code,
-            message=_MESSAGES.get(error.public_code),
-        )
+        return logged_defined_error("confirm_customer_service_credential_email", error.public_code, retryable=False)
