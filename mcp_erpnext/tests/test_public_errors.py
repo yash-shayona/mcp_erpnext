@@ -4,6 +4,7 @@ import ast
 import re
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from mcp_erpnext import observability
@@ -21,7 +22,7 @@ from mcp_erpnext.public_errors import (
     defined_error,
     definition_for,
 )
-from mcp_erpnext.services.common import email, pdf, read
+from mcp_erpnext.services.common import email, lifecycle, pdf, read
 from mcp_erpnext.remote_api import _safe_error
 
 
@@ -375,6 +376,22 @@ class PublicErrorFoundationTests(unittest.TestCase):
                 self.assertEqual(result["code"], code)
                 self.assertEqual(result["message"], definition_for(code).message)
                 self.assertNotIn("internal details", result["message"])
+
+    def test_profile_mismatch_callers_use_catalog_message(self):
+        expected = defined_error("PROFILE_MISMATCH")
+        _document, lifecycle_failure = lifecycle._revalidate(
+            SimpleNamespace(payload={"profile": "purchase"}), "update", "sales"
+        )
+        email_failure = email._apply_document_email(
+            {"profile": "purchase"}, "sales", email.WriteMode.APPROVAL_REQUIRED
+        )
+
+        for result in (lifecycle_failure, email_failure):
+            with self.subTest(result=result):
+                self.assertEqual(result["code"], "PROFILE_MISMATCH")
+                self.assertEqual(result["message"], expected["message"])
+                self.assertNotIn("MCP", result["message"])
+                self.assertNotIn("profile", result["message"].lower())
 
     def test_policy_and_permission_categories_remain_distinct(self):
         capability = defined_error("DELETE_DISABLED")

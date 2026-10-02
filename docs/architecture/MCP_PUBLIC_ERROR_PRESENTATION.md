@@ -122,9 +122,12 @@ staleness, capability/configuration, and temporary failures.
 - ER-02 removes the previously confirmed lifecycle exception-text exposure for
   `LIFECYCLE_VALIDATION_FAILED` and `LINKED_DOCUMENT`. Remaining raw-exception
   checks belong to ER-03 through ER-05.
-- Thin service-local adapters may remain where they delegate to the catalog;
-  they do not accept or own public message text. The legacy observability
-  `message=` parameter remains only for compatibility outside migrated callers.
+- Thin service-local adapters may retain legacy message parameters, but they
+  discard those values and delegate public presentation to the catalog. The
+  observability `message=` parameter remains only for compatibility outside
+  migrated runtime callers. Tests cover the common Read, PDF, Email, and
+  lifecycle adapters, including profile-mismatch email/lifecycle callers, so
+  legacy wording cannot override catalog presentation.
 - Write-policy public wording comes from the catalog while the policy module
   retains write-mode authorization semantics. Capability restrictions and
   permission denials remain distinct.
