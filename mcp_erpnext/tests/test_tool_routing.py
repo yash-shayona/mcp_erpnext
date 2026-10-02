@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import asyncio
+import unittest
+from dataclasses import replace
+
+from mcp_erpnext.contracts.audit import audit_tool_contracts
+from mcp_erpnext.contracts.registry import TOOL_CONTRACTS, ToolRoutingRole
+from mcp_erpnext.instructions import get_mcp_instructions
+from mcp_erpnext.mcp_server import create_mcp
+from mcp_erpnext.settings import MCPProfile, MCPSettings
+from mcp_erpnext.tools.registration import tool_registration_kwargs
+
+
+def _settings(profile: MCPProfile) -> MCPSettings:
+    return replace(MCPSettings.from_environment(), profile=profile)
+
+
+class ToolRoutingTests(unittest.TestCase):
+    def _tools_by_profile(self) -> dict[MCPProfile, dict[str, object]]:
+        return {
+            profile: {
+                tool.name: tool
+                for tool in asyncio.run(create_mcp(_settings(profile)).list_tools())
+            }
+            for profile in MCPProfile
+        }
+
+    def test_initialized_servers_compose_common_and_sales_profile_guidance(self):
+        for profile in MCPProfile:
+            with self.subTest(profile=profile):
+                self.assertEqual(
+                    create_mcp(_settings(profile)).instructions,
+                    get_mcp_instructions(profile),
+                )
+                self.assertIn("exact known reference", get_mcp_instructions(profile))
+                self.assertIn('recipient_scope="self"', get_mcp_instructions(profile))
+        sales = get_mcp_instructions(MCPProfile.SALES)
+        self.assertIn("only the Customer and item rows are required", sales)
+        self.assertIn("resolve_terms_and_conditions", sales)
+        self.assertIn("resolve_payment_terms_template", sales)
+        self.assertIn("Never infer a Terms", sales)
+        self.assertIn("did not request a Terms template, do not call the resolver", sales)
+        purchase = get_mcp_instructions(MCPProfile.PURCHASE)
+        for expected in (
+            "resolve_supplier",
+            "purchase-enabled Items",
+            "prepare_purchase_order",
+            "approval -> `confirm_purchase_order`",
+            "naming series",
+            "returns `needs_input`",
+            "Purchase Receipt",
+            "Purchase Invoice",
+            "Supplier Payment",
+        ):
+            self.assertIn(expected, purchase)
+        self.assertNotIn("resolve_terms_and_conditions", purchase)
+        self.assertIn("resolve_buying_terms_and_conditions", purchase)
+        self.assertIn("resolve_payment_terms_template", purchase)
+        for profile in (MCPProfile.ACCOUNTS,):
+            with self.subTest(profile=profile):
+                self.assertNotIn("only the Customer and item rows are required", get_mcp_instructions(profile))
+                self.assertNotIn("resolve_terms_and_conditions", get_mcp_instructions(profile))
+                self.assertNotIn("resolve_payment_terms_template", get_mcp_instructions(profile))
+
+    def test_every_registered_tool_uses_its_contract_governed_description(self):
+        tools_by_profile = self._tools_by_profile()
+        names = set().union(*(tools.keys() for tools in tools_by_profile.values()))
+        self.assertEqual(names, set(TOOL_CONTRACTS))
+        for tools in tools_by_profile.values():
+            for name, tool in tools.items():
+                with self.subTest(name=name):
+                    self.assertEqual(tool.description, TOOL_CONTRACTS[name].routing_description())
+                    self.assertTrue(tool.description.strip())
+                    self.assertEqual(
+                        tool.meta["mcp_erpnext"]["routing_role"],
+                        TOOL_CONTRACTS[name].governed_routing_role.value,
+                    )
+
+    def test_all_governed_roles_are_represented_by_the_public_inventory(self):
+        self.assertEqual(
+            {contract.governed_routing_role for contract in TOOL_CONTRACTS.values()},
+            set(ToolRoutingRole),
+        )
+
+    def test_read_discovery_reporting_and_resolver_roles_are_distinct(self):
+        descriptions = {
+            name: TOOL_CONTRACTS[name].routing_description()
+            for name in (
+                "get_customer",
+                "resolve_customer",
+                "search_customers",
+                "query_customers",
+                "aggregate_customers",
+            )
+        }
+        self.assertIn("exact stable", descriptions["get_customer"])
+        self.assertIn("natural-language", descriptions["resolve_customer"])
+        self.assertIn("terminal for lookup", descriptions["resolve_customer"])
+        self.assertIn("candidate discovery", descriptions["search_customers"])
+        self.assertIn("structured filtering", descriptions["query_customers"])
+        self.assertIn("server-side count", descriptions["aggregate_customers"])
+
+    def test_resolver_terminal_states_and_selection_apply_to_supported_entities(self):
+        for name in (
+            "resolve_customer",
+            "resolve_item",
+            "resolve_supplier",
+            "resolve_terms_and_conditions",
+            "resolve_payment_terms_template",
+        ):
+            description = TOOL_CONTRACTS[name].routing_description()
+            with self.subTest(name=name):
+                self.assertIn("`resolved` is terminal", description)
+                self.assertIn("`ambiguous`, use the returned candidates", description)
+                self.assertIn("`not_found`, ask for clarification", description)
+        selection = TOOL_CONTRACTS["select_resolved_candidate"].routing_description()
+        self.assertIn("`ambiguous` Customer, Item, Terms, or Payment Terms", selection)
+        self.assertIn("returned by that result", selection)
+
+    def test_prepare_confirm_and_specialized_workflows_encode_existing_sequence(self):
+        for prepare, confirm in (
+            ("prepare_quotation", "confirm_quotation"),
+            ("prepare_purchase_order", "confirm_purchase_order"),
+            ("prepare_sales_invoice_payment", "confirm_sales_invoice_payment"),
+        ):
+            with self.subTest(prepare=prepare):
+                self.assertIn("Review the returned preview/prepared state", TOOL_CONTRACTS[prepare].routing_description())
+                self.assertIn("valid prepared operation", TOOL_CONTRACTS[confirm].routing_description())
+        self.assertIn("lifecycle action", TOOL_CONTRACTS["prepare_document_submit"].routing_description())
+        self.assertIn("source document", TOOL_CONTRACTS["prepare_quotation_to_sales_order"].routing_description())
+        self.assertIn("not a generic create tool", TOOL_CONTRACTS["confirm_quotation_to_sales_order"].routing_description())
+        quotation = TOOL_CONTRACTS["prepare_quotation"].routing_description()
+        self.assertIn("Only the Customer and item rows are required", quotation)
+        self.assertIn("when the user does not provide `valid_till`, omit it", quotation)
+        self.assertIn("do not ask the user to choose a default period", quotation)
+        self.assertIn("PDF artifact", TOOL_CONTRACTS["render_document_pdf"].routing_description())
+        self.assertIn("does not send email", TOOL_CONTRACTS["prepare_document_email"].routing_description())
+        self.assertIn("Queue external email", TOOL_CONTRACTS["confirm_document_email"].routing_description())
+
+    def test_governed_registration_replaces_a_local_description(self):
+        kwargs = tool_registration_kwargs(
+            "resolve_customer", {"description": "ungoverned local text"}
+        )
+        self.assertEqual(
+            kwargs["description"], TOOL_CONTRACTS["resolve_customer"].routing_description()
+        )
+
+    def test_contract_audit_rejects_description_drift(self):
+        tools = asyncio.run(create_mcp(_settings(MCPProfile.SALES)).list_tools())
+        contracts = {
+            **TOOL_CONTRACTS,
+            "get_customer": replace(
+                TOOL_CONTRACTS["get_customer"], purpose="Drifted purpose."
+            ),
+        }
+        self.assertIn(
+            "get_customer: public description differs from its governed routing description.",
+            audit_tool_contracts(tools, contracts),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
